@@ -17,7 +17,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-size: 14px;
           }
-          a { color: inherit; text-decoration: none; }
           .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: opacity 0.15s; }
           .btn:hover { opacity: 0.85; }
           .btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -29,7 +28,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           input:focus, select:focus, textarea:focus { border-color: #2563eb !important; }
           .card { background: #ffffff !important; border: 1px solid #e2e6ea !important; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
           .toast { position: fixed; bottom: 20px; right: 20px; background: #1e1e1e; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 9999; }
-          @keyframes fadeIn { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:none } }
         `}</style>
       </head>
       <body>{children}</body>
