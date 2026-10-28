@@ -2,8 +2,8 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #0f0f0f;
-  color: #e8e8e8;
+  background: #f0f2f5;
+  color: #111;
   font-size: 14px;
 }
 
@@ -26,12 +26,12 @@ a { color: inherit; text-decoration: none; }
 .btn-primary { background: #2563eb; color: #fff; }
 .btn-success { background: #16a34a; color: #fff; }
 .btn-danger  { background: #dc2626; color: #fff; }
-.btn-ghost   { background: #2a2a2a; color: #e8e8e8; }
+.btn-ghost   { background: #e2e6ea; color: #333; }
 
 input, select, textarea {
-  background: #1e1e1e;
-  border: 1px solid #333;
-  color: #e8e8e8;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #111;
   border-radius: 5px;
   padding: 7px 10px;
   font-size: 13px;
@@ -41,10 +41,11 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus { border-color: #2563eb; }
 
 .card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: #ffffff;
+  border: 1px solid #e2e6ea;
   border-radius: 10px;
   padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .tag {
@@ -54,18 +55,18 @@ input:focus, select:focus, textarea:focus { border-color: #2563eb; }
   font-size: 11px;
   font-weight: 600;
 }
-.tag-blue   { background: #1d3557; color: #90c0ff; }
-.tag-green  { background: #14371f; color: #6ee89a; }
-.tag-yellow { background: #3b2f00; color: #fde68a; }
-.tag-red    { background: #3b0a0a; color: #fca5a5; }
-.tag-gray   { background: #222; color: #aaa; }
+.tag-blue   { background: #dbeafe; color: #1d4ed8; }
+.tag-green  { background: #dcfce7; color: #15803d; }
+.tag-yellow { background: #fef9c3; color: #854d0e; }
+.tag-red    { background: #fee2e2; color: #b91c1c; }
+.tag-gray   { background: #f3f4f6; color: #6b7280; }
 
 .toast {
   position: fixed;
   bottom: 20px; right: 20px;
   background: #1e1e1e;
   border: 1px solid #333;
-  color: #e8e8e8;
+  color: #fff;
   padding: 10px 16px;
   border-radius: 8px;
   font-size: 13px;
