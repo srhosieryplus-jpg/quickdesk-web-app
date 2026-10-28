@@ -5,15 +5,15 @@ import { getSession, clearSession } from '@/lib/auth'
 import { User } from '@/lib/types'
 
 const ALL_MODULES = [
-  { id:'tasks',      label:'Tasks',        icon:'☑', path:'/tasks',               bg:'#b8f0e6', iconColor:'#1a6b5a' },
-  { id:'season_ss',  label:'SS',           icon:'✦',  path:'/season-log?type=SS',  bg:'#fde68a', iconColor:'#92400e' },
-  { id:'season_aw',  label:'AW',           icon:'✻',  path:'/season-log?type=AW',  bg:'#bfdbfe', iconColor:'#1e40af' },
-  { id:'ic',         label:'IC Log',       icon:'∞',  path:'/ic-log',              bg:'#e9d5ff', iconColor:'#6b21a8' },
-  { id:'po_tracker', label:'PO Tracker',   icon:'⊞',  path:'/po-tracker',          bg:'#fbcfe8', iconColor:'#9d174d' },
-  { id:'qd',         label:'QuickDesk',    icon:'≡',  path:'/quickdesk',           bg:'#fca5a5', iconColor:'#7f1d1d' },
-  { id:'autocsv',    label:'Auto CSV',     icon:'⚡', path:'/autocsv',             bg:'#fcd34d', iconColor:'#78350f' },
-  { id:'reports',    label:'Reports',      icon:'⊡',  path:'/reports',             bg:'#6ee7b7', iconColor:'#065f46' },
-  { id:'settings',   label:'Settings',     icon:'✿',  path:'/settings',            bg:'#e2e8f0', iconColor:'#334155' },
+  { id:'tasks',      label:'Tasks',              icon:'☑',  path:'/tasks',               bg:'#b8f0e6', iconColor:'#1a6b5a' },
+  { id:'season_ss',  label:'SS',                 icon:'☀️', path:'/season-log?type=SS',  bg:'#fde68a', iconColor:'#92400e' },
+  { id:'season_aw',  label:'AW',                 icon:'✻',  path:'/season-log?type=AW',  bg:'#bfdbfe', iconColor:'#1e40af' },
+  { id:'ic',         label:'Infinity Classics',  icon:'∞',  path:'/ic-log',              bg:'#e9d5ff', iconColor:'#6b21a8' },
+  { id:'po_tracker', label:'PO Tracker',         icon:'⊞',  path:'/po-tracker',          bg:'#fbcfe8', iconColor:'#9d174d' },
+  { id:'qd',         label:'UPC Scanner',        icon:'⌇',  path:'/quickdesk',           bg:'#fca5a5', iconColor:'#7f1d1d' },
+  { id:'autocsv',    label:'Auto CSV',           icon:'⚡', path:'/autocsv',             bg:'#fcd34d', iconColor:'#78350f' },
+  { id:'reports',    label:'Reports',            icon:'⊡',  path:'/reports',             bg:'#6ee7b7', iconColor:'#065f46' },
+  { id:'settings',   label:'Settings',           icon:'✿',  path:'/settings',            bg:'#e2e8f0', iconColor:'#334155' },
 ]
 
 export default function SelectorPage() {
@@ -39,12 +39,21 @@ export default function SelectorPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        position: 'relative',
         borderBottom: '1px solid #d4c8f0',
         background: 'rgba(255,255,255,0.6)',
         backdropFilter: 'blur(8px)',
       }}>
-        {/* Left: logo + location */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Left: user info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9b8ec4' }}>
+          <span style={{ fontSize: 14 }}>👤</span>
+          <span style={{ fontWeight: 700, color: '#5b21b6' }}>{user.userid}</span>
+          <span>·</span>
+          <span>{user.store === 'ALL' ? 'All Stores' : user.store}</span>
+        </div>
+
+        {/* Center: logo + location */}
+        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
             <polygon points="11,1 21,7 21,19 11,25 1,19 1,7" fill="none" stroke="#7c3aed" strokeWidth="2" />
           </svg>
@@ -53,19 +62,11 @@ export default function SelectorPage() {
           <span style={{ fontSize: 14, fontWeight: 600, color: '#7c3aed' }}>{user.location || 'Admin'}</span>
         </div>
 
-        {/* Right: user info + sign out */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <button
-            onClick={() => { clearSession(); router.push('/') }}
-            style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}
-          >Sign Out</button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9b8ec4' }}>
-            <span style={{ fontSize: 14 }}>👤</span>
-            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{user.userid}</span>
-            <span>·</span>
-            <span>{user.store === 'ALL' ? 'All Stores' : user.store}</span>
-          </div>
-        </div>
+        {/* Right: sign out */}
+        <button
+          onClick={() => { clearSession(); router.push('/') }}
+          style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}
+        >Sign Out</button>
       </div>
 
       {/* Page title */}
