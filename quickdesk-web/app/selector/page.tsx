@@ -31,12 +31,11 @@ export default function SelectorPage() {
   const modules = ALL_MODULES.filter(m => user.modules.includes(m.id))
 
   return (
-    <div style={{ minHeight:'100vh', padding:20 }}>
-      {/* Header */}
+    <div style={{ minHeight:'100vh', padding:20, background:'#f0f2f5' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:28, maxWidth:700, margin:'0 auto 28px' }}>
         <div>
-          <h1 style={{ fontSize:20, fontWeight:700 }}>📋 QuickDesk</h1>
-          <p style={{ fontSize:12, color:'#888', marginTop:2 }}>
+          <h1 style={{ fontSize:20, fontWeight:700, color:'#111' }}>📋 QuickDesk</h1>
+          <p style={{ fontSize:12, color:'#666', marginTop:2 }}>
             {user.userid} · {user.store} · {user.location}
           </p>
         </div>
@@ -45,29 +44,22 @@ export default function SelectorPage() {
           Sign out
         </button>
       </div>
-
-      {/* Module grid */}
-      <div style={{
-        maxWidth:700, margin:'0 auto',
-        display:'grid',
-        gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))',
-        gap:12
-      }}>
+      <div style={{ maxWidth:700, margin:'0 auto', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:12 }}>
         {modules.map(m => (
           <button key={m.id}
-            className="card"
             onClick={() => router.push(m.path)}
             style={{
               display:'flex', flexDirection:'column', alignItems:'center',
               gap:8, padding:'20px 12px', cursor:'pointer',
-              border:'1px solid #2a2a2a', background:'#1a1a1a',
-              transition:'border-color 0.15s, background 0.15s'
+              border:'1px solid #e2e6ea', background:'#ffffff',
+              borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,0.06)',
+              transition:'border-color 0.15s'
             }}
             onMouseEnter={e => (e.currentTarget.style.borderColor='#2563eb')}
-            onMouseLeave={e => (e.currentTarget.style.borderColor='#2a2a2a')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor='#e2e6ea')}
           >
             <span style={{ fontSize:28 }}>{m.icon}</span>
-            <span style={{ fontSize:13, fontWeight:500 }}>{m.label}</span>
+            <span style={{ fontSize:13, fontWeight:500, color:'#111' }}>{m.label}</span>
           </button>
         ))}
       </div>
