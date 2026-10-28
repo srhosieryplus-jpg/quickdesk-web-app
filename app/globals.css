@@ -1,0 +1,75 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f0f0f;
+  color: #e8e8e8;
+  font-size: 14px;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: #2563eb; color: #fff; }
+.btn-success { background: #16a34a; color: #fff; }
+.btn-danger  { background: #dc2626; color: #fff; }
+.btn-ghost   { background: #2a2a2a; color: #e8e8e8; }
+
+input, select, textarea {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  color: #e8e8e8;
+  border-radius: 5px;
+  padding: 7px 10px;
+  font-size: 13px;
+  width: 100%;
+  outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: #2563eb; }
+
+.card {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.tag-blue   { background: #1d3557; color: #90c0ff; }
+.tag-green  { background: #14371f; color: #6ee89a; }
+.tag-yellow { background: #3b2f00; color: #fde68a; }
+.tag-red    { background: #3b0a0a; color: #fca5a5; }
+.tag-gray   { background: #222; color: #aaa; }
+
+.toast {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  color: #e8e8e8;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 9999;
+  animation: fadeIn 0.2s;
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:none } }
