@@ -58,21 +58,34 @@ export default function LoginPage() {
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* Full background honeycomb */}
+      {/* Full background honeycomb with clear center */}
       <svg
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
         xmlns="http://www.w3.org/2000/svg"
       >
-        {hexes.map((h, i) => (
-          <polygon
-            key={i}
-            points={hexPoints(h.x, h.y)}
-            fill="none"
-            stroke="#7c3aed"
-            strokeWidth="1"
-            opacity="0.13"
-          />
-        ))}
+        <defs>
+          <radialGradient id="fadeCenter" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#eeeaf6" stopOpacity="1" />
+            <stop offset="35%" stopColor="#eeeaf6" stopOpacity="1" />
+            <stop offset="60%" stopColor="#eeeaf6" stopOpacity="0" />
+          </radialGradient>
+          <mask id="hexMask">
+            <rect width="100%" height="100%" fill="white" />
+            <rect width="100%" height="100%" fill="url(#fadeCenter)" />
+          </mask>
+        </defs>
+        <g mask="url(#hexMask)">
+          {hexes.map((h, i) => (
+            <polygon
+              key={i}
+              points={hexPoints(h.x, h.y)}
+              fill="none"
+              stroke="#7c3aed"
+              strokeWidth="1"
+              opacity="0.18"
+            />
+          ))}
+        </g>
       </svg>
 
       {/* Card */}
