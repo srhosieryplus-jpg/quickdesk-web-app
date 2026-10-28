@@ -50,17 +50,8 @@ export default function SelectorPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#eeeaf6', position: 'relative', overflow: 'hidden' }}>
-
-      {/* Honeycomb background */}
-      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} xmlns="http://www.w3.org/2000/svg">
-        {hexes.map((h, i) => (
-          <polygon key={i} points={hexPoints(h.x, h.y)} fill="none" stroke="#7c3aed" strokeWidth="1" opacity="0.13" />
-        ))}
-      </svg>
-
-      {/* Content */}
-      <div style={{ position: 'relative', zIndex: 1, padding: '24px 20px', maxWidth: 720, margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', background: '#eeeaf6' }}>
+      <div style={{ padding: '24px 20px', maxWidth: 720, margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
