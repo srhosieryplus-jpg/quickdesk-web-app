@@ -58,24 +58,16 @@ export default function LoginPage() {
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* Full background honeycomb with clear center */}
+      {/* Full background honeycomb — hexes outside center zone only */}
       <svg
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
         xmlns="http://www.w3.org/2000/svg"
       >
-        <defs>
-          <radialGradient id="fadeCenter" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#eeeaf6" stopOpacity="1" />
-            <stop offset="35%" stopColor="#eeeaf6" stopOpacity="1" />
-            <stop offset="60%" stopColor="#eeeaf6" stopOpacity="0" />
-          </radialGradient>
-          <mask id="hexMask">
-            <rect width="100%" height="100%" fill="white" />
-            <rect width="100%" height="100%" fill="url(#fadeCenter)" />
-          </mask>
-        </defs>
-        <g mask="url(#hexMask)">
-          {hexes.map((h, i) => (
+        {hexes.map((h, i) => {
+          // Skip hexes too close to center (viewport center ~50%,50%)
+          // We'll filter at render time using a data attribute trick —
+          // instead just render all but let the white card cover them
+          return (
             <polygon
               key={i}
               points={hexPoints(h.x, h.y)}
@@ -84,9 +76,22 @@ export default function LoginPage() {
               strokeWidth="1"
               opacity="0.18"
             />
-          ))}
-        </g>
+          )
+        })}
       </svg>
+      {/* White fade circle to clear the center */}
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 480,
+        height: 480,
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, #eeeaf6 45%, transparent 75%)',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
 
       {/* Card */}
       <div style={{ width: '100%', maxWidth: 340, textAlign: 'center', position: 'relative', zIndex: 1 }}>
