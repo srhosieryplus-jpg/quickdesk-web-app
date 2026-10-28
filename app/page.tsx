@@ -25,26 +25,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:20, background:'#f0f2f5' }}>
       <div style={{ width:'100%', maxWidth:360 }}>
         <div style={{ textAlign:'center', marginBottom:32 }}>
           <div style={{ fontSize:42, marginBottom:8 }}>📋</div>
-          <h1 style={{ fontSize:24, fontWeight:700, letterSpacing:'-0.5px' }}>QuickDesk</h1>
-          <p style={{ color:'#888', marginTop:4, fontSize:13 }}>Sign in with your User ID</p>
+          <h1 style={{ fontSize:24, fontWeight:700, letterSpacing:'-0.5px', color:'#111' }}>QuickDesk</h1>
+          <p style={{ color:'#666', marginTop:4, fontSize:13 }}>Sign in with your User ID</p>
         </div>
-
-        <form onSubmit={handleLogin} className="card" style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <form onSubmit={handleLogin} style={{ background:'#fff', border:'1px solid #e2e6ea', borderRadius:10, padding:20, boxShadow:'0 1px 3px rgba(0,0,0,0.06)', display:'flex', flexDirection:'column', gap:12 }}>
           <div>
-            <label style={{ fontSize:12, color:'#aaa', display:'block', marginBottom:4 }}>User ID</label>
-            <input
-              autoFocus
-              value={userid}
-              onChange={e => setUserid(e.target.value)}
-              placeholder="e.g. SR"
-              style={{ textTransform:'uppercase' }}
-            />
+            <label style={{ fontSize:12, color:'#666', display:'block', marginBottom:4 }}>User ID</label>
+            <input autoFocus value={userid} onChange={e => setUserid(e.target.value)} placeholder="e.g. SR" style={{ textTransform:'uppercase' }} />
           </div>
-          {err && <p style={{ color:'#f87171', fontSize:12 }}>{err}</p>}
+          {err && <p style={{ color:'#dc2626', fontSize:12 }}>{err}</p>}
           <button className="btn btn-primary" type="submit" disabled={loading} style={{ width:'100%', justifyContent:'center' }}>
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
