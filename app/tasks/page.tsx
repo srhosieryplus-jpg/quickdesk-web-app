@@ -41,12 +41,9 @@ export default function TasksPage() {
     if (!newTask.trim() || !user) return
     setSaving(true)
     const { error } = await supabase.from('tasks').insert({
-      store: user.store,
-      location: user.location,
-      task: newTask.trim(),
-      note: newNote.trim(),
-      done: false,
-      logged_by: user.userid,
+      store: user.store, location: user.location,
+      task: newTask.trim(), note: newNote.trim(),
+      done: false, logged_by: user.userid,
     })
     if (error) { showToast('❌ Error saving task'); setSaving(false); return }
     setNewTask(''); setNewNote('')
@@ -71,19 +68,16 @@ export default function TasksPage() {
   const done = tasks.filter(t => t.done)
 
   return (
-    <div style={{ minHeight:'100vh', padding:20 }}>
+    <div style={{ minHeight:'100vh', padding:20, background:'#f0f2f5' }}>
       <div style={{ maxWidth:680, margin:'0 auto' }}>
-
-        {/* Header */}
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
           <button className="btn btn-ghost" style={{ fontSize:12 }} onClick={() => router.push('/selector')}>← Back</button>
-          <h2 style={{ fontSize:18, fontWeight:700 }}>✅ Tasks</h2>
-          {user && <span style={{ fontSize:12, color:'#888', marginLeft:'auto' }}>{user.store}</span>}
+          <h2 style={{ fontSize:18, fontWeight:700, color:'#111' }}>✅ Tasks</h2>
+          {user && <span style={{ fontSize:12, color:'#666', marginLeft:'auto' }}>{user.store}</span>}
         </div>
 
-        {/* Add task form */}
-        <form onSubmit={addTask} className="card" style={{ marginBottom:20, display:'flex', flexDirection:'column', gap:10 }}>
-          <h3 style={{ fontSize:13, color:'#aaa', fontWeight:600 }}>Add Task</h3>
+        <form onSubmit={addTask} style={{ background:'#fff', border:'1px solid #e2e6ea', borderRadius:10, padding:16, boxShadow:'0 1px 3px rgba(0,0,0,0.06)', marginBottom:20, display:'flex', flexDirection:'column', gap:10 }}>
+          <h3 style={{ fontSize:13, color:'#666', fontWeight:600 }}>Add Task</h3>
           <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Task description…" />
           <input value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Note (optional)" />
           <button className="btn btn-primary" type="submit" disabled={saving || !newTask.trim()} style={{ alignSelf:'flex-start' }}>
@@ -91,57 +85,37 @@ export default function TasksPage() {
           </button>
         </form>
 
-        {/* Open tasks */}
-        {loading ? (
-          <p style={{ color:'#888', fontSize:13 }}>Loading…</p>
-        ) : (
+        {loading ? <p style={{ color:'#666', fontSize:13 }}>Loading…</p> : (
           <>
-            <p style={{ fontSize:12, color:'#888', marginBottom:8 }}>OPEN ({open.length})</p>
-            {open.length === 0 && <p style={{ color:'#555', fontSize:13, marginBottom:16 }}>No open tasks.</p>}
+            <p style={{ fontSize:12, color:'#666', marginBottom:8, fontWeight:600 }}>OPEN ({open.length})</p>
+            {open.length === 0 && <p style={{ color:'#999', fontSize:13, marginBottom:16 }}>No open tasks.</p>}
             <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 }}>
-              {open.map(t => (
-                <TaskRow key={t.id} task={t} onToggle={toggleDone} onDelete={deleteTask} />
-              ))}
+              {open.map(t => <TaskRow key={t.id} task={t} onToggle={toggleDone} onDelete={deleteTask} />)}
             </div>
-
-            {done.length > 0 && (
-              <>
-                <p style={{ fontSize:12, color:'#888', marginBottom:8 }}>DONE ({done.length})</p>
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                  {done.map(t => (
-                    <TaskRow key={t.id} task={t} onToggle={toggleDone} onDelete={deleteTask} />
-                  ))}
-                </div>
-              </>
-            )}
+            {done.length > 0 && <>
+              <p style={{ fontSize:12, color:'#666', marginBottom:8, fontWeight:600 }}>DONE ({done.length})</p>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {done.map(t => <TaskRow key={t.id} task={t} onToggle={toggleDone} onDelete={deleteTask} />)}
+              </div>
+            </>}
           </>
         )}
       </div>
-
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
 }
 
-function TaskRow({ task, onToggle, onDelete }: {
-  task: Task
-  onToggle: (t: Task) => void
-  onDelete: (id: string) => void
-}) {
+function TaskRow({ task, onToggle, onDelete }: { task: Task; onToggle: (t: Task) => void; onDelete: (id: string) => void }) {
   return (
-    <div className="card" style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
-      <input type="checkbox" checked={task.done} onChange={() => onToggle(task)}
-        style={{ width:16, height:16, marginTop:2, cursor:'pointer', flexShrink:0 }} />
+    <div style={{ background:'#fff', border:'1px solid #e2e6ea', borderRadius:10, padding:14, boxShadow:'0 1px 3px rgba(0,0,0,0.06)', display:'flex', alignItems:'flex-start', gap:10 }}>
+      <input type="checkbox" checked={task.done} onChange={() => onToggle(task)} style={{ width:16, height:16, marginTop:2, cursor:'pointer', flexShrink:0 }} />
       <div style={{ flex:1, minWidth:0 }}>
-        <p style={{ fontSize:13, textDecoration: task.done ? 'line-through' : 'none', color: task.done ? '#555' : '#e8e8e8' }}>
-          {task.task}
-        </p>
-        {task.note && <p style={{ fontSize:12, color:'#888', marginTop:2 }}>{task.note}</p>}
-        <p style={{ fontSize:11, color:'#555', marginTop:4 }}>
-          {task.logged_by} · {new Date(task.saved_at).toLocaleDateString()}
-        </p>
+        <p style={{ fontSize:13, textDecoration: task.done ? 'line-through' : 'none', color: task.done ? '#999' : '#111' }}>{task.task}</p>
+        {task.note && <p style={{ fontSize:12, color:'#666', marginTop:2 }}>{task.note}</p>}
+        <p style={{ fontSize:11, color:'#999', marginTop:4 }}>{task.logged_by} · {new Date(task.saved_at).toLocaleDateString()}</p>
       </div>
-      <button onClick={() => onDelete(task.id)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:15, padding:'0 2px' }}>🗑</button>
+      <button onClick={() => onDelete(task.id)} style={{ background:'none', border:'none', color:'#aaa', cursor:'pointer', fontSize:15 }}>🗑</button>
     </div>
   )
 }
