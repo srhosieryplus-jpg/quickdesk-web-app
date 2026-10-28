@@ -69,7 +69,7 @@ export default function SelectorPage() {
       </div>
 
       {/* Page title */}
-      <div style={{ padding: '28px 28px 16px' }}>
+      <div style={{ padding: '28px 28px 16px', maxWidth: 720, margin: '0 auto' }}>
         <h2 style={{ fontSize: 18, fontWeight: 800, color: '#3b1f8c', marginBottom: 4 }}>Select a Module</h2>
         <p style={{ fontSize: 12, color: '#9b8ec4' }}>— choose a module to begin</p>
       </div>
@@ -78,9 +78,11 @@ export default function SelectorPage() {
       <div style={{
         padding: '0 28px 40px',
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: 16,
-        maxWidth: 860,
+        gridTemplateColumns: 'repeat(4, 140px)',
+        gap: 14,
+        maxWidth: 720,
+        margin: '0 auto',
+        justifyContent: 'center',
       }}>
         {modules.map(m => (
           <button
@@ -91,12 +93,12 @@ export default function SelectorPage() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 14,
-              padding: '32px 16px',
+              gap: 10,
+              padding: '22px 12px',
               cursor: 'pointer',
               border: 'none',
               background: m.bg,
-              borderRadius: 18,
+              borderRadius: 16,
               boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
               transition: 'transform 0.12s, box-shadow 0.12s',
               aspectRatio: '1',
@@ -110,8 +112,8 @@ export default function SelectorPage() {
               e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'
             }}
           >
-            <span style={{ fontSize: 36, color: m.iconColor, lineHeight: 1 }}>{m.icon}</span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: m.iconColor, letterSpacing: '0.02em', textAlign: 'center' }}>
+            <span style={{ fontSize: 28, color: m.iconColor, lineHeight: 1 }}>{m.icon}</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: m.iconColor, letterSpacing: '0.02em', textAlign: 'center' }}>
               {m.label}
             </span>
           </button>
