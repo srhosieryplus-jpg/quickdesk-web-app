@@ -17,6 +17,9 @@ const ALL_MODULES = [
   { id: 'settings',   label: 'Settings' },
 ]
 
+const STORES = ['ALL', 'NYC', 'LA', 'CHI', 'MIA', 'DAL', 'SF', 'BOS', 'ATL', 'SEA']
+const LOCATIONS = ['Admin', 'Manager', 'Sales', 'Stock', 'Cashier', 'Supervisor', 'Other']
+
 interface DBUser {
   id: string
   userid: string
@@ -27,12 +30,17 @@ interface DBUser {
 
 const emptyForm = { userid: '', store: '', location: '', modules: [] as string[] }
 
+const purple = '#7c3aed'
+const purpleLight = '#f5f3ff'
+const border = '#d4c8f0'
+
 export default function SettingsPage() {
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [users, setUsers] = useState<DBUser[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
+  const [toastType, setToastType] = useState<'ok'|'err'>('ok')
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -41,16 +49,19 @@ export default function SettingsPage() {
   useEffect(() => {
     const u = getSession()
     if (!u) { router.push('/'); return }
-    if (!u.modules.includes('settings')) { router.push('/selector'); return }
     setCurrentUser(u)
     fetchUsers()
   }, [router])
 
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000) }
+  function showToast(msg: string, type: 'ok'|'err' = 'ok') {
+    setToast(msg); setToastType(type)
+    setTimeout(() => setToast(''), 3500)
+  }
 
   async function fetchUsers() {
     setLoading(true)
-    const { data } = await supabase.from('users').select('*').order('userid')
+    const { data, error } = await supabase.from('users').select('*').order('userid')
+    if (error) { showToast('❌ Could not load users', 'err'); setLoading(false); return }
     setUsers(data as DBUser[] || [])
     setLoading(false)
   }
@@ -79,182 +90,203 @@ export default function SettingsPage() {
 
   async function saveUser(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.userid.trim() || !form.store.trim()) return
+    const uid = form.userid.trim().toUpperCase()
+    const store = form.store.trim().toUpperCase()
+    if (!uid || !store) { showToast('❌ User ID and Store are required', 'err'); return }
     setSaving(true)
+
     const payload = {
-      userid: form.userid.trim().toUpperCase(),
-      store: form.store.trim().toUpperCase(),
+      userid: uid,
+      store,
       location: form.location.trim(),
       modules: form.modules,
     }
+
     if (editingId) {
       const { error } = await supabase.from('users').update(payload).eq('id', editingId)
-      if (error) { showToast('❌ Error updating user'); setSaving(false); return }
+      if (error) { showToast(`❌ ${error.message}`, 'err'); setSaving(false); return }
       showToast('✅ User updated')
     } else {
+      // Check for duplicate userid
+      const { data: existing } = await supabase.from('users').select('id').eq('userid', uid).maybeSingle()
+      if (existing) { showToast(`❌ User ID "${uid}" already exists`, 'err'); setSaving(false); return }
       const { error } = await supabase.from('users').insert(payload)
-      if (error) { showToast('❌ Error creating user'); setSaving(false); return }
+      if (error) { showToast(`❌ ${error.message}`, 'err'); setSaving(false); return }
       showToast('✅ User created')
     }
+
     cancelForm()
     setSaving(false)
     fetchUsers()
   }
 
   async function deleteUser(u: DBUser) {
+    if (u.userid === currentUser?.userid) { showToast('❌ Cannot delete your own account', 'err'); return }
     if (!confirm(`Delete user "${u.userid}"? This cannot be undone.`)) return
-    await supabase.from('users').delete().eq('id', u.id)
+    const { error } = await supabase.from('users').delete().eq('id', u.id)
+    if (error) { showToast(`❌ ${error.message}`, 'err'); return }
     setUsers(prev => prev.filter(x => x.id !== u.id))
     showToast('🗑 User deleted')
   }
 
-  const purple = '#7c3aed'
-  const purpleLight = '#f5f3ff'
-  const border = '#d4c8f0'
-
   return (
     <div style={{ minHeight: '100vh', padding: 20, background: '#eeeaf6' }}>
-      <div style={{ maxWidth: 860, margin: '0 auto' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <button
-            onClick={() => router.push('/selector')}
-            style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer', color: '#5b21b6', fontWeight: 600 }}
-          >← Back</button>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#5b21b6', letterSpacing: '0.04em' }}>⚙️ Settings — User Management</h2>
-          <button
-            onClick={() => { cancelForm(); setShowForm(true) }}
-            style={{ marginLeft: 'auto', background: purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-          >+ New User</button>
+          <button onClick={() => router.push('/selector')}
+            style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer', color: '#5b21b6', fontWeight: 600 }}>
+            ← Back
+          </button>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#5b21b6', letterSpacing: '0.04em' }}>⚙️ User Management</h2>
+            <p style={{ fontSize: 12, color: '#9b8ec4', marginTop: 1 }}>{users.length} user{users.length !== 1 ? 's' : ''} registered</p>
+          </div>
+          <button onClick={() => { cancelForm(); setShowForm(true) }}
+            style={{ marginLeft: 'auto', background: purple, color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(124,58,237,0.25)' }}>
+            + New User
+          </button>
         </div>
 
-        {/* Form */}
+        {/* Create / Edit Form */}
         {showForm && (
-          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, padding: 20, marginBottom: 24, boxShadow: '0 2px 12px rgba(124,58,237,0.08)' }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, color: '#5b21b6', marginBottom: 16 }}>
-              {editingId ? 'Edit User' : 'Create New User'}
+          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 24, marginBottom: 24, boxShadow: '0 4px 20px rgba(124,58,237,0.10)' }}>
+            <h3 style={{ fontSize: 14, fontWeight: 800, color: '#5b21b6', marginBottom: 18, letterSpacing: '0.04em' }}>
+              {editingId ? '✏️ Edit User' : '➕ Create New User'}
             </h3>
             <form onSubmit={saveUser}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+              {/* Row 1: basic fields */}
+              <div style={{ display: 'grid', gridTemplateColumns: '160px 160px 1fr', gap: 14, marginBottom: 18 }}>
                 <div>
-                  <label style={{ fontSize: 11, color: '#7c6fa0', fontWeight: 600, display: 'block', marginBottom: 4 }}>USER ID *</label>
+                  <label style={labelStyle}>USER ID *</label>
                   <input
                     value={form.userid}
-                    onChange={e => setForm(f => ({ ...f, userid: e.target.value }))}
+                    onChange={e => setForm(f => ({ ...f, userid: e.target.value.toUpperCase() }))}
                     placeholder="e.g. SR"
-                    style={{ textTransform: 'uppercase', background: purpleLight, border: `1.5px solid ${border}`, borderRadius: 6, padding: '8px 10px', fontSize: 13, color: '#3b1f8c', width: '100%', outline: 'none' }}
+                    maxLength={10}
+                    style={inputStyle}
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: '#7c6fa0', fontWeight: 600, display: 'block', marginBottom: 4 }}>STORE *</label>
-                  <input
+                  <label style={labelStyle}>STORE *</label>
+                  <select
                     value={form.store}
                     onChange={e => setForm(f => ({ ...f, store: e.target.value }))}
-                    placeholder="e.g. NYC or ALL"
-                    style={{ textTransform: 'uppercase', background: purpleLight, border: `1.5px solid ${border}`, borderRadius: 6, padding: '8px 10px', fontSize: 13, color: '#3b1f8c', width: '100%', outline: 'none' }}
-                  />
+                    style={selectStyle}
+                  >
+                    <option value="">— Select —</option>
+                    {STORES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: '#7c6fa0', fontWeight: 600, display: 'block', marginBottom: 4 }}>LOCATION</label>
-                  <input
+                  <label style={labelStyle}>LOCATION / ROLE</label>
+                  <select
                     value={form.location}
                     onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-                    placeholder="e.g. Admin"
-                    style={{ background: purpleLight, border: `1.5px solid ${border}`, borderRadius: 6, padding: '8px 10px', fontSize: 13, color: '#3b1f8c', width: '100%', outline: 'none' }}
-                  />
+                    style={selectStyle}
+                  >
+                    <option value="">— Select —</option>
+                    {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
                 </div>
               </div>
 
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 11, color: '#7c6fa0', fontWeight: 600, display: 'block', marginBottom: 8 }}>MODULE ACCESS</label>
+              {/* Module toggles */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ ...labelStyle, display: 'block', marginBottom: 10 }}>MODULE ACCESS</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {ALL_MODULES.map(m => {
                     const on = form.modules.includes(m.id)
                     return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => toggleModule(m.id)}
+                      <button key={m.id} type="button" onClick={() => toggleModule(m.id)}
                         style={{
-                          padding: '6px 14px',
-                          borderRadius: 20,
+                          padding: '6px 16px', borderRadius: 20,
                           border: `1.5px solid ${on ? purple : border}`,
                           background: on ? purple : '#fff',
-                          color: on ? '#fff' : '#7c6fa0',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          transition: 'all 0.15s',
-                        }}
-                      >{m.label}</button>
+                          color: on ? '#fff' : '#9b8ec4',
+                          fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                          transition: 'all 0.12s',
+                        }}>
+                        {m.label}
+                      </button>
                     )
                   })}
                 </div>
+                <p style={{ fontSize: 11, color: '#b8aed8', marginTop: 8 }}>{form.modules.length} module{form.modules.length !== 1 ? 's' : ''} selected</p>
               </div>
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <button
-                  type="submit"
-                  disabled={saving || !form.userid.trim() || !form.store.trim()}
-                  style={{ background: purple, color: '#fff', border: 'none', borderRadius: 8, padding: '9px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}
-                >{saving ? 'Saving…' : editingId ? 'Save Changes' : 'Create User'}</button>
-                <button
-                  type="button"
-                  onClick={cancelForm}
-                  style={{ background: '#fff', color: '#7c6fa0', border: `1px solid ${border}`, borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-                >Cancel</button>
+                <button type="submit" disabled={saving}
+                  style={{ background: purple, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+                  {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Create User'}
+                </button>
+                <button type="button" onClick={cancelForm}
+                  style={{ background: '#fff', color: '#9b8ec4', border: `1px solid ${border}`, borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Cancel
+                </button>
               </div>
             </form>
           </div>
         )}
 
-        {/* Users table */}
+        {/* Users Table */}
         {loading ? (
-          <p style={{ color: '#7c6fa0', fontSize: 13 }}>Loading users…</p>
+          <p style={{ color: '#9b8ec4', fontSize: 13, padding: 20 }}>Loading users…</p>
         ) : (
-          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.06)' }}>
+          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 16px rgba(124,58,237,0.07)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: purpleLight }}>
-                  <th style={th}>User ID</th>
-                  <th style={th}>Store</th>
-                  <th style={th}>Location</th>
-                  <th style={th}>Modules</th>
-                  <th style={{ ...th, width: 100 }}>Actions</th>
+                <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
+                  <th style={thStyle}>User ID</th>
+                  <th style={thStyle}>Store</th>
+                  <th style={thStyle}>Location</th>
+                  <th style={thStyle}>Modules</th>
+                  <th style={{ ...thStyle, textAlign: 'right', paddingRight: 20 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.length === 0 && (
-                  <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: '#a89cc8', fontSize: 13 }}>No users found.</td></tr>
+                  <tr>
+                    <td colSpan={5} style={{ padding: 32, textAlign: 'center', color: '#b8aed8', fontSize: 13 }}>
+                      No users yet. Click <strong>+ New User</strong> to add one.
+                    </td>
+                  </tr>
                 )}
                 {users.map((u, i) => (
-                  <tr key={u.id} style={{ borderTop: `1px solid ${border}`, background: i % 2 === 0 ? '#fff' : '#faf8ff' }}>
-                    <td style={td}><span style={{ fontWeight: 700, color: '#5b21b6' }}>{u.userid}</span></td>
-                    <td style={td}>{u.store}</td>
-                    <td style={td}>{u.location || '—'}</td>
-                    <td style={td}>
+                  <tr key={u.id} style={{ borderTop: i === 0 ? 'none' : `1px solid ${border}`, background: i % 2 === 0 ? '#fff' : '#faf8ff', transition: 'background 0.1s' }}>
+                    <td style={tdStyle}>
+                      <span style={{ fontWeight: 800, color: '#5b21b6', fontSize: 14, letterSpacing: '0.05em' }}>{u.userid}</span>
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={{ background: purpleLight, color: purple, border: `1px solid ${border}`, borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 700 }}>
+                        {u.store}
+                      </span>
+                    </td>
+                    <td style={{ ...tdStyle, color: '#666' }}>{u.location || '—'}</td>
+                    <td style={tdStyle}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {u.modules.length === 0 && <span style={{ color: '#c4b5fd', fontSize: 12 }}>No access</span>}
                         {u.modules.map(m => {
                           const mod = ALL_MODULES.find(x => x.id === m)
                           return mod ? (
-                            <span key={m} style={{ background: purpleLight, color: purple, border: `1px solid ${border}`, borderRadius: 12, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
+                            <span key={m} style={{ background: '#ede9fe', color: '#6d28d9', borderRadius: 10, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}>
                               {mod.label}
                             </span>
                           ) : null
                         })}
                       </div>
                     </td>
-                    <td style={td}>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          onClick={() => startEdit(u)}
-                          style={{ background: purpleLight, color: purple, border: `1px solid ${border}`, borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                        >Edit</button>
-                        <button
-                          onClick={() => deleteUser(u)}
-                          style={{ background: '#fff5f5', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                        >Del</button>
+                    <td style={{ ...tdStyle, textAlign: 'right', paddingRight: 16 }}>
+                      <div style={{ display: 'inline-flex', gap: 6 }}>
+                        <button onClick={() => startEdit(u)}
+                          style={{ background: purpleLight, color: purple, border: `1px solid ${border}`, borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                          Edit
+                        </button>
+                        <button onClick={() => deleteUser(u)}
+                          style={{ background: '#fff5f5', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                          ✕
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -264,8 +296,16 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
       {toast && (
-        <div style={{ position: 'fixed', bottom: 20, right: 20, background: '#3b1f8c', color: '#fff', padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 16px rgba(124,58,237,0.25)' }}>
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24,
+          background: toastType === 'err' ? '#7f1d1d' : '#3b1f8c',
+          color: '#fff', padding: '12px 20px', borderRadius: 10,
+          fontSize: 13, fontWeight: 600, zIndex: 9999,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+          animation: 'fadeIn 0.2s ease',
+        }}>
           {toast}
         </div>
       )}
@@ -273,19 +313,32 @@ export default function SettingsPage() {
   )
 }
 
-const th: React.CSSProperties = {
-  padding: '10px 14px',
-  textAlign: 'left',
-  fontSize: 11,
-  fontWeight: 700,
-  color: '#7c3aed',
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
+const labelStyle: React.CSSProperties = {
+  fontSize: 11, color: '#9b8ec4', fontWeight: 700,
+  letterSpacing: '0.06em', display: 'block', marginBottom: 5,
 }
 
-const td: React.CSSProperties = {
-  padding: '12px 14px',
-  fontSize: 13,
-  color: '#333',
-  verticalAlign: 'middle',
+const inputStyle: React.CSSProperties = {
+  background: '#f5f3ff', border: '1.5px solid #c4b5fd',
+  borderRadius: 7, padding: '9px 12px', fontSize: 13,
+  color: '#3b1f8c', fontWeight: 700, width: '100%', outline: 'none',
+  letterSpacing: '0.05em',
+}
+
+const selectStyle: React.CSSProperties = {
+  background: '#f5f3ff', border: '1.5px solid #c4b5fd',
+  borderRadius: 7, padding: '9px 12px', fontSize: 13,
+  color: '#3b1f8c', fontWeight: 600, width: '100%', outline: 'none',
+  cursor: 'pointer',
+}
+
+const thStyle: React.CSSProperties = {
+  padding: '12px 16px', textAlign: 'left',
+  fontSize: 11, fontWeight: 800, color: '#7c3aed',
+  letterSpacing: '0.08em', textTransform: 'uppercase',
+}
+
+const tdStyle: React.CSSProperties = {
+  padding: '13px 16px', fontSize: 13,
+  color: '#333', verticalAlign: 'middle',
 }
