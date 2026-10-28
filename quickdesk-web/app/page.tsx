@@ -3,14 +3,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginUser, setSession } from '@/lib/auth'
 
-function HexOutline({ x, y, size, opacity = 0.18 }: { x: number; y: number; size: number; opacity?: number }) {
-  const pts = Array.from({ length: 6 }, (_, i) => {
-    const a = (Math.PI / 180) * (60 * i - 30)
-    return `${x + size * Math.cos(a)},${y + size * Math.sin(a)}`
-  }).join(' ')
-  return <polygon points={pts} fill="none" stroke="#7c3aed" strokeWidth="1.5" opacity={opacity} />
-}
-
 export default function LoginPage() {
   const router = useRouter()
   const [userid, setUserid] = useState('')
@@ -32,17 +24,27 @@ export default function LoginPage() {
     router.push('/selector')
   }
 
-  // Honeycomb grid positions (flat-top hexagons, tiled)
-  const hexSize = 22
-  const cols = 12
-  const rows = 9
+  // Full-screen honeycomb — pointy-top hexagons tiled edge to edge
+  const S = 28       // hex radius
+  const W = S * Math.sqrt(3)
+  const H = S * 2
+  const cols = 32
+  const rows = 22
   const hexes: { x: number; y: number }[] = []
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const x = col * hexSize * 1.732 + (row % 2 === 0 ? 0 : hexSize * 0.866)
-      const y = row * hexSize * 1.5
-      hexes.push({ x: x + 20, y: y + 20 })
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      hexes.push({
+        x: c * W + (r % 2 === 0 ? 0 : W / 2),
+        y: r * H * 0.75,
+      })
     }
+  }
+
+  function hexPoints(cx: number, cy: number) {
+    return Array.from({ length: 6 }, (_, i) => {
+      const a = (Math.PI / 3) * i - Math.PI / 6
+      return `${cx + S * Math.cos(a)},${cy + S * Math.sin(a)}`
+    }).join(' ')
   }
 
   return (
@@ -56,87 +58,96 @@ export default function LoginPage() {
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* Honeycomb background */}
-      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} xmlns="http://www.w3.org/2000/svg">
-        {hexes.map((h, i) => <HexOutline key={i} x={h.x} y={h.y} size={hexSize} opacity={0.15} />)}
+      {/* Full background honeycomb */}
+      <svg
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        {hexes.map((h, i) => (
+          <polygon
+            key={i}
+            points={hexPoints(h.x, h.y)}
+            fill="none"
+            stroke="#7c3aed"
+            strokeWidth="1"
+            opacity="0.13"
+          />
+        ))}
       </svg>
 
-      <div style={{ width: '100%', maxWidth: 380, textAlign: 'center', position: 'relative', zIndex: 1 }}>
+      {/* Card */}
+      <div style={{ width: '100%', maxWidth: 340, textAlign: 'center', position: 'relative', zIndex: 1 }}>
 
-        {/* Logo — outlined hex with DESK inside */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
-          <svg width="100" height="116" viewBox="0 0 100 116" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* outer hex outline */}
+        {/* Hex logo */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+          <svg width="80" height="92" viewBox="0 0 80 92" fill="none" xmlns="http://www.w3.org/2000/svg">
             <polygon
-              points="50,4 96,28 96,88 50,112 4,88 4,28"
-              fill="rgba(124,58,237,0.06)"
+              points="40,3 77,23 77,69 40,89 3,69 3,23"
+              fill="rgba(124,58,237,0.07)"
               stroke="#7c3aed"
               strokeWidth="2.5"
             />
-            {/* inner hex outline */}
             <polygon
-              points="50,16 84,34 84,82 50,100 16,82 16,34"
+              points="40,14 66,29 66,63 40,78 14,63 14,29"
               fill="none"
               stroke="#7c3aed"
               strokeWidth="1"
-              opacity="0.35"
+              opacity="0.3"
             />
             <text
-              x="50"
-              y="62"
+              x="40" y="47"
               textAnchor="middle"
               dominantBaseline="middle"
               fill="#5b21b6"
-              fontSize="16"
+              fontSize="19"
               fontWeight="900"
               fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-              letterSpacing="3"
-            >DESK</text>
+              letterSpacing="2"
+            >QD</text>
           </svg>
         </div>
 
-        <h1 style={{ fontSize: 24, fontWeight: 900, letterSpacing: '0.1em', color: '#5b21b6', marginBottom: 4 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: '0.1em', color: '#5b21b6', marginBottom: 3 }}>
           QUICKDESK
         </h1>
-        <p style={{ color: '#9b8ec4', fontSize: 13, marginBottom: 28 }}>Enter your User ID to continue</p>
+        <p style={{ color: '#9b8ec4', fontSize: 12, marginBottom: 22 }}>Enter your User ID to continue</p>
 
         <form onSubmit={handleLogin} style={{
-          background: 'rgba(255,255,255,0.92)',
+          background: 'rgba(255,255,255,0.88)',
           border: '1.5px solid #d4c8f0',
           borderRadius: 14,
-          padding: '24px 28px',
-          boxShadow: '0 4px 24px rgba(124,58,237,0.10)',
+          padding: '20px 22px',
+          boxShadow: '0 4px 28px rgba(124,58,237,0.12)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 14,
+          gap: 11,
           textAlign: 'left',
-          backdropFilter: 'blur(6px)',
+          backdropFilter: 'blur(8px)',
         }}>
           <div>
-            <label style={{ fontSize: 11, color: '#9b8ec4', display: 'block', marginBottom: 6, fontWeight: 700, letterSpacing: '0.06em' }}>
+            <label style={{ fontSize: 10, color: '#9b8ec4', display: 'block', marginBottom: 5, fontWeight: 700, letterSpacing: '0.08em' }}>
               USER ID
             </label>
             <input
               autoFocus
               value={userid}
               onChange={e => setUserid(e.target.value)}
-              placeholder=""
               style={{
                 textTransform: 'uppercase',
                 background: '#f5f3ff',
                 border: '1.5px solid #c4b5fd',
-                borderRadius: 8,
-                padding: '10px 14px',
-                fontSize: 15,
+                borderRadius: 7,
+                padding: '8px 12px',
+                fontSize: 13,
                 color: '#3b1f8c',
                 fontWeight: 700,
                 width: '100%',
                 outline: 'none',
-                letterSpacing: '0.1em',
+                letterSpacing: '0.12em',
               }}
             />
           </div>
-          {err && <p style={{ color: '#dc2626', fontSize: 12 }}>{err}</p>}
+          {err && <p style={{ color: '#dc2626', fontSize: 11, margin: 0 }}>{err}</p>}
           <button
             type="submit"
             disabled={loading}
@@ -145,8 +156,8 @@ export default function LoginPage() {
               color: '#fff',
               border: 'none',
               borderRadius: 8,
-              padding: '12px 0',
-              fontSize: 14,
+              padding: '10px 0',
+              fontSize: 13,
               fontWeight: 700,
               cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.7 : 1,
@@ -159,7 +170,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p style={{ fontSize: 12, color: '#b8aed8', marginTop: 18 }}>
+        <p style={{ fontSize: 11, color: '#c4b5fd', marginTop: 16 }}>
           Contact your manager to get a User ID
         </p>
       </div>
