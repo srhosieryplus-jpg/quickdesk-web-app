@@ -40,6 +40,22 @@ export default function AutoCSVPage() {
   const [logFilter, setLogFilter] = useState('')
   const [logLoading, setLogLoading] = useState(false)
 
+  // POS processing state
+  interface PosRow {
+    invoice: string; poNum: string; customer: string; style: string
+    upc: string; shippedQty: string; id: string; createdPO: string
+    itemNotOnOrder: string; validUPC: string; poPreviouslyClosed: string
+    storeID: string; newPONumber: string
+    isError: boolean
+  }
+  const [posRows, setPosRows] = useState<PosRow[]>([])
+  const [posErrors, setPosErrors] = useState<PosRow[]>([])
+  const [showErrorModal, setShowErrorModal] = useState(false)
+  const [fixedInput, setFixedInput] = useState('')
+  const [showAddFixed, setShowAddFixed] = useState(false)
+  // invoiceGroup → { poNum, customer, storeID, qty } for logged clean rows
+  const [pendingLog, setPendingLog] = useState<Record<string, { poNum: string; customer: string; storeID: string; qty: number }>>({})
+
   const [toast, setToast] = useState('')
 
   useEffect(() => {
@@ -133,34 +149,104 @@ export default function AutoCSVPage() {
     showToast(`✅ ${dataLines.length} rows · ${rows.length} unique`)
   }
 
+  const POS_COLS = ['','InvoiceNoCompany','PONum','Customer','Style','UPC','ShippedQTY','ID','CreatedPO','ItemNotOnOrder','ValidUPC','POPreviouslyClosed','StoreID','NewPONumber'] as const
+
+  function parsePosLines(text: string): PosRow[] {
+    return text.trim().split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !/^invoicenocompany/i.test(l) && !/^\t?InvoiceNoCompany/i.test(l))
+      .map(line => {
+        // first column is blank, so split on tab and shift
+        const parts = line.split('\t')
+        // handle whether pasted with or without leading blank tab
+        const offset = parts[0].trim() === '' ? 1 : 0
+        const get = (i: number) => (parts[offset + i] || '').trim()
+        const validUPC = get(9)
+        return {
+          invoice: get(0), poNum: get(1), customer: get(2), style: get(3),
+          upc: get(4), shippedQty: get(5), id: get(6), createdPO: get(7),
+          itemNotOnOrder: get(8), validUPC, poPreviouslyClosed: get(10),
+          storeID: get(11), newPONumber: get(12),
+          isError: validUPC !== '' && validUPC !== undefined,
+        }
+      })
+      .filter(r => r.invoice)
+  }
+
   function processPosQuery() {
     if (!posQuery.trim()) { showToast('⚠️ Paste POS query data first'); return }
-    const lines = posQuery.trim().split('\n').filter(l => l.trim())
-    const parsed: Record<string, { poNum: string; customer: string; storeId: string; qty: number; notOnOrder: number; closedPO: boolean; newPO: string }> = {}
-    let errors = 0
+    const rows = parsePosLines(posQuery)
+    if (!rows.length) { showToast('⚠️ No data rows found — check format'); return }
 
-    for (const line of lines) {
-      const parts = line.trim().split(/\s+/)
-      if (parts.length < 7) continue
-      const [invoice, poNum, customer, , upc, qty, , , notOnOrder, validUpc, closedPO, storeId, newPO] = parts
-      const q = parseInt(qty) || 0
-      if (!parsed[invoice]) {
-        parsed[invoice] = { poNum, customer, storeId: storeId || '', qty: 0, notOnOrder: 0, closedPO: false, newPO: newPO || '' }
-      }
-      parsed[invoice].qty += q
-      if (notOnOrder && notOnOrder !== 'NO') parsed[invoice].notOnOrder++
-      if (closedPO === '✓' || closedPO === 'yes') parsed[invoice].closedPO = true
-      if (validUpc === 'NO' || notOnOrder === 'YES') errors++
+    const good = rows.filter(r => !r.isError)
+    const bad = rows.filter(r => r.isError)
+    setPosRows(rows)
+    setPosErrors(bad)
+
+    // Group good rows by invoice for logging
+    const grouped: Record<string, { poNum: string; customer: string; storeID: string; qty: number }> = {}
+    for (const r of good) {
+      const q = parseInt(r.shippedQty) || 0
+      if (!grouped[r.invoice]) grouped[r.invoice] = { poNum: r.poNum, customer: r.customer, storeID: r.storeID, qty: 0 }
+      grouped[r.invoice].qty += q
     }
+    setPendingLog(grouped)
 
-    const rows = Object.entries(parsed)
-    const header = 'InvoiceNoCompany\tPONum\tCustomer\tStoreID\tShippedQty (sum)\tItem Not On Order\tClosed PO?\tNewPO#'
-    const body = rows.map(([inv, v]) =>
-      `${inv}\t${v.poNum}\t${v.customer}\t${v.storeId}\t${v.qty}\t${v.notOnOrder || ''}\t${v.closedPO ? '✓' : ''}\t${v.newPO || ''}`
-    ).join('\n')
-    setPosSummary([header, body].join('\n'))
+    // Build POS summary string for bottom-right panel
+    const invLines: string[] = []
+    for (const [inv, v] of Object.entries(grouped)) {
+      invLines.push(`${inv}\t${v.poNum}\t${v.customer}\t${v.storeID}\t${v.qty}`)
+    }
+    setPosSummary(['InvoiceNoCompany\tPONum\tCustomer\tStoreID\tShippedQty (sum)', ...invLines].join('\n'))
 
-    showToast(`✅ Processed · ${errors} with errors`)
+    showToast(`✅ ${good.length} clean · ${bad.length} error${bad.length !== 1 ? 's' : ''}`)
+    if (bad.length > 0) setShowAddFixed(false)
+  }
+
+  async function logToSupabase(
+    grouped: Record<string, { poNum: string; customer: string; storeID: string; qty: number }>,
+    allowDupes = false
+  ) {
+    if (!user) return
+    let skipped = 0
+    for (const [invoice, v] of Object.entries(grouped)) {
+      if (!allowDupes && loggedInvoices.has(invoice)) { skipped++; continue }
+      await supabase.from('autocsv_log').insert({
+        invoice_num: invoice,
+        po_num: v.poNum,
+        store: v.storeID || user.store,
+        qty_total: v.qty,
+        userid: user.userid,
+      })
+    }
+    // refresh logged set
+    const { data } = await supabase.from('autocsv_log').select('invoice_num')
+    if (data) setLoggedInvoices(new Set(data.map((r: { invoice_num: string }) => r.invoice_num)))
+    return skipped
+  }
+
+  async function handleProcessAndLog() {
+    if (!Object.keys(pendingLog).length) { showToast('⚠️ Process POS data first'); return }
+    const skipped = await logToSupabase(pendingLog, false)
+    const logged = Object.keys(pendingLog).length - (skipped || 0)
+    showToast(`✅ Logged ${logged} invoice${logged !== 1 ? 's' : ''}${skipped ? ` · ${skipped} skipped (already logged)` : ''}`)
+    if (posErrors.length > 0) setShowAddFixed(true)
+  }
+
+  async function handleAddFixed() {
+    if (!fixedInput.trim()) { showToast('⚠️ Paste corrected rows first'); return }
+    const rows = parsePosLines(fixedInput)
+    const grouped: Record<string, { poNum: string; customer: string; storeID: string; qty: number }> = {}
+    for (const r of rows) {
+      const q = parseInt(r.shippedQty) || 0
+      if (!grouped[r.invoice]) grouped[r.invoice] = { poNum: r.poNum, customer: r.customer, storeID: r.storeID, qty: 0 }
+      grouped[r.invoice].qty += q
+    }
+    // Force-insert even if duplicate (user is intentionally adding to existing log)
+    await logToSupabase(grouped, true)
+    showToast(`✅ Added ${Object.keys(grouped).length} fixed invoice(s) to log`)
+    setFixedInput('')
+    setShowAddFixed(false)
   }
 
   function clearAll() {
@@ -169,6 +255,12 @@ export default function AutoCSVPage() {
     setVendorFooter('')
     setPosQuery('')
     setPosSummary('')
+    setPosRows([])
+    setPosErrors([])
+    setPendingLog({})
+    setShowAddFixed(false)
+    setFixedInput('')
+    setShowErrorModal(false)
   }
 
   if (!user) return null
@@ -362,51 +454,100 @@ export default function AutoCSVPage() {
           <div style={panelStyle}>
             <div style={panelHeaderStyle}>
               <span style={panelLabelStyle}>POS Query</span>
-              <span style={{ fontSize: 10, color: '#b8aed8' }}>InvoiceNoCompany · PONum · Customer · UPC · ValidUPC ...</span>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => {}} style={smBtn('#fff3cd', '#92400e')}>⚠ View Errors</button>
-                <button onClick={processPosQuery} style={smBtn(purple, '#fff')}>▶ Process + Log</button>
+                {posErrors.length > 0 && (
+                  <button onClick={() => setShowErrorModal(true)} style={smBtn('#fff3cd', '#92400e')}>
+                    ⚠ View Errors ({posErrors.length})
+                  </button>
+                )}
+                <button onClick={processPosQuery} style={smBtn('#e0e7ff', '#3730a3')}>▶ Process</button>
+                <button onClick={handleProcessAndLog} style={smBtn(purple, '#fff')}>📥 Log</button>
               </div>
             </div>
+
+            {/* Fixed header row */}
+            <div style={{ overflowX: 'auto', flexShrink: 0, borderBottom: `1px solid ${border}` }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 10, width: '100%' }}>
+                <thead>
+                  <tr style={{ background: '#f0ebff' }}>
+                    {POS_COLS.map((col, i) => (
+                      <th key={i} style={{
+                        padding: '5px 8px', textAlign: 'left', fontWeight: 800,
+                        color: col === 'ValidUPC' ? '#dc2626' : purple,
+                        whiteSpace: 'nowrap', letterSpacing: '0.03em',
+                        minWidth: i === 0 ? 24 : undefined,
+                        borderRight: `1px solid ${border}`,
+                      }}>{col}</th>
+                    ))}
+                  </tr>
+                </thead>
+              </table>
+            </div>
+
             <div style={{ flex: 1, overflow: 'hidden' }}>
               <textarea
                 value={posQuery}
                 onChange={e => setPosQuery(e.target.value)}
-                placeholder="Paste POS query data here..."
-                style={taStyle}
+                placeholder={`Paste system response here (tab-separated, blank first column)...\n\nExpected columns:\n  [blank]  InvoiceNoCompany  PONum  Customer  Style  UPC  ShippedQTY  ID  CreatedPO  ItemNotOnOrder  ValidUPC  POPreviouslyClosed  StoreID  NewPONumber`}
+                style={{ ...taStyle, fontSize: 10 }}
               />
             </div>
             <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
-              {posQuery.trim()
-                ? `✓ ${posQuery.trim().split('\n').filter(l => l.trim()).length} rows`
-                : 'No data'}
+              {posRows.length > 0
+                ? `${posRows.length} rows · ${posRows.filter(r=>!r.isError).length} clean · ${posErrors.length} error${posErrors.length !== 1 ? 's' : ''}`
+                : posQuery.trim() ? `${posQuery.trim().split('\n').filter(l => l.trim()).length} rows pasted` : 'No data'}
             </div>
+
+            {/* Add Fixed section — appears after logging when errors exist */}
+            {showAddFixed && (
+              <div style={{ borderTop: `2px solid #fcd34d`, background: '#fffbeb', padding: 10, flexShrink: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: '#92400e', marginBottom: 6 }}>
+                  ✏️ ADD FIXED ROWS — paste corrected rows below (will append to existing log, no dupe warning)
+                </div>
+                <textarea
+                  value={fixedInput}
+                  onChange={e => setFixedInput(e.target.value)}
+                  placeholder="Paste corrected rows here..."
+                  style={{ ...taStyle, height: 80, background: '#fff', border: `1px solid #fcd34d`, borderRadius: 6, fontSize: 10 }}
+                />
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setShowAddFixed(false); setFixedInput('') }} style={smBtn('#f3f4f6', '#6b7280')}>Cancel</button>
+                  <button onClick={handleAddFixed} style={smBtn('#16a34a', '#fff')}>✅ Add to Log</button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* BOTTOM-RIGHT: POS Summary + Errors */}
+          {/* BOTTOM-RIGHT: POS Summary */}
           <div style={panelStyle}>
             <div style={panelHeaderStyle}>
-              <span style={panelLabelStyle}>POS Summary + Errors</span>
+              <span style={panelLabelStyle}>POS Summary</span>
+              {posRows.length > 0 && (
+                <span style={{ fontSize: 10, color: posErrors.length > 0 ? '#dc2626' : '#16a34a', fontWeight: 700 }}>
+                  {posErrors.length > 0 ? `⚠ ${posErrors.length} error${posErrors.length !== 1 ? 's' : ''} — log excludes them` : '✅ All rows clean'}
+                </span>
+              )}
             </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
               {posSummary ? (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
+                      {['InvoiceNoCompany','PONum','Customer','StoreID','ShippedQty (sum)'].map(h => (
+                        <th key={h} style={{ padding: '7px 10px', fontWeight: 800, color: purple, textAlign: 'left', whiteSpace: 'nowrap', fontSize: 10 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
                   <tbody>
-                    {posSummary.split('\n').map((line, i) => {
-                      const cells = line.split('\t')
-                      const hasError = i > 0 && (cells[5] || cells[6] === '✓')
+                    {posSummary.split('\n').slice(1).map((line, i) => {
+                      const [inv, poNum, customer, storeID, qty] = line.split('\t')
                       return (
-                        <tr key={i} style={{
-                          background: i === 0 ? purpleLight : hasError ? '#fff1f2' : i % 2 === 0 ? '#fff' : '#faf8ff',
-                          borderBottom: `1px solid ${border}`,
-                        }}>
-                          {cells.map((cell, j) => (
-                            <td key={j} style={{
-                              padding: '6px 10px', fontWeight: i === 0 ? 800 : 400,
-                              color: i === 0 ? purple : hasError ? '#dc2626' : '#333',
-                              fontFamily: i === 0 ? 'inherit' : 'monospace', whiteSpace: 'nowrap',
-                            }}>{cell}</td>
-                          ))}
+                        <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#faf8ff', borderBottom: `1px solid ${border}` }}>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 700, color: '#2d1f6e' }}>{inv}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#555' }}>{poNum}</td>
+                          <td style={{ padding: '6px 10px', color: '#555' }}>{customer}</td>
+                          <td style={{ padding: '6px 10px', color: '#555' }}>{storeID}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 700 }}>{qty}</td>
                         </tr>
                       )
                     })}
@@ -420,10 +561,57 @@ export default function AutoCSVPage() {
             </div>
             {posSummary && (
               <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
-                {posSummary.split('\n').length - 1} invoices processed
+                {posSummary.split('\n').length - 1} unique invoice{posSummary.split('\n').length - 1 !== 1 ? 's' : ''}
               </div>
             )}
           </div>
+
+          {/* Error Modal */}
+          {showErrorModal && (
+            <div style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }} onClick={() => setShowErrorModal(false)}>
+              <div style={{
+                background: '#fff', borderRadius: 14, width: '80%', maxWidth: 900, maxHeight: '75vh',
+                display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
+                overflow: 'hidden',
+              }} onClick={e => e.stopPropagation()}>
+                <div style={{ background: '#fff1f2', borderBottom: '2px solid #fecaca', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 900, color: '#dc2626', fontSize: 13 }}>⚠ Error Rows — ValidUPC Issues ({posErrors.length})</span>
+                  <button onClick={() => setShowErrorModal(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#dc2626' }}>✕</button>
+                </div>
+                <div style={{ overflow: 'auto', flex: 1 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: '#fef2f2', borderBottom: '2px solid #fecaca', position: 'sticky', top: 0 }}>
+                        {['InvoiceNoCompany','PONum','Customer','Style','UPC','ShippedQTY','ValidUPC','StoreID'].map(h => (
+                          <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: h === 'ValidUPC' ? '#dc2626' : '#7f1d1d', fontWeight: 800, fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {posErrors.map((r, i) => (
+                        <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fff5f5', borderBottom: '1px solid #fecaca' }}>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 700, color: '#7f1d1d' }}>{r.invoice}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{r.poNum}</td>
+                          <td style={{ padding: '6px 10px' }}>{r.customer}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{r.style}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{r.upc}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{r.shippedQty}</td>
+                          <td style={{ padding: '6px 10px', color: '#dc2626', fontWeight: 700 }}>{r.validUPC}</td>
+                          <td style={{ padding: '6px 10px' }}>{r.storeID}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ padding: '10px 20px', borderTop: '1px solid #fecaca', background: '#fff1f2', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button onClick={() => setShowErrorModal(false)} style={smBtn('#dc2626', '#fff')}>Close</button>
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       )}
