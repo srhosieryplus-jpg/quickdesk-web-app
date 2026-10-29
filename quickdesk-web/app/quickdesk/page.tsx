@@ -283,9 +283,7 @@ export default function QDPage() {
 
         {/* Center: logo + title */}
         <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
-          <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
-            <polygon points="11,1 21,7 21,19 11,25 1,19 1,7" fill="none" stroke="#7c3aed" strokeWidth="2" />
-          </svg>
+          <span style={{ fontSize: 18, fontWeight: 900, color: '#7c3aed', letterSpacing: '0.05em' }}>▌▌▌</span>
           <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>UPC SCANNER</span>
           {/* Live / offline pill */}
           <span style={{
@@ -340,9 +338,9 @@ export default function QDPage() {
 
             <div style={{ display: 'flex', gap: 8 }}>
               {[['Total Qty', totalQty], ['Unique', uniqueCount]].map(([lbl, num]) => (
-                <div key={lbl as string} style={{ flex: 1, background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '4px 8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: purple }}>{num}</div>
-                  <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>{lbl}</div>
+                <div key={lbl as string} style={{ flex: 1, background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '3px 6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: purple }}>{num}</div>
+                  <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 600 }}>{lbl}</div>
                 </div>
               ))}
             </div>
