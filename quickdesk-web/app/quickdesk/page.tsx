@@ -42,6 +42,7 @@ export default function QDPage() {
   // Extra col prompt
   const [colPrompt, setColPrompt] = useState(false)
   const [colName, setColName] = useState('')
+  const pendingScanRef = useRef<string>('')
 
   useEffect(() => {
     const u = getSession()
@@ -64,13 +65,21 @@ export default function QDPage() {
 
   function startSession() {
     if (!newName.trim()) { showToast('Enter a session name'); return }
-    setSession({
+    const newSess: UPCSession = {
       name: newName.trim(),
       store: newStore,
       order_list: [],
       data: {},
       extra_cols: [],
-    })
+    }
+    // If user tried to scan before starting, process it now
+    const pending = pendingScanRef.current
+    if (pending) {
+      newSess.order_list = [pending]
+      newSess.data[pending] = { qty: 1 }
+      pendingScanRef.current = ''
+    }
+    setSession(newSess)
     setShowModal(false)
     setNewName('')
     setTimeout(() => inputRef.current?.focus(), 100)
@@ -84,7 +93,8 @@ export default function QDPage() {
 
   function handleScan(upc: string) {
     upc = upc.trim()
-    if (!upc || !session) { showToast('Start a session first!'); return }
+    if (!session) { pendingScanRef.current = upc; setShowModal(true); return }
+    if (!upc) return
     setSession(prev => {
       if (!prev) return prev
       const d = { ...prev.data }
@@ -184,7 +194,7 @@ export default function QDPage() {
     const src = s || session
     if (!src || !src.order_list.length) { showToast('Nothing to export'); return }
     const extra = src.extra_cols
-    const headers = ['UPC', 'Qty', ...extra, 'Store', 'Session']
+    const headers = ['UPC', 'Qty', ...extra, 'Store ID', 'Session']
     const rows = src.order_list.map(upc => {
       const d = src.data[upc]
       return [upc, d.qty, ...extra.map(n => d[n] || ''), src.store, src.name]
@@ -207,7 +217,7 @@ export default function QDPage() {
       {/* Header */}
       <div style={{ background: '#e8e4f8', borderBottom: `2px solid ${border}`, padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>
-          ▌▌ UPC SCANNER
+          ▌▌▌ UPC SCANNER
           <span style={{ color: '#6b7280', fontWeight: 400, fontSize: 12, marginLeft: 8 }}>
             {session ? `${session.name} — ${session.store}` : 'No Active Session'}
           </span>
@@ -230,8 +240,8 @@ export default function QDPage() {
           {/* Scan input */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <label style={labelSt}>Scan Barcode / UPC</label>
-            <input ref={inputRef} type="text" placeholder="Scan or type any code…"
-              style={{ ...inputSt, fontSize: 13, fontWeight: 600, letterSpacing: '0.8px' }}
+            <input ref={inputRef} type="text" placeholder="Scan or type code…"
+              style={{ ...inputSt, fontSize: 11, fontWeight: 600, letterSpacing: '0.8px' }}
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   const v = (e.target as HTMLInputElement).value;
