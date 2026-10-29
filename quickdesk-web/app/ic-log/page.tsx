@@ -105,8 +105,9 @@ export default function ICLogPage() {
     e.preventDefault()
     const order = newOrder.trim()
     if (!order) { showToast('❌ Invoice # required', 'err'); return }
+    if (!newStore) { showToast('❌ StoreID required', 'err'); return }
     setAdding(true)
-    const { error } = await supabase.from('ic_log').insert({
+    const payload = {
       store: newStore,
       userid: currentUser?.userid || '',
       order_num: order,
@@ -116,8 +117,9 @@ export default function ICLogPage() {
       qty_pushed: 0,
       in_push_log: false,
       note_pushed: false,
-    })
-    if (error) { showToast(`❌ ${error.message}`, 'err'); setAdding(false); return }
+    }
+    const { error } = await supabase.from('ic_log').insert(payload)
+    if (error) { showToast(`❌ ${error.message || error.code || 'Insert failed'}`, 'err'); setAdding(false); return }
     setNewOrder(''); setNewNote('')
     setAdding(false)
     showToast('✅ Order logged')
@@ -168,19 +170,18 @@ export default function ICLogPage() {
             style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>
             ← Home
           </button>
+          <div style={{ width: 1, height: 16, background: border }} />
+          <span style={{ fontSize: 12, color: '#9b8ec4' }}>
+            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{currentUser?.userid}</span>
+            {currentUser?.store ? <> · {currentUser.store === 'ALL' ? 'All Stores' : currentUser.store}</> : ''}
+          </span>
         </div>
 
         {/* Center */}
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, pointerEvents: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20, color: purple }}>∞</span>
-            <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>INFINITY CLASSICS</span>
-            <span style={{ color: '#c4b5fd', fontSize: 14 }}>— Order Log</span>
-          </div>
-          <div style={{ fontSize: 11, color: '#9b8ec4' }}>
-            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{currentUser?.userid}</span>
-            {currentUser?.store ? <> · StoreID: <span style={{ fontWeight: 600, color: '#7c3aed' }}>{currentUser.store === 'ALL' ? 'All Stores' : currentUser.store}</span></> : ''}
-          </div>
+        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
+          <span style={{ fontSize: 20, color: purple }}>∞</span>
+          <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>INFINITY CLASSICS</span>
+          <span style={{ color: '#c4b5fd', fontSize: 14 }}>— Order Log</span>
         </div>
 
         {/* Right */}
@@ -194,8 +195,8 @@ export default function ICLogPage() {
 
       {/* Add form */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '10px 20px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: purpleD, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Log a New Order</div>
-        <form onSubmit={addEntry} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: purpleD, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Log a New Order</div>
+        <form onSubmit={addEntry} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <label style={labelSt}>StoreID:</label>
             <select value={newStore} onChange={e => setNewStore(e.target.value)} style={inputSt}>
