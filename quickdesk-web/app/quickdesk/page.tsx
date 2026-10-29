@@ -3,16 +3,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { User } from '@/lib/types'
 
 const STORES = ['PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
 const DELETE_PASSWORD = 'delete'
+const ADMINS = ['SR', 'STAR']
 
 interface ScanData { qty: number; [col: string]: string | number }
 interface UPCSession {
   id?: string
   name: string
   store: string
-  created_at?: string
+  userid?: string
   saved_at?: string
   order_list: string[]
   data: Record<string, ScanData>
@@ -24,22 +26,27 @@ const purpleD = '#6d28d9'
 const purpleLight = '#f5f3ff'
 const border = '#c4b5fd'
 
+type Tab = 'scanner' | 'history'
+
 export default function QDPage() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const isAdmin = (u: User | null) => u && ADMINS.includes(u.userid.toUpperCase())
 
+  const [tab, setTab] = useState<Tab>('scanner')
   const [session, setSession] = useState<UPCSession | null>(null)
-  const [savedSessions, setSavedSessions] = useState<(UPCSession & { id: string })[]>([])
+  const [recentSessions, setRecentSessions] = useState<(UPCSession & { id: string })[]>([])
+  const [allSessions, setAllSessions] = useState<(UPCSession & { id: string })[]>([])
+  const [historySearch, setHistorySearch] = useState('')
   const [sortAsc, setSortAsc] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
 
-  // New session modal
   const [showModal, setShowModal] = useState(false)
   const [newName, setNewName] = useState('')
   const [newStore, setNewStore] = useState('PO')
 
-  // Extra col prompt
   const [colPrompt, setColPrompt] = useState(false)
   const [colName, setColName] = useState('')
   const pendingScanRef = useRef<string>('')
@@ -47,7 +54,8 @@ export default function QDPage() {
   useEffect(() => {
     const u = getSession()
     if (!u) { router.push('/'); return }
-    loadSessions()
+    setCurrentUser(u)
+    loadSessions(u)
   }, [router])
 
   function showToast(msg: string) {
@@ -55,12 +63,17 @@ export default function QDPage() {
     setTimeout(() => setToast(''), 2500)
   }
 
-  async function loadSessions() {
-    const { data } = await supabase
-      .from('upc_sessions')
-      .select('*')
-      .order('saved_at', { ascending: false })
-    setSavedSessions((data || []) as (UPCSession & { id: string })[])
+  async function loadSessions(u?: User) {
+    const user = u || currentUser
+    if (!user) return
+    let query = supabase.from('upc_sessions').select('*').order('saved_at', { ascending: false })
+    if (!isAdmin(user)) {
+      query = query.eq('userid', user.userid)
+    }
+    const { data } = await query
+    const all = (data || []) as (UPCSession & { id: string })[]
+    setAllSessions(all)
+    setRecentSessions(all.slice(0, 5))
   }
 
   function startSession() {
@@ -68,11 +81,11 @@ export default function QDPage() {
     const newSess: UPCSession = {
       name: newName.trim(),
       store: newStore,
+      userid: currentUser?.userid,
       order_list: [],
       data: {},
       extra_cols: [],
     }
-    // If user tried to scan before starting, process it now
     const pending = pendingScanRef.current
     if (pending) {
       newSess.order_list = [pending]
@@ -88,6 +101,7 @@ export default function QDPage() {
 
   function loadSessionData(s: UPCSession & { id: string }) {
     setSession({ ...s })
+    setTab('scanner')
     setTimeout(() => inputRef.current?.focus(), 100)
   }
 
@@ -158,6 +172,7 @@ export default function QDPage() {
     const payload = {
       name: session.name,
       store: session.store,
+      userid: currentUser?.userid || '',
       order_list: session.order_list,
       data: session.data,
       extra_cols: session.extra_cols,
@@ -194,10 +209,10 @@ export default function QDPage() {
     const src = s || session
     if (!src || !src.order_list.length) { showToast('Nothing to export'); return }
     const extra = src.extra_cols
-    const headers = ['UPC', 'Qty', ...extra, 'Store ID', 'Session']
+    const headers = ['UPC', 'Qty', ...extra, 'Store ID', 'Session', 'User']
     const rows = src.order_list.map(upc => {
       const d = src.data[upc]
-      return [upc, d.qty, ...extra.map(n => d[n] || ''), src.store, src.name]
+      return [upc, d.qty, ...extra.map(n => d[n] || ''), src.store, src.name, src.userid || '']
     })
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const a = document.createElement('a')
@@ -210,6 +225,34 @@ export default function QDPage() {
   const totalQty = session ? Object.values(session.data).reduce((s, r) => s + (r.qty as number), 0) : 0
   const uniqueCount = session?.order_list.length ?? 0
   const rows = session ? (sortAsc ? session.order_list : [...session.order_list].reverse()) : []
+
+  const filteredHistory = allSessions.filter(s => {
+    const q = historySearch.toLowerCase()
+    return !q || s.name.toLowerCase().includes(q) || s.store.toLowerCase().includes(q) || (s.userid || '').toLowerCase().includes(q)
+  })
+
+  function SessionCard({ s, showUser }: { s: UPCSession & { id: string }; showUser?: boolean }) {
+    const total = Object.values(s.data).reduce((a, r) => a + (r.qty as number), 0)
+    const date = s.saved_at ? new Date(s.saved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+    return (
+      <div style={{ background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '5px 6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, flex: 1 }}>{s.name}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: total > 0 ? '#dcfce7' : '#fef3c7', color: total > 0 ? '#166534' : '#92400e' }}>
+            {total > 0 ? '✓' : 'Empty'}
+          </span>
+        </div>
+        <div style={{ fontSize: 10, color: '#6b7280', margin: '2px 0' }}>
+          {s.store}{showUser && s.userid ? ` · ${s.userid}` : ''} · {s.order_list.length} UPCs · {total} qty{date ? ` · ${date}` : ''}
+        </div>
+        <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
+          <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px', flex: 1 }}>Load</button>
+          <button onClick={() => exportCSV(s)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 7px', flex: 1 }}>↓ CSV</button>
+          <button onClick={() => deleteSession(s)} style={{ ...btnSt('red'), fontSize: 10, padding: '2px 6px' }}>✕</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -231,163 +274,190 @@ export default function QDPage() {
         <Btn color="ghost" onClick={() => router.push('/selector')}>← Home</Btn>
       </div>
 
-      {/* Body */}
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', flex: 1, minHeight: 0, height: 'calc(100vh - 44px)' }}>
-
-        {/* Left panel */}
-        <div style={{ background: '#fff', borderRight: `1px solid ${border}`, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
-
-          {/* Scan input */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <label style={labelSt}>Scan Barcode / UPC</label>
-            <input ref={inputRef} type="text" placeholder="Scan or type code…"
-              style={{ ...inputSt, fontSize: 11, fontWeight: 600, letterSpacing: '0.8px' }}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  const v = (e.target as HTMLInputElement).value;
-                  if (v) { handleScan(v); (e.target as HTMLInputElement).value = '' }
-                }
-              }} />
-          </div>
-
-          {/* Stats */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[['Total Qty', totalQty], ['Unique', uniqueCount]].map(([lbl, num]) => (
-              <div key={lbl as string} style={{ flex: 1, background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '4px 8px', textAlign: 'center' }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: purple }}>{num}</div>
-                <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>{lbl}</div>
-              </div>
-            ))}
-          </div>
-
-          <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
-
-          {/* Custom columns */}
-          <div style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: purpleD, marginBottom: 6 }}>Custom Columns</div>
-            {session?.extra_cols.map(col => (
-              <div key={col} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: purpleD, flex: 1 }}>📌 {col}</span>
-                <button onClick={() => removeExtraCol(col)}
-                  style={{ background: '#fee2e2', border: 'none', color: '#dc2626', fontSize: 10, padding: '2px 5px', borderRadius: 3, cursor: 'pointer' }}>✕</button>
-              </div>
-            ))}
-            {colPrompt ? (
-              <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                <input value={colName} onChange={e => setColName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addExtraCol()}
-                  autoFocus placeholder="Column name…"
-                  style={{ ...inputSt, flex: 1, fontSize: 11 }} />
-                <button onClick={addExtraCol} style={{ ...btnSt('primary'), fontSize: 10, padding: '3px 8px' }}>Add</button>
-                <button onClick={() => { setColPrompt(false); setColName('') }} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 6px' }}>✕</button>
-              </div>
-            ) : (
-              <button onClick={() => setColPrompt(true)}
-                style={{ width: '100%', ...btnSt('ghost'), justifyContent: 'center', fontSize: 11, padding: '3px 8px', marginTop: 2 }}>
-                + Add Column
-              </button>
-            )}
-          </div>
-
-          <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
-
-          {/* Saved sessions */}
-          <div style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 6, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: purpleD, textTransform: 'uppercase', letterSpacing: '0.4px', flex: 1 }}>Saved Sessions</span>
-              <button onClick={loadSessions} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 6px' }}>🔄</button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto' }}>
-              {savedSessions.length === 0 && (
-                <div style={{ color: '#6b7280', fontSize: 11, padding: 6, textAlign: 'center' }}>No saved sessions.</div>
-              )}
-              {savedSessions.map(s => {
-                const total = Object.values(s.data).reduce((a, r) => a + (r.qty as number), 0)
-                return (
-                  <div key={s.id} style={{ background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '5px 6px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, flex: 1 }}>{s.name}</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: total > 0 ? '#dcfce7' : '#fef3c7', color: total > 0 ? '#166534' : '#92400e' }}>
-                        {total > 0 ? '✓' : 'Empty'}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 10, color: '#6b7280', margin: '2px 0' }}>
-                      {s.store} · {s.order_list.length} UPCs · {total} qty
-                    </div>
-                    <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
-                      <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px', flex: 1 }}>Load</button>
-                      <button onClick={() => exportCSV(s)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 7px', flex: 1 }}>↓ CSV</button>
-                      <button onClick={() => deleteSession(s)} style={{ ...btnSt('red'), fontSize: 10, padding: '2px 6px' }}>✕</button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <button onClick={clearSession}
-            style={{ width: '100%', ...btnSt('red'), justifyContent: 'center', fontSize: 11 }}>
-            🗑 Clear Session
+      {/* Tab bar */}
+      <div style={{ background: '#e8e4f8', borderBottom: `1px solid ${border}`, display: 'flex', gap: 0 }}>
+        {(['scanner', 'history'] as Tab[]).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{ padding: '7px 18px', fontSize: 12, fontWeight: 700, border: 'none', borderBottom: tab === t ? `2px solid ${purple}` : '2px solid transparent', background: 'none', color: tab === t ? purple : '#6b7280', cursor: 'pointer', textTransform: 'capitalize', fontFamily: 'Inter, sans-serif' }}>
+            {t === 'scanner' ? '📷 Scanner' : '🗂 History'}
           </button>
-        </div>
-
-        {/* Right panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ background: '#e8e4f8', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: `1px solid ${border}` }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>Session Table</span>
-            <div style={{ flex: 1 }} />
-            <button onClick={() => setSortAsc(a => !a)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>⇅ Sort</button>
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {!session || session.order_list.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#6b7280', padding: '50px 20px', fontSize: 13 }}>
-                {session ? 'Start scanning barcodes.' : 'Start a session and scan barcodes to begin.'}
-              </div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
-                    <th style={thSt}>#</th>
-                    <th style={thSt}>UPC</th>
-                    <th style={thSt}>Qty</th>
-                    {session.extra_cols.map(c => <th key={c} style={thSt}>{c}</th>)}
-                    <th style={{ ...thSt, width: 32 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((upc, ri) => {
-                    const row = session.data[upc]
-                    return (
-                      <tr key={upc} style={{ background: ri % 2 === 0 ? purpleLight : '#fafafa', borderBottom: `1px solid #ede9fe` }}>
-                        <td style={{ ...tdSt, color: '#6b7280', fontSize: 10 }}>{ri + 1}</td>
-                        <td style={{ ...tdSt, fontFamily: 'Courier New, monospace', fontWeight: 600, letterSpacing: '0.4px' }}>{upc}</td>
-                        <td style={tdSt}>
-                          <input type="number" min="0" defaultValue={row.qty}
-                            style={{ width: 52, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 700, color: purple, textAlign: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}
-                            onChange={e => updateQty(upc, e.target.value)}
-                            onBlur={e => { if (!e.target.value || +e.target.value <= 0) removeUpc(upc) }} />
-                        </td>
-                        {session.extra_cols.map(col => (
-                          <td key={col} style={tdSt}>
-                            <input type="text" defaultValue={row[col] as string || ''}
-                              style={{ width: 72, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif' }}
-                              onChange={e => updateExtra(upc, col, e.target.value)} />
-                          </td>
-                        ))}
-                        <td style={tdSt}>
-                          <button onClick={() => removeUpc(upc)}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 13, cursor: 'pointer', padding: '1px 5px', borderRadius: 3 }}>✕</button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
+        ))}
       </div>
+
+      {/* Scanner tab */}
+      {tab === 'scanner' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', flex: 1, minHeight: 0, height: 'calc(100vh - 80px)' }}>
+
+          {/* Left panel */}
+          <div style={{ background: '#fff', borderRight: `1px solid ${border}`, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <label style={labelSt}>Scan Barcode / UPC</label>
+              <input ref={inputRef} type="text" placeholder="Scan or type code…"
+                style={{ ...inputSt, fontSize: 11, fontWeight: 600, letterSpacing: '0.8px' }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const v = (e.target as HTMLInputElement).value;
+                    if (v) { handleScan(v); (e.target as HTMLInputElement).value = '' }
+                  }
+                }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['Total Qty', totalQty], ['Unique', uniqueCount]].map(([lbl, num]) => (
+                <div key={lbl as string} style={{ flex: 1, background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '4px 8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: purple }}>{num}</div>
+                  <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>{lbl}</div>
+                </div>
+              ))}
+            </div>
+
+            <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
+
+            {/* Custom columns */}
+            <div style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: purpleD, marginBottom: 6 }}>Custom Columns</div>
+              {session?.extra_cols.map(col => (
+                <div key={col} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: purpleD, flex: 1 }}>📌 {col}</span>
+                  <button onClick={() => removeExtraCol(col)}
+                    style={{ background: '#fee2e2', border: 'none', color: '#dc2626', fontSize: 10, padding: '2px 5px', borderRadius: 3, cursor: 'pointer' }}>✕</button>
+                </div>
+              ))}
+              {colPrompt ? (
+                <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                  <input value={colName} onChange={e => setColName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addExtraCol()}
+                    autoFocus placeholder="Column name…"
+                    style={{ ...inputSt, flex: 1, fontSize: 11 }} />
+                  <button onClick={addExtraCol} style={{ ...btnSt('primary'), fontSize: 10, padding: '3px 8px' }}>Add</button>
+                  <button onClick={() => { setColPrompt(false); setColName('') }} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 6px' }}>✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setColPrompt(true)}
+                  style={{ width: '100%', ...btnSt('ghost'), justifyContent: 'center', fontSize: 11, padding: '3px 8px', marginTop: 2 }}>
+                  + Add Column
+                </button>
+              )}
+            </div>
+
+            <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
+
+            {/* Recent sessions (last 5) */}
+            <div style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 6, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: purpleD, textTransform: 'uppercase', letterSpacing: '0.4px', flex: 1 }}>Recent (last 5)</span>
+                <button onClick={() => loadSessions()} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 6px' }}>🔄</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto' }}>
+                {recentSessions.length === 0 && (
+                  <div style={{ color: '#6b7280', fontSize: 11, padding: 6, textAlign: 'center' }}>No saved sessions.</div>
+                )}
+                {recentSessions.map(s => (
+                  <SessionCard key={s.id} s={s} showUser={isAdmin(currentUser) ?? false} />
+                ))}
+                {allSessions.length > 5 && (
+                  <button onClick={() => setTab('history')}
+                    style={{ ...btnSt('ghost'), fontSize: 10, justifyContent: 'center', padding: '3px 8px' }}>
+                    View all {allSessions.length} →
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <button onClick={clearSession}
+              style={{ width: '100%', ...btnSt('red'), justifyContent: 'center', fontSize: 11 }}>
+              🗑 Clear Session
+            </button>
+          </div>
+
+          {/* Right panel — scan table */}
+          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ background: '#e8e4f8', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: `1px solid ${border}` }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>Session Table</span>
+              <div style={{ flex: 1 }} />
+              <button onClick={() => setSortAsc(a => !a)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>⇅ Sort</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {!session || session.order_list.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#6b7280', padding: '50px 20px', fontSize: 13 }}>
+                  {session ? 'Start scanning barcodes.' : 'Start a session and scan barcodes to begin.'}
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
+                      <th style={thSt}>#</th>
+                      <th style={thSt}>UPC</th>
+                      <th style={thSt}>Qty</th>
+                      {session.extra_cols.map(c => <th key={c} style={thSt}>{c}</th>)}
+                      <th style={{ ...thSt, width: 32 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((upc, ri) => {
+                      const row = session.data[upc]
+                      return (
+                        <tr key={upc} style={{ background: ri % 2 === 0 ? purpleLight : '#fafafa', borderBottom: `1px solid #ede9fe` }}>
+                          <td style={{ ...tdSt, color: '#6b7280', fontSize: 10 }}>{ri + 1}</td>
+                          <td style={{ ...tdSt, fontFamily: 'Courier New, monospace', fontWeight: 600, letterSpacing: '0.4px' }}>{upc}</td>
+                          <td style={tdSt}>
+                            <input type="number" min="0" defaultValue={row.qty}
+                              style={{ width: 52, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 700, color: purple, textAlign: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}
+                              onChange={e => updateQty(upc, e.target.value)}
+                              onBlur={e => { if (!e.target.value || +e.target.value <= 0) removeUpc(upc) }} />
+                          </td>
+                          {session.extra_cols.map(col => (
+                            <td key={col} style={tdSt}>
+                              <input type="text" defaultValue={row[col] as string || ''}
+                                style={{ width: 72, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif' }}
+                                onChange={e => updateExtra(upc, col, e.target.value)} />
+                            </td>
+                          ))}
+                          <td style={tdSt}>
+                            <button onClick={() => removeUpc(upc)}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 13, cursor: 'pointer', padding: '1px 5px', borderRadius: 3 }}>✕</button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History tab */}
+      {tab === 'history' && (
+        <div style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 700, width: '100%', margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>
+              {isAdmin(currentUser) ? 'All Sessions' : 'My Sessions'} · {allSessions.length}
+            </span>
+            <div style={{ flex: 1 }} />
+            <button onClick={() => loadSessions()} style={{ ...btnSt('ghost'), fontSize: 11, padding: '3px 10px' }}>🔄 Refresh</button>
+          </div>
+          <input
+            value={historySearch}
+            onChange={e => setHistorySearch(e.target.value)}
+            placeholder={isAdmin(currentUser) ? 'Search by invoice, store or user…' : 'Search by invoice or store…'}
+            style={{ ...inputSt, fontSize: 12 }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
+            {filteredHistory.length === 0 && (
+              <div style={{ color: '#6b7280', fontSize: 13, textAlign: 'center', padding: 32 }}>
+                {historySearch ? 'No results.' : 'No sessions yet.'}
+              </div>
+            )}
+            {filteredHistory.map(s => (
+              <SessionCard key={s.id} s={s} showUser={isAdmin(currentUser) ?? false} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* New session modal */}
       {showModal && (
@@ -415,7 +485,6 @@ export default function QDPage() {
         </div>
       )}
 
-      {/* Toast */}
       {toast && (
         <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: purple, color: '#fff', padding: '7px 18px', borderRadius: 20, fontSize: 12, fontWeight: 700, zIndex: 200, pointerEvents: 'none' }}>
           {toast}
