@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
 
 // ── Keyword rules for auto-filling Mg/Sg/Ssg ──────────────────────────────────
@@ -61,7 +62,7 @@ const DEFAULT_RULES = [
 interface Rule { keyword: string; mg: string; sg: string; ssg: string }
 
 interface EntryRow {
-  upc: string; vendorid: string; brand: string; productid: string; pcode: string
+  invoice: string; upc: string; vendorid: string; brand: string; productid: string; pcode: string
   description: string; color: string; size: string; unitcost: string
 }
 
@@ -158,7 +159,7 @@ const purple = '#7c3aed'
 const purpleLight = '#f5f3ff'
 const border = '#d4c8f0'
 
-const emptyEntry: EntryRow = { upc:'', vendorid:'', brand:'', productid:'', pcode:'', description:'', color:'', size:'', unitcost:'' }
+const emptyEntry: EntryRow = { invoice:'', upc:'', vendorid:'', brand:'', productid:'', pcode:'', description:'', color:'', size:'', unitcost:'' }
 
 export default function AutoCSVPage() {
   const router = useRouter()
@@ -178,7 +179,7 @@ export default function AutoCSVPage() {
 
   // refs for enter-key navigation
   const fieldRefs = useRef<(HTMLInputElement | null)[]>([])
-  const FIELDS: (keyof EntryRow)[] = ['upc','vendorid','brand','productid','pcode','description','color','size','unitcost']
+  const FIELDS: (keyof EntryRow)[] = ['invoice','upc','vendorid','brand','productid','pcode','description','color','size','unitcost']
 
   useEffect(() => {
     const u = getSession()
@@ -238,7 +239,7 @@ export default function AutoCSVPage() {
   function editRow(idx: number) {
     const r = rows[idx]
     setEntry({
-      upc: r.Upc, vendorid: r.Vendorid, brand: r.Brand,
+      invoice: r.Invoice || '', upc: r.Upc, vendorid: r.Vendorid, brand: r.Brand,
       productid: r.Productid, pcode: r.Pcode,
       description: r.Description, color: r.Color, size: r.Size,
       unitcost: r.Unitcost,
@@ -258,7 +259,7 @@ export default function AutoCSVPage() {
     setEditIdx(null)
   }
 
-  function exportCSV() {
+  async function exportCSV() {
     if (!rows.length) { showToast('⚠️ No rows to export'); return }
     const header = CSV_COLS.join(',')
     const lines = rows.map(r =>
@@ -276,6 +277,34 @@ export default function AutoCSVPage() {
     a.click()
     URL.revokeObjectURL(url)
     showToast(`📥 Exported ${rows.length} rows`)
+
+    // Log each unique invoice to autocsv_log so IC Log can auto-match
+    if (user) {
+      // Group rows by Vendorid (used as invoice_num) to get unique invoices + qty totals
+      // We use Vendorid+Productid as the invoice identifier — actually use Productid as invoice_num
+      // The IC Log matches on invoice_num = order_num logged by user
+      // Best key for matching: use the session's store and a unique "invoice" concept
+      // Since Auto CSV doesn't have an invoice # field, we log each unique Productid group
+      // with the store from the user's profile and qty = row count for that product
+      const invoiceMap = new Map<string, { po_num: string; qty: number }>()
+      for (const r of rows) {
+        const key = r.Productid || r.Upc
+        if (!key) continue
+        const existing = invoiceMap.get(key)
+        if (existing) { existing.qty += 1 }
+        else { invoiceMap.set(key, { po_num: r.Pcode || '', qty: 1 }) }
+      }
+      const logEntries = Array.from(invoiceMap.entries()).map(([invoice_num, v]) => ({
+        store: user.store,
+        userid: user.userid,
+        invoice_num,
+        po_num: v.po_num,
+        qty_total: v.qty,
+      }))
+      if (logEntries.length) {
+        await supabase.from('autocsv_log').insert(logEntries)
+      }
+    }
   }
 
   function copySheet() {
