@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -16,7 +16,12 @@ interface LogBookEntry {
   po_num: string
   store: string
   qty_total: number
+  pos_qty: number | null
   userid: string
+  ic_order_num: string | null
+  ic_status: string | null
+  ic_note: string | null
+  ic_logged_by: string | null
 }
 
 export default function AutoCSVPage() {
@@ -28,6 +33,8 @@ export default function AutoCSVPage() {
   const [vendorCSV, setVendorCSV] = useState('')
   const [posQuery, setPosQuery] = useState('')
   const [posSummary, setPosSummary] = useState('')
+  const vendorTaRef = useRef<HTMLTextAreaElement>(null)
+  const posTaRef = useRef<HTMLTextAreaElement>(null)
 
   interface SummaryRow {
     invoice: string; poNum: string; customer: string; qty: number; dupes: number; alreadyLogged: boolean
@@ -395,8 +402,9 @@ export default function AutoCSVPage() {
             </div>
             <div style={{ flex: 1, overflow: 'hidden' }}>
               <textarea
+                ref={vendorTaRef}
                 value={vendorCSV}
-                onChange={e => setVendorCSV(e.target.value)}
+                onChange={e => { setVendorCSV(e.target.value); requestAnimationFrame(() => { if (vendorTaRef.current) vendorTaRef.current.scrollTop = 0 }) }}
                 placeholder="Paste vendor CSV data here..."
                 style={taStyle}
               />
@@ -439,11 +447,7 @@ export default function AutoCSVPage() {
                     ))}
                   </tbody>
                 </table>
-              ) : (
-                <div style={{ padding: 32, textAlign: 'center', color: '#c4b5fd', fontSize: 12 }}>
-                  Process vendor CSV to see summary
-                </div>
-              )}
+              ) : null}
             </div>
             <div style={{ padding: '6px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: vendorFooter.includes('⚠') ? '#dc2626' : '#9b8ec4' }}>
               {vendorFooter || ' '}
@@ -486,9 +490,10 @@ export default function AutoCSVPage() {
 
             <div style={{ flex: 1, overflow: 'hidden' }}>
               <textarea
+                ref={posTaRef}
                 value={posQuery}
-                onChange={e => setPosQuery(e.target.value)}
-                placeholder={`Paste system response here (tab-separated, blank first column)...\n\nExpected columns:\n  [blank]  InvoiceNoCompany  PONum  Customer  Style  UPC  ShippedQTY  ID  CreatedPO  ItemNotOnOrder  ValidUPC  POPreviouslyClosed  StoreID  NewPONumber`}
+                onChange={e => { setPosQuery(e.target.value); requestAnimationFrame(() => { if (posTaRef.current) posTaRef.current.scrollTop = 0 }) }}
+                placeholder="Paste system response here..."
                 style={{ ...taStyle, fontSize: 10 }}
               />
             </div>
@@ -553,11 +558,7 @@ export default function AutoCSVPage() {
                     })}
                   </tbody>
                 </table>
-              ) : (
-                <div style={{ padding: 32, textAlign: 'center', color: '#c4b5fd', fontSize: 12 }}>
-                  Process POS query to see summary
-                </div>
-              )}
+              ) : null}
             </div>
             {posSummary && (
               <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
@@ -620,10 +621,10 @@ export default function AutoCSVPage() {
       {/* TAB 2: Log Book                                                     */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'logbook' && (
-        <div style={{ padding: '20px 24px', maxWidth: 1300, margin: '0 auto', width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ padding: '16px 20px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexShrink: 0 }}>
             <div>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: '#3b1f8c', margin: 0 }}>Push Log &amp; IC Cross-Reference</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#3b1f8c', margin: 0 }}>Push Log &amp; IC Cross-Reference</h3>
               <p style={{ fontSize: 11, color: '#9b8ec4', margin: '2px 0 0' }}>
                 {filteredLog.length} entr{filteredLog.length !== 1 ? 'ies' : 'y'}
               </p>
@@ -640,46 +641,83 @@ export default function AutoCSVPage() {
             />
           </div>
 
-          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'auto', boxShadow: '0 2px 16px rgba(124,58,237,0.07)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-              <thead>
+          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'auto', flex: 1, boxShadow: '0 2px 16px rgba(124,58,237,0.07)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                 <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
-                  {['Timestamp', 'Invoice #', 'PO #', 'Store', 'CSV Qty', 'Logged By'].map(col => (
-                    <th key={col} style={{
+                  {[
+                    { label: 'Timestamp', ic: false },
+                    { label: 'Invoice #', ic: false },
+                    { label: 'PO #', ic: false },
+                    { label: 'Store', ic: false },
+                    { label: 'CSV Qty', ic: false },
+                    { label: 'POS Qty', ic: false },
+                    { label: 'Match', ic: false },
+                    { label: 'IC Order #', ic: true },
+                    { label: 'Logged By', ic: false },
+                    { label: 'IC Status', ic: true },
+                    { label: 'Note', ic: true },
+                  ].map(({ label, ic }) => (
+                    <th key={label} style={{
                       padding: '10px 12px', textAlign: 'left', fontSize: 10,
-                      fontWeight: 800, color: purple, letterSpacing: '0.07em',
-                      textTransform: 'uppercase', whiteSpace: 'nowrap',
-                    }}>{col}</th>
+                      fontWeight: 800, color: ic ? '#0369a1' : purple,
+                      letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+                      borderRight: label === 'Match' ? `2px solid ${border}` : undefined,
+                    }}>{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {logLoading ? (
-                  <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd', fontSize: 13 }}>Loading...</td></tr>
+                  <tr><td colSpan={11} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd', fontSize: 13 }}>Loading...</td></tr>
                 ) : filteredLog.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ padding: 48, textAlign: 'center', color: '#c4b5fd' }}>
-                      <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
-                      <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>No log entries yet</p>
-                      <p style={{ fontSize: 12 }}>Entries appear here after processing in the Invoice Processor</p>
-                    </td>
+                    <td colSpan={11} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd' }}>No entries yet</td>
                   </tr>
-                ) : filteredLog.map((e, i) => (
-                  <tr key={e.id} style={{ borderTop: i === 0 ? 'none' : `1px solid #f0ebff`, background: i % 2 === 0 ? '#fff' : '#faf8ff' }}>
-                    <td style={{ padding: '9px 12px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>
-                      {new Date(e.exported_at).toLocaleString()}
-                    </td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace' }}>
-                      {e.invoice_num}
-                    </td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: '#333', fontFamily: 'monospace' }}>
-                      {e.po_num || '—'}
-                    </td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: '#333' }}>{e.store}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: '#333', textAlign: 'center' }}>{e.qty_total}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: '#6b7280' }}>{e.userid}</td>
-                  </tr>
-                ))}
+                ) : filteredLog.map((e, i) => {
+                  const csvQty = e.qty_total
+                  const posQty = e.pos_qty ?? null
+                  const match = posQty !== null ? csvQty === posQty : null
+                  const hasIC = !!e.ic_order_num
+                  return (
+                    <tr key={e.id} style={{ borderTop: i === 0 ? 'none' : `1px solid #f0ebff`, background: i % 2 === 0 ? '#fff' : '#faf8ff' }}>
+                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>
+                        {(() => {
+                          const d = new Date(e.exported_at)
+                          const mo = String(d.getMonth()+1).padStart(2,'0')
+                          const day = String(d.getDate()).padStart(2,'0')
+                          const yr = String(d.getFullYear()).slice(2)
+                          const h = String(d.getHours() % 12 || 12).padStart(2,'0')
+                          const min = String(d.getMinutes()).padStart(2,'0')
+                          return `${mo}-${day}-${yr} ${h}:${min}`
+                        })()}
+                      </td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace' }}>{e.invoice_num}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, color: '#333', fontFamily: 'monospace' }}>{e.po_num || '—'}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, color: '#333', fontWeight: 600 }}>{e.store}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, color: '#333', textAlign: 'center', fontFamily: 'monospace' }}>{csvQty}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, color: posQty !== null ? '#333' : '#d1d5db', textAlign: 'center', fontFamily: 'monospace' }}>{posQty ?? '—'}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 13, textAlign: 'center', borderRight: `2px solid ${border}` }}>
+                        {match === true ? <span style={{ color: '#16a34a', fontWeight: 800 }}>✓</span>
+                          : match === false ? <span style={{ color: '#dc2626', fontWeight: 800 }}>✗</span>
+                          : ''}
+                      </td>
+                      {/* IC columns */}
+                      <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'monospace', color: hasIC ? '#0369a1' : '#d1d5db', fontWeight: hasIC ? 700 : 400 }}>{e.ic_order_num || '—'}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, color: '#6b7280' }}>{e.userid}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 11 }}>
+                        {e.ic_status ? (
+                          <span style={{
+                            background: e.ic_status.toLowerCase().includes('push') ? '#dcfce7' : '#eff6ff',
+                            color: e.ic_status.toLowerCase().includes('push') ? '#15803d' : '#1d4ed8',
+                            borderRadius: 4, padding: '2px 7px', fontWeight: 700, fontSize: 10,
+                          }}>{e.ic_status}</span>
+                        ) : ''}
+                      </td>
+                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#6b7280', fontStyle: e.ic_note ? 'normal' : 'italic' }}>{e.ic_note || ''}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
