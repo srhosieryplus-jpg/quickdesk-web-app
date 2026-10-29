@@ -1,77 +1,13 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
 
-// ── Keyword rules for auto-filling Mg/Sg/Ssg ──────────────────────────────────
-const DEFAULT_RULES = [
-  { keyword: 'Cotton Tights', mg: 'Legwear',     sg: 'Hosiery',   ssg: 'Tights' },
-  { keyword: 'Turtle Neck',   mg: 'Apparel',     sg: 'Tops',      ssg: 'Turtlenecks' },
-  { keyword: 'Sweatshirt',    mg: 'Apparel',     sg: 'Tops',      ssg: 'Sweaters' },
-  { keyword: 'Turtleneck',    mg: 'Apparel',     sg: 'Tops',      ssg: 'Turtlenecks' },
-  { keyword: 'Pantyhose',     mg: 'Legwear',     sg: 'Hosiery',   ssg: 'Pantyhose' },
-  { keyword: 'Knee High',     mg: 'Legwear',     sg: 'Socks',     ssg: 'Knee Socks' },
-  { keyword: 'Underwear',     mg: 'Intimates',   sg: 'Underwear', ssg: '' },
-  { keyword: 'Nightgown',     mg: 'Sleepwear',   sg: 'Nightgown', ssg: '' },
-  { keyword: 'Cardigan',      mg: 'Apparel',     sg: 'Tops',      ssg: 'Cardigans' },
-  { keyword: 'Mockneck',      mg: 'Apparel',     sg: 'Tops',      ssg: 'Mock Neck' },
-  { keyword: 'T-Shirt',       mg: 'Apparel',     sg: 'Tops',      ssg: 'T-Shirts' },
-  { keyword: 'Sweater',       mg: 'Apparel',     sg: 'Tops',      ssg: 'Sweaters' },
-  { keyword: 'Bloomer',       mg: 'Apparel',     sg: 'Bottoms',   ssg: 'Bloomers' },
-  { keyword: 'Blanket',       mg: 'Accessories', sg: 'Blankets',  ssg: '' },
-  { keyword: 'Mittens',       mg: 'Accessories', sg: 'Mittens',   ssg: '' },
-  { keyword: 'Swaddle',       mg: 'Accessories', sg: 'Swaddles',  ssg: '' },
-  { keyword: 'Jacket',        mg: 'Outerwear',   sg: 'Jackets',   ssg: '' },
-  { keyword: 'Leggin',        mg: 'Apparel',     sg: 'Bottoms',   ssg: 'Leggings' },
-  { keyword: 'Romper',        mg: 'Apparel',     sg: 'Rompers',   ssg: '' },
-  { keyword: 'Blouse',        mg: 'Apparel',     sg: 'Tops',      ssg: 'Blouses' },
-  { keyword: 'Hoodie',        mg: 'Apparel',     sg: 'Tops',      ssg: 'Hoodies' },
-  { keyword: 'Blazer',        mg: 'Outerwear',   sg: 'Blazers',   ssg: '' },
-  { keyword: 'Pajama',        mg: 'Sleepwear',   sg: 'Pajamas',   ssg: '' },
-  { keyword: 'Pyjama',        mg: 'Sleepwear',   sg: 'Pajamas',   ssg: '' },
-  { keyword: 'Jumper',        mg: 'Apparel',     sg: 'Jumpers',   ssg: '' },
-  { keyword: 'Footie',        mg: 'Apparel',     sg: 'Layette',   ssg: 'Footie' },
-  { keyword: 'Onesie',        mg: 'Apparel',     sg: 'Tops',      ssg: 'Rompers' },
-  { keyword: 'Anklet',        mg: 'Legwear',     sg: 'Socks',     ssg: 'Anklets' },
-  { keyword: 'Tights',        mg: 'Legwear',     sg: 'Hosiery',   ssg: 'Tights' },
-  { keyword: 'Beanie',        mg: 'Accessories', sg: 'Beanies',   ssg: '' },
-  { keyword: 'Gloves',        mg: 'Accessories', sg: 'Gloves',    ssg: '' },
-  { keyword: 'Shorts',        mg: 'Apparel',     sg: 'Bottoms',   ssg: 'Shorts' },
-  { keyword: 'Skirt',         mg: 'Apparel',     sg: 'Bottoms',   ssg: 'Skirts' },
-  { keyword: 'Shirt',         mg: 'Apparel',     sg: 'Tops',      ssg: 'Shirts' },
-  { keyword: 'Ankle',         mg: 'Legwear',     sg: 'Socks',     ssg: 'Anklets' },
-  { keyword: 'Dress',         mg: 'Apparel',     sg: 'Dresses',   ssg: '' },
-  { keyword: 'Pant',          mg: 'Apparel',     sg: 'Bottoms',   ssg: 'Pants' },
-  { keyword: 'Vest',          mg: 'Apparel',     sg: 'Tops',      ssg: 'Vest' },
-  { keyword: 'Coat',          mg: 'Outerwear',   sg: 'Coats',     ssg: '' },
-  { keyword: 'Sock',          mg: 'Legwear',     sg: 'Socks',     ssg: '' },
-  { keyword: 'Polo',          mg: 'Apparel',     sg: 'Tops',      ssg: 'Polos' },
-  { keyword: 'Knee',          mg: 'Legwear',     sg: 'Socks',     ssg: 'Knee Socks' },
-  { keyword: 'Crew',          mg: 'Legwear',     sg: 'Socks',     ssg: 'Crews' },
-  { keyword: 'Robe',          mg: 'Apparel',     sg: 'Robes',     ssg: '' },
-  { keyword: 'Set',           mg: 'Apparel',     sg: 'Sets',      ssg: '' },
-  { keyword: 'Tee',           mg: 'Apparel',     sg: 'Tops',      ssg: 'T-Shirts' },
-  { keyword: 'Top',           mg: 'Apparel',     sg: 'Tops',      ssg: '' },
-  { keyword: 'Bib',           mg: 'Accessories', sg: 'Bibs',      ssg: '' },
-  { keyword: 'Hat',           mg: 'Accessories', sg: '-',         ssg: 'Hats' },
-  { keyword: 'Pj',            mg: 'Sleepwear',   sg: 'Pajamas',   ssg: '' },
-]
-
-interface Rule { keyword: string; mg: string; sg: string; ssg: string }
-
-interface EntryRow {
-  invoice: string; upc: string; vendorid: string; brand: string; productid: string; pcode: string
-  description: string; color: string; size: string; unitcost: string
-}
-
-interface ResultRow {
-  Invoice: string; Upc: string; Vendorid: string; Brand: string; Productid: string; Pcode: string
-  Mg: string; Sg: string; Ssg: string; Iu1: string; Iu2: string; Iu3: string; Iu4: string
-  Description: string; Color: string; Size: string; Saleprice: string; Unitcost: string
-  Season: string; Taxrule: string; Website: string; Scale: string; Pu4: string
-}
+const purple = '#7c3aed'
+const purpleLight = '#f5f3ff'
+const border = '#d4c8f0'
 
 interface LogBookEntry {
   id: string
@@ -83,111 +19,16 @@ interface LogBookEntry {
   userid: string
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-function toTitleCase(s: string) { return s ? s.trim().replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()) : s }
-function fmtColor(s: string) { return toTitleCase(s) }
-function fmtSize(s: string) {
-  const t = s.trim()
-  if (!t) return t
-  if (t.toUpperCase() === 'OS') return 'One Size'
-  return t.length <= 4 ? t.toUpperCase() : toTitleCase(t)
-}
-
-function matchDesc(desc: string, rules: Rule[]) {
-  const d = (desc || '').toLowerCase()
-  for (const rule of rules) {
-    if (rule.keyword && d.includes(rule.keyword.toLowerCase())) {
-      return { mg: rule.mg, sg: rule.sg, ssg: rule.ssg }
-    }
-  }
-  return { mg: '', sg: '', ssg: '' }
-}
-
-function applyMarkup(unitcost: string, formula: string): string {
-  try {
-    const uc = parseFloat(unitcost.replace(/[$,]/g, '')) || 0
-    const expr = formula
-      .replace(/round\((.+)\)/i, '$1')
-      .replace(/unitcost/gi, String(uc))
-    // eslint-disable-next-line no-eval
-    const result = eval(expr) as number
-    return isNaN(result) ? '' : result.toFixed(2)
-  } catch { return '' }
-}
-
-function computeWebsite(storeTT: boolean, storeHP: boolean, storePO: boolean) {
-  if (storeTT && storeHP) return '3'
-  if (storePO) return '0'
-  if (storeHP) return '2'
-  return '1'
-}
-
-function expandRows(entry: EntryRow, season: string, iu: string, storeTT: boolean, storeHP: boolean, storePO: boolean, markup: string, usePu4: boolean, rules: Rule[]): ResultRow[] {
-  const colors = entry.color.split(',').map(s => s.trim()).filter(Boolean) || ['']
-  const sizes = entry.size.split(',').map(s => s.trim()).filter(Boolean) || ['']
-  const iuParts = iu.split(',').map(s => s.trim()).filter(Boolean)
-  const website = computeWebsite(storeTT, storeHP, storePO)
-  const { mg, sg, ssg } = matchDesc(entry.description, rules)
-  const saleprice = applyMarkup(entry.unitcost, markup)
-
-  const out: ResultRow[] = []
-  for (const color of (colors.length ? colors : [''])) {
-    for (const size of (sizes.length ? sizes : [''])) {
-      out.push({
-        Invoice: entry.invoice,
-        Upc: entry.upc,
-        Vendorid: entry.vendorid.toUpperCase(),
-        Brand: entry.brand,
-        Productid: entry.productid,
-        Pcode: entry.pcode || entry.productid,
-        Mg: mg, Sg: sg, Ssg: ssg,
-        Iu1: iuParts[0] || '', Iu2: iuParts[1] || '', Iu3: iuParts[2] || '', Iu4: iuParts[3] || '',
-        Description: toTitleCase(entry.description),
-        Color: fmtColor(color),
-        Size: fmtSize(size),
-        Saleprice: saleprice,
-        Unitcost: entry.unitcost,
-        Season: season,
-        Taxrule: '1',
-        Website: website,
-        Scale: '',
-        Pu4: usePu4 ? 'TTSplit' : '',
-      })
-    }
-  }
-  return out
-}
-
-const CSV_COLS: (keyof ResultRow)[] = [
-  'Upc','Vendorid','Brand','Productid','Pcode',
-  'Mg','Sg','Ssg','Iu1','Iu2','Iu3','Iu4',
-  'Description','Color','Size','Saleprice','Unitcost',
-  'Season','Taxrule','Website','Scale','Pu4',
-]
-
-const purple = '#7c3aed'
-const purpleLight = '#f5f3ff'
-const border = '#d4c8f0'
-
-const emptyEntry: EntryRow = { invoice:'', upc:'', vendorid:'', brand:'', productid:'', pcode:'', description:'', color:'', size:'', unitcost:'' }
-
 export default function AutoCSVPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [activeTab, setActiveTab] = useState<'processor' | 'logbook'>('processor')
 
   // Invoice Processor state
-  const [entry, setEntry] = useState<EntryRow>(emptyEntry)
-  const [season, setSeason] = useState('SS26')
-  const [iu, setIu] = useState('')
-  const [markup, setMarkup] = useState('unitcost * 2')
-  const [storeTT, setStoreTT] = useState(true)
-  const [storeHP, setStoreHP] = useState(false)
-  const [storePO, setStorePO] = useState(false)
-  const [usePu4, setUsePu4] = useState(false)
-  const [rows, setRows] = useState<ResultRow[]>([])
-  const [rules] = useState<Rule[]>(DEFAULT_RULES)
-  const [editIdx, setEditIdx] = useState<number | null>(null)
+  const [vendorCSV, setVendorCSV] = useState('')
+  const [vendorSummary, setVendorSummary] = useState('')
+  const [posQuery, setPosQuery] = useState('')
+  const [posSummary, setPosSummary] = useState('')
 
   // Log Book state
   const [logEntries, setLogEntries] = useState<LogBookEntry[]>([])
@@ -195,9 +36,6 @@ export default function AutoCSVPage() {
   const [logLoading, setLogLoading] = useState(false)
 
   const [toast, setToast] = useState('')
-
-  const fieldRefs = useRef<(HTMLInputElement | null)[]>([])
-  const FIELDS: (keyof EntryRow)[] = ['invoice','upc','vendorid','brand','productid','pcode','description','color','size','unitcost']
 
   useEffect(() => {
     const u = getSession()
@@ -224,144 +62,90 @@ export default function AutoCSVPage() {
     setTimeout(() => setToast(''), 2800)
   }
 
-  function setField(k: keyof EntryRow, v: string) {
-    setEntry(e => {
-      const next = { ...e, [k]: v }
-      if (k === 'productid' && !e.pcode) next.pcode = v
-      if (k === 'pcode' && !e.productid) next.productid = v
-      return next
-    })
-  }
+  function processVendorCSV() {
+    if (!vendorCSV.trim()) { showToast('⚠️ Paste vendor CSV data first'); return }
+    const lines = vendorCSV.trim().split('\n').filter(l => l.trim())
+    // Parse tab or whitespace separated: InvoiceNoCompany PONum Customer Style UPC ShippedQty
+    const parsed: Record<string, { poNum: string; customer: string; qty: number; dupes: number }> = {}
+    let total = 0
+    const seen = new Set<string>()
 
-  function handleKeyDown(e: React.KeyboardEvent, idx: number) {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      if (idx < FIELDS.length - 1) {
-        fieldRefs.current[idx + 1]?.focus()
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/)
+      if (parts.length < 6) continue
+      const [invoice, poNum, customer, , upc, qtyStr] = parts
+      const qty = parseInt(qtyStr) || 0
+      const key = `${invoice}|${upc}`
+      if (seen.has(key)) {
+        if (parsed[invoice]) parsed[invoice].dupes++
       } else {
-        addRow()
+        seen.add(key)
+        if (!parsed[invoice]) {
+          parsed[invoice] = { poNum, customer, qty: 0, dupes: 0 }
+        }
+        parsed[invoice].qty += qty
+        total += qty
       }
     }
+
+    const rows = Object.entries(parsed)
+    const uniqueCount = rows.length
+    const totalDupes = rows.reduce((s, [, v]) => s + v.dupes, 0)
+
+    // Build summary text
+    const header = 'InvoiceNoCompany\tPONum\tCustomer\tShippedQty (sum)\tDupes'
+    const body = rows.map(([inv, v]) => `${inv}\t${v.poNum}\t${v.customer}\t${v.qty}\t${v.dupes || ''}`).join('\n')
+    setVendorSummary([header, body].join('\n'))
+
+    showToast(`✅ ${lines.length} rows · ${uniqueCount} unique · ${totalDupes} dupes`)
   }
 
-  function addRow() {
-    if (!entry.description.trim() && !entry.upc.trim()) {
-      showToast('⚠️ Description or UPC is required')
-      return
-    }
-    const newRows = expandRows(entry, season, iu, storeTT, storeHP, storePO, markup, usePu4, rules)
-    if (editIdx !== null) {
-      setRows(prev => {
-        const next = [...prev]
-        next.splice(editIdx, 1, ...newRows)
-        return next
-      })
-      setEditIdx(null)
-      showToast(`✅ Updated ${newRows.length} row${newRows.length !== 1 ? 's' : ''}`)
-    } else {
-      setRows(prev => [...prev, ...newRows])
-      showToast(`✅ Added ${newRows.length} row${newRows.length !== 1 ? 's' : ''}`)
-    }
-    setEntry(emptyEntry)
-    fieldRefs.current[0]?.focus()
-  }
+  function processPosQuery() {
+    if (!posQuery.trim()) { showToast('⚠️ Paste POS query data first'); return }
+    const lines = posQuery.trim().split('\n').filter(l => l.trim())
+    const parsed: Record<string, { poNum: string; customer: string; storeId: string; qty: number; notOnOrder: number; closedPO: boolean; newPO: string }> = {}
+    let errors = 0
 
-  function editRow(idx: number) {
-    const r = rows[idx]
-    setEntry({
-      invoice: r.Invoice || '', upc: r.Upc, vendorid: r.Vendorid, brand: r.Brand,
-      productid: r.Productid, pcode: r.Pcode,
-      description: r.Description, color: r.Color, size: r.Size,
-      unitcost: r.Unitcost,
-    })
-    setEditIdx(idx)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  function deleteRow(idx: number) {
-    setRows(prev => prev.filter((_, i) => i !== idx))
-  }
-
-  function clearAll() {
-    if (!confirm('Clear all rows?')) return
-    setRows([])
-    setEntry(emptyEntry)
-    setEditIdx(null)
-  }
-
-  async function exportCSV() {
-    if (!rows.length) { showToast('⚠️ No rows to export'); return }
-    const header = CSV_COLS.join(',')
-    const lines = rows.map(r =>
-      CSV_COLS.map(c => {
-        const v = String(r[c] ?? '')
-        return v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v
-      }).join(',')
-    )
-    const csv = [header, ...lines].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `autocsv_${season}_${new Date().toISOString().slice(0,10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    showToast(`📥 Exported ${rows.length} rows`)
-
-    if (user) {
-      const invoiceMap = new Map<string, { po_num: string; qty: number }>()
-      for (const r of rows) {
-        const key = r.Invoice || r.Productid || r.Upc
-        if (!key) continue
-        const existing = invoiceMap.get(key)
-        if (existing) { existing.qty += 1 }
-        else { invoiceMap.set(key, { po_num: r.Pcode || '', qty: 1 }) }
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/)
+      if (parts.length < 7) continue
+      const [invoice, poNum, customer, , upc, qty, , , notOnOrder, validUpc, closedPO, storeId, newPO] = parts
+      const q = parseInt(qty) || 0
+      if (!parsed[invoice]) {
+        parsed[invoice] = { poNum, customer, storeId: storeId || '', qty: 0, notOnOrder: 0, closedPO: false, newPO: newPO || '' }
       }
-      const logEntries = Array.from(invoiceMap.entries()).map(([invoice_num, v]) => ({
-        store: user.store,
-        userid: user.userid,
-        invoice_num,
-        po_num: v.po_num,
-        qty_total: v.qty,
-      }))
-      if (logEntries.length) {
-        await supabase.from('autocsv_log').insert(logEntries)
-      }
+      parsed[invoice].qty += q
+      if (notOnOrder && notOnOrder !== 'NO') parsed[invoice].notOnOrder++
+      if (closedPO === '✓' || closedPO === 'yes') parsed[invoice].closedPO = true
+      if (validUpc === 'NO' || notOnOrder === 'YES') errors++
     }
+
+    const rows = Object.entries(parsed)
+    const header = 'InvoiceNoCompany\tPONum\tCustomer\tStoreID\tShippedQty (sum)\tItem Not On Order\tClosed PO?\tNewPO#'
+    const body = rows.map(([inv, v]) =>
+      `${inv}\t${v.poNum}\t${v.customer}\t${v.storeId}\t${v.qty}\t${v.notOnOrder || ''}\t${v.closedPO ? '✓' : ''}\t${v.newPO || ''}`
+    ).join('\n')
+    setPosSummary([header, body].join('\n'))
+
+    showToast(`✅ Processed · ${errors} with errors`)
   }
 
-  function copySheet() {
-    if (!rows.length) { showToast('⚠️ No rows to copy'); return }
-    const header = CSV_COLS.join('\t')
-    const lines = rows.map(r => CSV_COLS.map(c => r[c] ?? '').join('\t'))
-    navigator.clipboard.writeText([header, ...lines].join('\n'))
-      .then(() => showToast('📋 Copied to clipboard'))
+  function copyText(text: string) {
+    if (!text) { showToast('Nothing to copy'); return }
+    navigator.clipboard.writeText(text)
+      .then(() => showToast('📋 Copied'))
       .catch(() => showToast('❌ Clipboard not available'))
   }
 
-  const website = computeWebsite(storeTT, storeHP, storePO)
+  function clearAll() {
+    setVendorCSV('')
+    setVendorSummary('')
+    setPosQuery('')
+    setPosSummary('')
+  }
 
   if (!user) return null
 
-  const labelStyle: React.CSSProperties = {
-    fontSize: 10, color: '#9b8ec4', fontWeight: 700,
-    letterSpacing: '0.06em', display: 'block', marginBottom: 4,
-  }
-  const inputStyle: React.CSSProperties = {
-    background: '#f5f3ff', border: `1.5px solid ${border}`,
-    borderRadius: 7, padding: '8px 10px', fontSize: 13,
-    color: '#3b1f8c', fontWeight: 600, width: '100%', outline: 'none',
-  }
-  const thStyle: React.CSSProperties = {
-    padding: '10px 12px', textAlign: 'left', fontSize: 10,
-    fontWeight: 800, color: purple, letterSpacing: '0.07em',
-    textTransform: 'uppercase', whiteSpace: 'nowrap',
-  }
-  const tdStyle: React.CSSProperties = {
-    padding: '9px 12px', fontSize: 12, color: '#333', verticalAlign: 'middle',
-  }
-
-  // Log Book filtered entries
   const filteredLog = logEntries.filter(e => {
     if (!logFilter) return true
     const q = logFilter.toLowerCase()
@@ -371,8 +155,39 @@ export default function AutoCSVPage() {
       e.userid?.toLowerCase().includes(q)
   })
 
+  const taStyle: React.CSSProperties = {
+    width: '100%', height: '100%', resize: 'none',
+    background: '#faf9ff', border: 'none', outline: 'none',
+    fontFamily: 'monospace', fontSize: 11, color: '#2d1f6e',
+    lineHeight: 1.5, padding: '10px 12px',
+    boxSizing: 'border-box',
+  }
+
+  const panelStyle: React.CSSProperties = {
+    background: '#fff', border: `1.5px solid ${border}`,
+    borderRadius: 10, overflow: 'hidden',
+    display: 'flex', flexDirection: 'column',
+    boxShadow: '0 2px 10px rgba(124,58,237,0.06)',
+  }
+
+  const panelHeaderStyle: React.CSSProperties = {
+    background: purpleLight, borderBottom: `1px solid ${border}`,
+    padding: '7px 12px', display: 'flex', alignItems: 'center',
+    justifyContent: 'space-between', flexShrink: 0,
+  }
+
+  const panelLabelStyle: React.CSSProperties = {
+    fontSize: 10, fontWeight: 800, color: purple,
+    letterSpacing: '0.06em', textTransform: 'uppercase',
+  }
+
+  const smBtn = (bg: string, color: string): React.CSSProperties => ({
+    background: bg, color, border: 'none', borderRadius: 5,
+    padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+  })
+
   return (
-    <div style={{ minHeight: '100vh', background: '#eeeaf6' }}>
+    <div style={{ minHeight: '100vh', background: '#eeeaf6', display: 'flex', flexDirection: 'column' }}>
 
       {/* Toast */}
       {toast && (
@@ -388,7 +203,7 @@ export default function AutoCSVPage() {
         padding: '12px 24px', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', borderBottom: `1px solid ${border}`,
         background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
-        position: 'sticky', top: 0, zIndex: 10,
+        position: 'sticky', top: 0, zIndex: 10, flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={() => router.push('/selector')}
@@ -400,32 +215,18 @@ export default function AutoCSVPage() {
           </span>
         </div>
 
-        {/* Centered title */}
         <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center' }}>
           <h2 style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.04em', margin: 0 }}>
             ⚡ AUTO CSV
           </h2>
-          <p style={{ fontSize: 11, color: '#9b8ec4', margin: 0 }}>
-            {rows.length} row{rows.length !== 1 ? 's' : ''} · Season: {season}
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          {activeTab === 'processor' && rows.length > 0 && (
-            <>
-              <button onClick={copySheet}
-                style={{ background: '#dbeafe', color: '#1e40af', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                📋 Copy Sheet
-              </button>
-              <button onClick={exportCSV}
-                style={{ background: '#bbf7d0', color: '#166534', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                💾 Export CSV
-              </button>
-              <button onClick={clearAll}
-                style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                🗑 Clear All
-              </button>
-            </>
+          {activeTab === 'processor' && (
+            <button onClick={clearAll}
+              style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              🗑 Clear All
+            </button>
           )}
           {activeTab === 'logbook' && (
             <button onClick={fetchLogEntries}
@@ -438,8 +239,8 @@ export default function AutoCSVPage() {
 
       {/* Tabs */}
       <div style={{
-        display: 'flex', gap: 0, borderBottom: `2px solid ${border}`,
-        background: 'rgba(255,255,255,0.5)', padding: '0 24px',
+        display: 'flex', borderBottom: `2px solid ${border}`,
+        background: 'rgba(255,255,255,0.5)', padding: '0 24px', flexShrink: 0,
       }}>
         {(['processor', 'logbook'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
@@ -448,7 +249,6 @@ export default function AutoCSVPage() {
             color: activeTab === tab ? purple : '#9b8ec4',
             borderBottom: activeTab === tab ? `3px solid ${purple}` : '3px solid transparent',
             marginBottom: -2, letterSpacing: '0.03em',
-            transition: 'color 0.15s',
           }}>
             {tab === 'processor' ? '📄 Invoice Processor' : '📋 Log Book'}
           </button>
@@ -456,183 +256,153 @@ export default function AutoCSVPage() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* TAB 1: Invoice Processor                                           */}
+      {/* TAB 1: Invoice Processor — 4-panel grid                            */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'processor' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, padding: '20px 24px', maxWidth: 1440, margin: '0 auto' }}>
+        <div style={{
+          flex: 1, display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gridTemplateRows: '1fr 1fr',
+          gap: 12, padding: 16,
+          minHeight: 0,
+        }}>
 
-          {/* ── LEFT PANEL: Entry form ─────────────────────────────────── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-            {/* Blueprint globals */}
-            <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, padding: 16, boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
-              <p style={{ fontSize: 11, fontWeight: 800, color: purple, letterSpacing: '0.07em', marginBottom: 12 }}>BLUEPRINT</p>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                <div>
-                  <label style={labelStyle}>SEASON</label>
-                  <input value={season} onChange={e => setSeason(e.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>IU VALUES</label>
-                  <input value={iu} onChange={e => setIu(e.target.value)} placeholder="e.g. Men, Women" style={inputStyle} />
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 10 }}>
-                <label style={labelStyle}>MARKUP FORMULA</label>
-                <input value={markup} onChange={e => setMarkup(e.target.value)} placeholder="unitcost * 2" style={inputStyle} />
-                <p style={{ fontSize: 10, color: '#b8aed8', marginTop: 4 }}>Use <code>unitcost</code> as variable · e.g. <code>unitcost * 2.5</code></p>
-              </div>
-
-              {/* Store flags */}
-              <div style={{ marginBottom: 8 }}>
-                <label style={labelStyle}>STORES → WEBSITE={website}</label>
-                <div style={{ display: 'flex', gap: 12, marginTop: 2 }}>
-                  {[['TT', storeTT, setStoreTT], ['HP', storeHP, setStoreHP], ['PO', storePO, setStorePO]].map(([lbl, val, setter]) => (
-                    <label key={lbl as string} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: (val as boolean) ? purple : '#9b8ec4', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={val as boolean} onChange={e => (setter as (v: boolean) => void)(e.target.checked)}
-                        style={{ accentColor: purple }} />
-                      {lbl as string}
-                    </label>
-                  ))}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: usePu4 ? purple : '#9b8ec4', cursor: 'pointer', marginLeft: 8 }}>
-                    <input type="checkbox" checked={usePu4} onChange={e => setUsePu4(e.target.checked)}
-                      style={{ accentColor: purple }} />
-                    Pu4
-                  </label>
-                </div>
+          {/* TOP-LEFT: Vendor CSV input */}
+          <div style={panelStyle}>
+            <div style={panelHeaderStyle}>
+              <span style={panelLabelStyle}>Vendor CSV</span>
+              <span style={{ fontSize: 10, color: '#b8aed8' }}>InvoiceNoCompany · PONum · Customer · Style · UPC · ShippedQty</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setVendorCSV('')} style={smBtn('#fee2e2', '#dc2626')}>Clear</button>
+                <button onClick={processVendorCSV} style={smBtn(purple, '#fff')}>▶ Process</button>
               </div>
             </div>
-
-            {/* Item entry */}
-            <div style={{ background: '#fff', border: `1.5px solid ${editIdx !== null ? purple : border}`, borderRadius: 12, padding: 16, boxShadow: editIdx !== null ? '0 0 0 2px #ede9fe' : '0 2px 12px rgba(124,58,237,0.07)' }}>
-              <p style={{ fontSize: 11, fontWeight: 800, color: editIdx !== null ? purple : '#9b8ec4', letterSpacing: '0.07em', marginBottom: 12 }}>
-                {editIdx !== null ? '✏️ EDIT ROW' : '➕ ADD ITEM'}
-              </p>
-
-              {FIELDS.map((field, idx) => {
-                const LABELS: Record<keyof EntryRow, string> = {
-                  invoice: 'INVOICE #', upc: 'UPC', vendorid: 'VENDOR ID', brand: 'BRAND',
-                  productid: 'PRODUCT ID', pcode: 'P-CODE',
-                  description: 'DESCRIPTION', color: 'COLOR(S)', size: 'SIZE(S)', unitcost: 'UNIT COST',
-                }
-                return (
-                  <div key={field} style={{ marginBottom: 9 }}>
-                    <label style={labelStyle}>{LABELS[field]}</label>
-                    <input
-                      ref={el => { fieldRefs.current[idx] = el }}
-                      value={entry[field]}
-                      onChange={e => setField(field, e.target.value)}
-                      onKeyDown={e => handleKeyDown(e, idx)}
-                      placeholder={field === 'color' || field === 'size' ? 'comma-sep to expand' : ''}
-                      style={{
-                        ...inputStyle,
-                        textTransform: field === 'vendorid' ? 'uppercase' : 'none',
-                      }}
-                    />
-                  </div>
-                )
-              })}
-
-              <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                <button onClick={addRow}
-                  style={{ flex: 1, background: purple, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  {editIdx !== null ? 'Update Row' : '＋ Add Row'}
-                </button>
-                {editIdx !== null && (
-                  <button onClick={() => { setEntry(emptyEntry); setEditIdx(null) }}
-                    style={{ background: '#fff', color: '#9b8ec4', border: `1px solid ${border}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                    Cancel
-                  </button>
-                )}
-              </div>
-              <p style={{ fontSize: 10, color: '#c4b5fd', marginTop: 8, textAlign: 'center' }}>
-                Press Enter to advance fields · Enter on last field adds row
-              </p>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <textarea
+                value={vendorCSV}
+                onChange={e => setVendorCSV(e.target.value)}
+                placeholder="Paste vendor CSV data here..."
+                style={taStyle}
+              />
+            </div>
+            <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
+              {vendorCSV.trim()
+                ? `${vendorCSV.trim().split('\n').filter(l => l.trim()).length} rows`
+                : 'No data'}
             </div>
           </div>
 
-          {/* ── RIGHT PANEL: Results table ─────────────────────────────── */}
-          <div>
-            {rows.length === 0 ? (
-              <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, padding: 48, textAlign: 'center', color: '#c4b5fd' }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
-                <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>No rows yet</p>
-                <p style={{ fontSize: 12 }}>Fill in the form on the left and click <strong>Add Row</strong></p>
-              </div>
-            ) : (
-              <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'auto', boxShadow: '0 2px 16px rgba(124,58,237,0.07)' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-                  <thead>
-                    <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
-                      <th style={{ ...thStyle, width: 36 }}>#</th>
-                      <th style={thStyle}>Invoice</th>
-                      <th style={thStyle}>UPC</th>
-                      <th style={thStyle}>Vendor</th>
-                      <th style={thStyle}>Brand</th>
-                      <th style={thStyle}>Prod ID</th>
-                      <th style={thStyle}>Description</th>
-                      <th style={thStyle}>Color</th>
-                      <th style={thStyle}>Size</th>
-                      <th style={thStyle}>MG</th>
-                      <th style={thStyle}>SG</th>
-                      <th style={thStyle}>SSG</th>
-                      <th style={thStyle}>Cost</th>
-                      <th style={thStyle}>Sale</th>
-                      <th style={thStyle}>Season</th>
-                      <th style={thStyle}>Web</th>
-                      <th style={{ ...thStyle, textAlign: 'right', paddingRight: 16 }}>Actions</th>
-                    </tr>
-                  </thead>
+          {/* TOP-RIGHT: Vendor Summary + Errors */}
+          <div style={panelStyle}>
+            <div style={panelHeaderStyle}>
+              <span style={panelLabelStyle}>Summary + Errors</span>
+              <button onClick={() => copyText(vendorSummary)} style={smBtn('#dbeafe', '#1e40af')}>📋 Copy</button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              {vendorSummary ? (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                   <tbody>
-                    {rows.map((r, i) => (
-                      <tr key={i} style={{ borderTop: i === 0 ? 'none' : `1px solid #f0ebff`, background: i % 2 === 0 ? '#fff' : '#faf8ff' }}>
-                        <td style={{ ...tdStyle, color: '#c4b5fd', fontSize: 11, fontWeight: 700 }}>{i + 1}</td>
-                        <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11, color: '#9b8ec4' }}>{r.Invoice || '—'}</td>
-                        <td style={{ ...tdStyle, color: '#9b8ec4', fontFamily: 'monospace', fontSize: 11 }}>{r.Upc || '—'}</td>
-                        <td style={{ ...tdStyle, fontWeight: 700, color: '#5b21b6' }}>{r.Vendorid}</td>
-                        <td style={tdStyle}>{r.Brand}</td>
-                        <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11 }}>{r.Productid}</td>
-                        <td style={{ ...tdStyle, maxWidth: 180 }}>
-                          <span title={r.Description} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {r.Description}
-                          </span>
-                        </td>
-                        <td style={tdStyle}>{r.Color}</td>
-                        <td style={tdStyle}>
-                          <span style={{ background: '#ede9fe', color: '#6d28d9', borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 700 }}>
-                            {r.Size}
-                          </span>
-                        </td>
-                        <td style={{ ...tdStyle, fontSize: 11, color: '#6b7280' }}>{r.Mg}</td>
-                        <td style={{ ...tdStyle, fontSize: 11, color: '#6b7280' }}>{r.Sg}</td>
-                        <td style={{ ...tdStyle, fontSize: 11, color: '#6b7280' }}>{r.Ssg}</td>
-                        <td style={{ ...tdStyle, color: '#374151' }}>${r.Unitcost}</td>
-                        <td style={{ ...tdStyle, fontWeight: 700, color: '#166534' }}>
-                          {r.Saleprice ? `$${r.Saleprice}` : '—'}
-                        </td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{r.Season}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{r.Website}</td>
-                        <td style={{ ...tdStyle, textAlign: 'right', paddingRight: 12 }}>
-                          <div style={{ display: 'inline-flex', gap: 5 }}>
-                            <button onClick={() => editRow(i)}
-                              style={{ background: purpleLight, color: purple, border: `1px solid ${border}`, borderRadius: 5, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                              Edit
-                            </button>
-                            <button onClick={() => deleteRow(i)}
-                              style={{ background: '#fff5f5', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 5, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                              ✕
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {vendorSummary.split('\n').map((line, i) => {
+                      const cells = line.split('\t')
+                      return (
+                        <tr key={i} style={{ background: i === 0 ? purpleLight : i % 2 === 0 ? '#fff' : '#faf8ff', borderBottom: `1px solid ${border}` }}>
+                          {cells.map((cell, j) => (
+                            <td key={j} style={{
+                              padding: '6px 10px',
+                              fontWeight: i === 0 ? 800 : 400,
+                              color: i === 0 ? purple : '#333',
+                              fontFamily: i === 0 ? 'inherit' : 'monospace',
+                              whiteSpace: 'nowrap',
+                            }}>{cell}</td>
+                          ))}
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
+              ) : (
+                <div style={{ padding: 32, textAlign: 'center', color: '#c4b5fd', fontSize: 12 }}>
+                  Process vendor CSV to see summary
+                </div>
+              )}
+            </div>
+            {vendorSummary && (
+              <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
+                {vendorSummary.split('\n').length - 1} unique invoices
               </div>
             )}
           </div>
+
+          {/* BOTTOM-LEFT: POS Query input */}
+          <div style={panelStyle}>
+            <div style={panelHeaderStyle}>
+              <span style={panelLabelStyle}>POS Query</span>
+              <span style={{ fontSize: 10, color: '#b8aed8' }}>InvoiceNoCompany · PONum · Customer · UPC · ValidUPC ...</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setPosQuery('')} style={smBtn('#fee2e2', '#dc2626')}>Clear</button>
+                <button onClick={processPosQuery} style={smBtn(purple, '#fff')}>▶ Process + Log</button>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <textarea
+                value={posQuery}
+                onChange={e => setPosQuery(e.target.value)}
+                placeholder="Paste POS query data here..."
+                style={taStyle}
+              />
+            </div>
+            <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
+              {posQuery.trim()
+                ? `${posQuery.trim().split('\n').filter(l => l.trim()).length} rows`
+                : 'No data'}
+            </div>
+          </div>
+
+          {/* BOTTOM-RIGHT: POS Summary + Errors */}
+          <div style={panelStyle}>
+            <div style={panelHeaderStyle}>
+              <span style={panelLabelStyle}>POS Summary + Errors</span>
+              <button onClick={() => copyText(posSummary)} style={smBtn('#dbeafe', '#1e40af')}>📋 Copy</button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              {posSummary ? (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <tbody>
+                    {posSummary.split('\n').map((line, i) => {
+                      const cells = line.split('\t')
+                      const hasError = cells.some(c => c && c !== '' && (cells[5] !== '' || cells[6] === '✓'))
+                      return (
+                        <tr key={i} style={{
+                          background: i === 0 ? purpleLight : hasError && i > 0 ? '#fff1f2' : i % 2 === 0 ? '#fff' : '#faf8ff',
+                          borderBottom: `1px solid ${border}`,
+                        }}>
+                          {cells.map((cell, j) => (
+                            <td key={j} style={{
+                              padding: '6px 10px',
+                              fontWeight: i === 0 ? 800 : 400,
+                              color: i === 0 ? purple : hasError && i > 0 ? '#dc2626' : '#333',
+                              fontFamily: i === 0 ? 'inherit' : 'monospace',
+                              whiteSpace: 'nowrap',
+                            }}>{cell}</td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ padding: 32, textAlign: 'center', color: '#c4b5fd', fontSize: 12 }}>
+                  Process POS query to see summary
+                </div>
+              )}
+            </div>
+            {posSummary && (
+              <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
+                {posSummary.split('\n').length - 1} invoices processed
+              </div>
+            )}
+          </div>
+
         </div>
       )}
 
@@ -640,9 +410,7 @@ export default function AutoCSVPage() {
       {/* TAB 2: Log Book                                                     */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'logbook' && (
-        <div style={{ padding: '20px 24px', maxWidth: 1300, margin: '0 auto' }}>
-
-          {/* Log Book header + controls */}
+        <div style={{ padding: '20px 24px', maxWidth: 1300, margin: '0 auto', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
               <h3 style={{ fontSize: 15, fontWeight: 800, color: '#3b1f8c', margin: 0 }}>Push Log &amp; IC Cross-Reference</h3>
@@ -650,26 +418,23 @@ export default function AutoCSVPage() {
                 {filteredLog.length} entr{filteredLog.length !== 1 ? 'ies' : 'y'}
               </p>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input
-                value={logFilter}
-                onChange={e => setLogFilter(e.target.value)}
-                placeholder="Search..."
-                style={{
-                  background: '#f5f3ff', border: `1.5px solid ${border}`,
-                  borderRadius: 8, padding: '7px 12px', fontSize: 12,
-                  color: '#3b1f8c', fontWeight: 600, outline: 'none', width: 200,
-                }}
-              />
-            </div>
+            <input
+              value={logFilter}
+              onChange={e => setLogFilter(e.target.value)}
+              placeholder="Search..."
+              style={{
+                background: '#f5f3ff', border: `1.5px solid ${border}`,
+                borderRadius: 8, padding: '7px 12px', fontSize: 12,
+                color: '#3b1f8c', fontWeight: 600, outline: 'none', width: 200,
+              }}
+            />
           </div>
 
-          {/* Table */}
           <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'auto', boxShadow: '0 2px 16px rgba(124,58,237,0.07)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
               <thead>
                 <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
-                  {['Timestamp','Invoice #','PO #','Store','CSV Qty','Logged By'].map(col => (
+                  {['Timestamp', 'Invoice #', 'PO #', 'Store', 'CSV Qty', 'Logged By'].map(col => (
                     <th key={col} style={{
                       padding: '10px 12px', textAlign: 'left', fontSize: 10,
                       fontWeight: 800, color: purple, letterSpacing: '0.07em',
@@ -680,46 +445,31 @@ export default function AutoCSVPage() {
               </thead>
               <tbody>
                 {logLoading ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd', fontSize: 13 }}>
-                      Loading...
-                    </td>
-                  </tr>
+                  <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd', fontSize: 13 }}>Loading...</td></tr>
                 ) : filteredLog.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ padding: 48, textAlign: 'center', color: '#c4b5fd' }}>
                       <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
                       <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>No log entries yet</p>
-                      <p style={{ fontSize: 12 }}>Export a CSV from the Invoice Processor to log entries here</p>
+                      <p style={{ fontSize: 12 }}>Entries appear here after processing in the Invoice Processor</p>
                     </td>
                   </tr>
-                ) : (
-                  filteredLog.map((e, i) => (
-                    <tr key={e.id} style={{
-                      borderTop: i === 0 ? 'none' : `1px solid #f0ebff`,
-                      background: i % 2 === 0 ? '#fff' : '#faf8ff',
-                    }}>
-                      <td style={{ padding: '9px 12px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>
-                        {new Date(e.exported_at).toLocaleString()}
-                      </td>
-                      <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace' }}>
-                        {e.invoice_num}
-                      </td>
-                      <td style={{ padding: '9px 12px', fontSize: 12, color: '#333', fontFamily: 'monospace' }}>
-                        {e.po_num || '—'}
-                      </td>
-                      <td style={{ padding: '9px 12px', fontSize: 12, color: '#333' }}>
-                        {e.store}
-                      </td>
-                      <td style={{ padding: '9px 12px', fontSize: 12, color: '#333', textAlign: 'center' }}>
-                        {e.qty_total}
-                      </td>
-                      <td style={{ padding: '9px 12px', fontSize: 12, color: '#6b7280' }}>
-                        {e.userid}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ) : filteredLog.map((e, i) => (
+                  <tr key={e.id} style={{ borderTop: i === 0 ? 'none' : `1px solid #f0ebff`, background: i % 2 === 0 ? '#fff' : '#faf8ff' }}>
+                    <td style={{ padding: '9px 12px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>
+                      {new Date(e.exported_at).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace' }}>
+                      {e.invoice_num}
+                    </td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: '#333', fontFamily: 'monospace' }}>
+                      {e.po_num || '—'}
+                    </td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: '#333' }}>{e.store}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: '#333', textAlign: 'center' }}>{e.qty_total}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: '#6b7280' }}>{e.userid}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
