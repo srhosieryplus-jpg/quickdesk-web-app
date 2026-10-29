@@ -42,6 +42,7 @@ export default function ICLogPage() {
   const [newNote, setNewNote] = useState('')
   const [adding, setAdding] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<ICEntry | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null)
 
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
@@ -144,6 +145,29 @@ export default function ICLogPage() {
     setEntries(prev => prev.filter(e => e.id !== id))
     setContextMenu(null)
     showToast('🗑 Deleted')
+  }
+
+  function openEdit(id: string) {
+    const entry = entries.find(e => e.id === id)
+    if (!entry) return
+    setEditingEntry(entry)
+    setContextMenu(null)
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingEntry) return
+    setAdding(true)
+    const { error } = await supabase.from('ic_log').update({
+      store: editingEntry.store,
+      order_num: editingEntry.order_num,
+      note: editingEntry.note,
+    }).eq('id', editingEntry.id)
+    setAdding(false)
+    if (error) { showToast(`❌ ${error.message}`, 'err'); return }
+    setEditingEntry(null)
+    showToast('✅ Updated')
+    fetchEntries()
   }
 
   function handleRowRightClick(e: React.MouseEvent, id: string) {
@@ -306,7 +330,7 @@ export default function ICLogPage() {
           background: '#fff', border: `1px solid ${border}`, borderRadius: 8,
           boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: 200, overflow: 'hidden', minWidth: 120,
         }} onClick={e => e.stopPropagation()}>
-          <button onClick={() => setContextMenu(null)}
+          <button onClick={() => openEdit(contextMenu.id)}
             style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: purpleD, fontWeight: 600, cursor: 'pointer' }}>
             ✏️ Edit
           </button>
@@ -315,6 +339,47 @@ export default function ICLogPage() {
             style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>
             🗑 Delete
           </button>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingEntry && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setEditingEntry(null) }}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: 340, boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: purpleD, marginBottom: 18, textAlign: 'center' }}>Edit Entry</div>
+            <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>StoreID</label>
+                <select value={editingEntry.store} onChange={e => setEditingEntry(prev => prev ? { ...prev, store: e.target.value } : prev)}
+                  style={{ ...inputSt, width: '100%' }}>
+                  {STORES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>Invoice #</label>
+                <input value={editingEntry.order_num}
+                  onChange={e => setEditingEntry(prev => prev ? { ...prev, order_num: e.target.value } : prev)}
+                  style={{ ...inputSt, width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>Note</label>
+                <input value={editingEntry.note}
+                  onChange={e => setEditingEntry(prev => prev ? { ...prev, note: e.target.value } : prev)}
+                  placeholder="optional…" style={{ ...inputSt, width: '100%' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button type="button" onClick={() => setEditingEntry(null)}
+                  style={{ flex: 1, background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 7, padding: '9px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={adding}
+                  style={{ flex: 2, background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '9px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: adding ? 0.7 : 1 }}>
+                  {adding ? '…' : '✓ Save'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
