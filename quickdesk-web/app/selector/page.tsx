@@ -10,7 +10,7 @@ const ALL_MODULES = [
   { id:'season_aw',  label:'AW',                 icon:'✻',  path:'/season-log?type=AW',  bg:'#bfdbfe', iconColor:'#1e40af' },
   { id:'ic',         label:'Infinity Classics',  icon:'∞',  path:'/ic-log',              bg:'#e9d5ff', iconColor:'#6b21a8' },
   { id:'po_tracker', label:'PO Tracker',         icon:'⊞',  path:'/po-tracker',          bg:'#fbcfe8', iconColor:'#9d174d' },
-  { id:'qd',         label:'UPC Scanner',        icon:'barcode', path:'/qd',              bg:'#fca5a5', iconColor:'#7f1d1d' },
+  { id:'qd',         label:'UPC Scanner',        icon:'barcode', path:'/quickdesk',       bg:'#fca5a5', iconColor:'#7f1d1d' },
   { id:'autocsv',    label:'Auto CSV',           icon:'⚡', path:'/autocsv',             bg:'#fcd34d', iconColor:'#78350f' },
   { id:'reports',    label:'Reports',            icon:'clipboard', path:'/reports', bg:'#6ee7b7', iconColor:'#065f46' },
   { id:'settings',   label:'Settings',           icon:'✿',  path:'/settings',            bg:'#e2e8f0', iconColor:'#334155' },
