@@ -142,30 +142,44 @@ export default function SettingsPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#eeeaf6', fontFamily: 'Inter, sans-serif' }}>
 
-      {/* Title bar */}
+      {/* Header — matches selector style */}
       <div style={{
-        background: '#f0eef8', borderBottom: `1px solid ${border}`,
-        padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10,
+        padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        position: 'relative', borderBottom: '1px solid #d4c8f0',
+        background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
       }}>
-        <span style={{ fontSize: 18, color: purple }}>👥</span>
-        <span style={{ fontSize: 15, fontWeight: 800, color: '#3730a3', letterSpacing: '0.02em' }}>
-          User Management
-        </span>
-        <span style={{ fontSize: 12, color: '#9b8ec4', marginLeft: 8 }}>
-          {currentUser?.userid === 'SR' || currentUser?.userid === 'STAR'
-            ? `'${currentUser.userid.toLowerCase()}' is the built-in admin (all access).`
-            : ''}
-        </span>
-        <button onClick={goHome} disabled={goingHome}
-          style={{ marginLeft: 'auto', background: anyDirty ? purple : 'none', color: anyDirty ? '#fff' : '#9b8ec4', border: anyDirty ? 'none' : 'none', borderRadius: 6, padding: anyDirty ? '5px 12px' : '0', fontSize: 13, cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s' }}>
-          {goingHome ? '💾 Saving…' : anyDirty ? '💾 Save & Home' : '← Home'}
-        </button>
+        {/* Left: home + user info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={goHome} disabled={goingHome}
+            style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>
+            {goingHome ? '💾 Saving…' : '← Home'}
+          </button>
+          <div style={{ width: 1, height: 16, background: '#d4c8f0' }} />
+          <span style={{ fontSize: 12, color: '#9b8ec4' }}>
+            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{currentUser?.userid}</span>
+          </span>
+        </div>
+
+        {/* Center: title */}
+        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
+          <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
+            <polygon points="11,1 21,7 21,19 11,25 1,19 1,7" fill="none" stroke="#7c3aed" strokeWidth="2" />
+          </svg>
+          <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>SETTINGS</span>
+        </div>
+
+        {/* Right: save indicator */}
+        <div>
+          {anyDirty && (
+            <span style={{ fontSize: 12, color: purple, fontWeight: 700 }}>● Unsaved changes</span>
+          )}
+        </div>
       </div>
 
-      {/* Inline Add User form */}
+      {/* Inline Add User form — centered */}
       <form onSubmit={addUser} style={{
         background: '#fff', borderBottom: `1px solid ${border}`,
-        padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+        padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <label style={labelStyle}>User ID:</label>
