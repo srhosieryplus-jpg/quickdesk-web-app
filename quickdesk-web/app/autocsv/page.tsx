@@ -67,7 +67,7 @@ interface EntryRow {
 }
 
 interface ResultRow {
-  Upc: string; Vendorid: string; Brand: string; Productid: string; Pcode: string
+  Invoice: string; Upc: string; Vendorid: string; Brand: string; Productid: string; Pcode: string
   Mg: string; Sg: string; Ssg: string; Iu1: string; Iu2: string; Iu3: string; Iu4: string
   Description: string; Color: string; Size: string; Saleprice: string; Unitcost: string
   Season: string; Taxrule: string; Website: string; Scale: string; Pu4: string
@@ -125,6 +125,7 @@ function expandRows(entry: EntryRow, season: string, iu: string, storeTT: boolea
   for (const color of (colors.length ? colors : [''])) {
     for (const size of (sizes.length ? sizes : [''])) {
       out.push({
+        Invoice: entry.invoice,
         Upc: entry.upc,
         Vendorid: entry.vendorid.toUpperCase(),
         Brand: entry.brand,
@@ -280,15 +281,9 @@ export default function AutoCSVPage() {
 
     // Log each unique invoice to autocsv_log so IC Log can auto-match
     if (user) {
-      // Group rows by Vendorid (used as invoice_num) to get unique invoices + qty totals
-      // We use Vendorid+Productid as the invoice identifier — actually use Productid as invoice_num
-      // The IC Log matches on invoice_num = order_num logged by user
-      // Best key for matching: use the session's store and a unique "invoice" concept
-      // Since Auto CSV doesn't have an invoice # field, we log each unique Productid group
-      // with the store from the user's profile and qty = row count for that product
       const invoiceMap = new Map<string, { po_num: string; qty: number }>()
       for (const r of rows) {
-        const key = r.Productid || r.Upc
+        const key = r.Invoice || r.Productid || r.Upc
         if (!key) continue
         const existing = invoiceMap.get(key)
         if (existing) { existing.qty += 1 }
@@ -436,7 +431,7 @@ export default function AutoCSVPage() {
 
             {FIELDS.map((field, idx) => {
               const LABELS: Record<keyof EntryRow, string> = {
-                upc: 'UPC', vendorid: 'VENDOR ID', brand: 'BRAND',
+                invoice: 'INVOICE #', upc: 'UPC', vendorid: 'VENDOR ID', brand: 'BRAND',
                 productid: 'PRODUCT ID', pcode: 'P-CODE',
                 description: 'DESCRIPTION', color: 'COLOR(S)', size: 'SIZE(S)', unitcost: 'UNIT COST',
               }
