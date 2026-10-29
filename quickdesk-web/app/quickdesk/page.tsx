@@ -55,6 +55,7 @@ export default function QDPage() {
     const u = getSession()
     if (!u) { router.push('/'); return }
     setCurrentUser(u)
+    if (u.store) setNewStore(u.store.toUpperCase())
     loadSessions(u)
   }, [router])
 
@@ -258,20 +259,20 @@ export default function QDPage() {
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
 
       {/* Header */}
-      <div style={{ background: '#e8e4f8', borderBottom: `2px solid ${border}`, padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>
-          ▌▌▌ UPC SCANNER
-          <span style={{ color: '#6b7280', fontWeight: 400, fontSize: 12, marginLeft: 8 }}>
+      <div style={{ background: '#e8e4f8', borderBottom: `2px solid ${border}`, padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', position: 'relative' }}>
+        <Btn color="ghost" onClick={() => router.push('/selector')}>← Home</Btn>
+        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>▌▌▌ UPC SCANNER</div>
+          <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 400 }}>
             {session ? `${session.name} — ${session.store}` : 'No Active Session'}
-          </span>
-        </span>
+          </div>
+        </div>
         <div style={{ flex: 1 }} />
         <Btn color="primary" onClick={() => setShowModal(true)}>+ New Invoice #</Btn>
         <Btn color="yellow" onClick={saveSession} disabled={saving || !session?.order_list.length}>
           {saving ? '…' : '💾 Save'}
         </Btn>
         <Btn color="green" onClick={() => exportCSV()}>↓ Export CSV</Btn>
-        <Btn color="ghost" onClick={() => router.push('/selector')}>← Home</Btn>
       </div>
 
       {/* Tab bar */}
@@ -472,7 +473,7 @@ export default function QDPage() {
                 autoFocus placeholder="e.g. 2813782" style={inputSt} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 16 }}>
-              <label style={labelSt}>Store</label>
+              <label style={labelSt}>Store ID</label>
               <select value={newStore} onChange={e => setNewStore(e.target.value)} style={inputSt}>
                 {STORES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
