@@ -232,12 +232,14 @@ export default function ICLogPage() {
       </div>
 
       {/* Filter bar */}
-      <div style={{ background: purpleLight, borderBottom: `1px solid ${border}`, padding: '6px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <label style={{ ...labelSt, color: purpleD }}>Filter:</label>
-        <input value={filter} onChange={e => setFilter(e.target.value)}
-          placeholder="store, order #, note, date…"
-          style={{ ...inputSt, width: 200 }} />
-        <span style={{ fontSize: 12, color: '#9b8ec4', marginLeft: 'auto' }}>{filtered.length} entries</span>
+      <div style={{ background: purpleLight, borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 900, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <label style={{ ...labelSt, color: purpleD }}>Search:</label>
+          <input value={filter} onChange={e => setFilter(e.target.value)}
+            placeholder="store, order #, note, date…"
+            style={{ ...inputSt, width: 200 }} />
+          <span style={{ fontSize: 12, color: '#9b8ec4', marginLeft: 'auto' }}>{filtered.length} entries</span>
+        </div>
       </div>
 
       {/* Table */}
