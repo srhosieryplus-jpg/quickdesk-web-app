@@ -64,6 +64,37 @@ export default function AutoCSVPage() {
   const [pendingLog, setPendingLog] = useState<Record<string, { poNum: string; customer: string; storeID: string; qty: number }>>({})
 
   const [toast, setToast] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  }
+  function toggleSelectAll(ids: string[]) {
+    setSelectedIds(prev => prev.size === ids.length ? new Set() : new Set(ids))
+  }
+
+  async function deleteSelected() {
+    if (!selectedIds.size) return
+    const pw = prompt(`Delete ${selectedIds.size} row${selectedIds.size !== 1 ? 's' : ''}? Enter password:`)
+    if (pw === null) return
+    if (pw.toLowerCase() !== 'delete') { showToast('❌ Incorrect password'); return }
+    await supabase.from('autocsv_log').delete().in('id', Array.from(selectedIds))
+    setLogEntries(prev => prev.filter(e => !selectedIds.has(e.id)))
+    setSelectedIds(new Set())
+    showToast(`🗑 Deleted ${selectedIds.size} row${selectedIds.size !== 1 ? 's' : ''}`)
+  }
+
+  function copyLog(entries: LogBookEntry[]) {
+    const cols = ['Timestamp','Invoice #','PO #','Store','CSV Qty','POS Qty','Match','IC Order #','Logged By','IC Status','Note']
+    const rows = entries.map(e => {
+      const match = e.pos_qty !== null ? (e.qty_total === e.pos_qty ? '✓' : '✗') : ''
+      const d = new Date(e.exported_at)
+      const ts = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${String(d.getHours()%12||12).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+      return [ts, e.invoice_num, e.po_num||'', e.store, e.qty_total, e.pos_qty??'', match, e.ic_order_num||'', e.ic_logged_by||e.userid, e.ic_status||'', e.ic_note||''].join('\t')
+    })
+    navigator.clipboard.writeText([cols.join('\t'), ...rows].join('\n'))
+    showToast('📋 Copied to clipboard')
+  }
 
   useEffect(() => {
     const u = getSession()
@@ -80,13 +111,45 @@ export default function AutoCSVPage() {
 
   async function fetchLogEntries() {
     setLogLoading(true)
-    const { data } = await supabase
+    // Fetch autocsv_log rows
+    const { data: pushData } = await supabase
       .from('autocsv_log')
       .select('*')
       .order('exported_at', { ascending: false })
-    const entries = data || []
+    const pushRows = pushData || []
+
+    // Fetch matching ic_log rows keyed by order_num (= invoice_num)
+    const invoiceNums = pushRows.map((r: { invoice_num: string }) => r.invoice_num)
+    let icMap: Record<string, { ic_order_num: string; ic_logged_by: string; ic_status: string; ic_note: string }> = {}
+    if (invoiceNums.length) {
+      const { data: icData } = await supabase
+        .from('ic_log')
+        .select('order_num, userid, status, note')
+        .in('order_num', invoiceNums)
+      for (const ic of icData || []) {
+        icMap[ic.order_num] = {
+          ic_order_num: ic.order_num,
+          ic_logged_by: ic.userid,
+          ic_status: ic.status,
+          ic_note: ic.note,
+        }
+      }
+    }
+
+    // Merge
+    const entries: LogBookEntry[] = pushRows.map((r: {
+      id: string; exported_at: string; invoice_num: string; po_num: string
+      store: string; qty_total: number; pos_qty: number | null; userid: string
+    }) => ({
+      ...r,
+      ic_order_num: icMap[r.invoice_num]?.ic_order_num ?? null,
+      ic_logged_by: icMap[r.invoice_num]?.ic_logged_by ?? null,
+      ic_status: icMap[r.invoice_num]?.ic_status ?? null,
+      ic_note: icMap[r.invoice_num]?.ic_note ?? null,
+    }))
+
     setLogEntries(entries)
-    setLoggedInvoices(new Set(entries.map((e: LogBookEntry) => e.invoice_num)))
+    setLoggedInvoices(new Set(entries.map(e => e.invoice_num)))
     setLogLoading(false)
   }
 
@@ -191,11 +254,12 @@ export default function AutoCSVPage() {
     setPosErrors(bad)
 
     // Group good rows by invoice for logging
-    const grouped: Record<string, { poNum: string; customer: string; storeID: string; qty: number }> = {}
+    const grouped: Record<string, { poNum: string; customer: string; storeID: string; qty: number; posQty: number }> = {}
     for (const r of good) {
       const q = parseInt(r.shippedQty) || 0
-      if (!grouped[r.invoice]) grouped[r.invoice] = { poNum: r.poNum, customer: r.customer, storeID: r.storeID, qty: 0 }
+      if (!grouped[r.invoice]) grouped[r.invoice] = { poNum: r.poNum, customer: r.customer, storeID: r.storeID, qty: 0, posQty: 0 }
       grouped[r.invoice].qty += q
+      grouped[r.invoice].posQty += q
     }
     setPendingLog(grouped)
 
@@ -211,7 +275,7 @@ export default function AutoCSVPage() {
   }
 
   async function logToSupabase(
-    grouped: Record<string, { poNum: string; customer: string; storeID: string; qty: number }>,
+    grouped: Record<string, { poNum: string; customer: string; storeID: string; qty: number; posQty?: number }>,
     allowDupes = false
   ) {
     if (!user) return
@@ -223,6 +287,7 @@ export default function AutoCSVPage() {
         po_num: v.poNum,
         store: v.storeID || user.store,
         qty_total: v.qty,
+        pos_qty: v.posQty ?? null,
         userid: user.userid,
       })
     }
@@ -621,30 +686,57 @@ export default function AutoCSVPage() {
       {/* TAB 2: Log Book                                                     */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'logbook' && (
-        <div style={{ padding: '16px 20px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexShrink: 0 }}>
-            <div>
-              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#3b1f8c', margin: 0 }}>Push Log &amp; IC Cross-Reference</h3>
-              <p style={{ fontSize: 11, color: '#9b8ec4', margin: '2px 0 0' }}>
+        <div style={{ padding: '12px 20px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+
+          {/* Toolbar row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexShrink: 0 }}>
+            {/* Left: title + count */}
+            <div style={{ flexShrink: 0 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 800, color: '#3b1f8c', margin: 0 }}>Push Log &amp; IC Cross-Reference</h3>
+              <p style={{ fontSize: 10, color: '#9b8ec4', margin: 0 }}>
                 {filteredLog.length} entr{filteredLog.length !== 1 ? 'ies' : 'y'}
+                {selectedIds.size > 0 && <span style={{ color: '#dc2626', fontWeight: 700 }}> · {selectedIds.size} selected</span>}
               </p>
             </div>
+
+            {/* Center: search */}
             <input
               value={logFilter}
               onChange={e => setLogFilter(e.target.value)}
-              placeholder="Search..."
+              placeholder="Search invoice, PO, store, user..."
               style={{
-                background: '#f5f3ff', border: `1.5px solid ${border}`,
-                borderRadius: 8, padding: '7px 12px', fontSize: 12,
-                color: '#3b1f8c', fontWeight: 600, outline: 'none', width: 200,
+                flex: 1, background: '#f5f3ff', border: `1.5px solid ${border}`,
+                borderRadius: 8, padding: '7px 14px', fontSize: 12,
+                color: '#3b1f8c', fontWeight: 600, outline: 'none',
               }}
             />
+
+            {/* Right: action buttons */}
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button
+                onClick={() => copyLog(filteredLog)}
+                style={smBtn('#e0e7ff', '#3730a3')}
+              >📋 Copy</button>
+              <button
+                onClick={deleteSelected}
+                disabled={selectedIds.size === 0}
+                style={{ ...smBtn('#fee2e2', '#dc2626'), opacity: selectedIds.size === 0 ? 0.4 : 1, cursor: selectedIds.size === 0 ? 'default' : 'pointer' }}
+              >🗑 Delete Sel{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}</button>
+            </div>
           </div>
 
           <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'auto', flex: 1, boxShadow: '0 2px 16px rgba(124,58,237,0.07)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                 <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
+                  {/* Checkbox select-all */}
+                  <th style={{ padding: '10px 10px', width: 32 }}>
+                    <input type="checkbox"
+                      checked={filteredLog.length > 0 && selectedIds.size === filteredLog.length}
+                      onChange={() => toggleSelectAll(filteredLog.map(e => e.id))}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </th>
                   {[
                     { label: 'Timestamp', ic: false },
                     { label: 'Invoice #', ic: false },
@@ -654,7 +746,7 @@ export default function AutoCSVPage() {
                     { label: 'POS Qty', ic: false },
                     { label: 'Match', ic: false },
                     { label: 'IC Order #', ic: true },
-                    { label: 'Logged By', ic: false },
+                    { label: 'Logged By', ic: true },
                     { label: 'IC Status', ic: true },
                     { label: 'Note', ic: true },
                   ].map(({ label, ic }) => (
@@ -669,29 +761,28 @@ export default function AutoCSVPage() {
               </thead>
               <tbody>
                 {logLoading ? (
-                  <tr><td colSpan={11} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd', fontSize: 13 }}>Loading...</td></tr>
+                  <tr><td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd', fontSize: 13 }}>Loading...</td></tr>
                 ) : filteredLog.length === 0 ? (
                   <tr>
-                    <td colSpan={11} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd' }}>No entries yet</td>
+                    <td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd' }}>No entries yet</td>
                   </tr>
                 ) : filteredLog.map((e, i) => {
                   const csvQty = e.qty_total
                   const posQty = e.pos_qty ?? null
                   const match = posQty !== null ? csvQty === posQty : null
                   const hasIC = !!e.ic_order_num
+                  const isSel = selectedIds.has(e.id)
+                  const d = new Date(e.exported_at)
+                  const ts = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${String(d.getHours()%12||12).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
                   return (
-                    <tr key={e.id} style={{ borderTop: i === 0 ? 'none' : `1px solid #f0ebff`, background: i % 2 === 0 ? '#fff' : '#faf8ff' }}>
-                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>
-                        {(() => {
-                          const d = new Date(e.exported_at)
-                          const mo = String(d.getMonth()+1).padStart(2,'0')
-                          const day = String(d.getDate()).padStart(2,'0')
-                          const yr = String(d.getFullYear()).slice(2)
-                          const h = String(d.getHours() % 12 || 12).padStart(2,'0')
-                          const min = String(d.getMinutes()).padStart(2,'0')
-                          return `${mo}-${day}-${yr} ${h}:${min}`
-                        })()}
+                    <tr key={e.id} style={{
+                      borderTop: i === 0 ? 'none' : `1px solid #f0ebff`,
+                      background: isSel ? '#ede9fe' : i % 2 === 0 ? '#fff' : '#faf8ff',
+                    }}>
+                      <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                        <input type="checkbox" checked={isSel} onChange={() => toggleSelect(e.id)} style={{ cursor: 'pointer' }} />
                       </td>
+                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>{ts}</td>
                       <td style={{ padding: '8px 12px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace' }}>{e.invoice_num}</td>
                       <td style={{ padding: '8px 12px', fontSize: 12, color: '#333', fontFamily: 'monospace' }}>{e.po_num || '—'}</td>
                       <td style={{ padding: '8px 12px', fontSize: 12, color: '#333', fontWeight: 600 }}>{e.store}</td>
@@ -702,9 +793,11 @@ export default function AutoCSVPage() {
                           : match === false ? <span style={{ color: '#dc2626', fontWeight: 800 }}>✗</span>
                           : ''}
                       </td>
-                      {/* IC columns */}
                       <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'monospace', color: hasIC ? '#0369a1' : '#d1d5db', fontWeight: hasIC ? 700 : 400 }}>{e.ic_order_num || '—'}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, color: '#6b7280' }}>{e.userid}</td>
+                      {/* Logged By = ic_log userid (store side), not autocsv userid */}
+                      <td style={{ padding: '8px 12px', fontSize: 12, color: e.ic_logged_by ? '#0369a1' : '#6b7280' }}>
+                        {e.ic_logged_by || <span style={{ color: '#d1d5db' }}>—</span>}
+                      </td>
                       <td style={{ padding: '8px 12px', fontSize: 11 }}>
                         {e.ic_status ? (
                           <span style={{
@@ -714,7 +807,7 @@ export default function AutoCSVPage() {
                           }}>{e.ic_status}</span>
                         ) : ''}
                       </td>
-                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#6b7280', fontStyle: e.ic_note ? 'normal' : 'italic' }}>{e.ic_note || ''}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#6b7280' }}>{e.ic_note || ''}</td>
                     </tr>
                   )
                 })}
