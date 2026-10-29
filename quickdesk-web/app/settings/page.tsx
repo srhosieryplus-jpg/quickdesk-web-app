@@ -200,16 +200,16 @@ export default function SettingsPage() {
         <p style={{ color: '#9b8ec4', fontSize: 13, padding: 24 }}>Loading…</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', minWidth: 900 }}>
+          <table style={{ width: 'auto', borderCollapse: 'collapse', background: '#fff', tableLayout: 'fixed' }}>
             <thead>
               <tr style={{ background: purpleLight, borderBottom: `1.5px solid ${border}` }}>
                 <th style={thStyle}>User ID</th>
                 <th style={thStyle}>Store</th>
                 <th style={thStyle}>Location</th>
                 {ALL_MODULES.map(m => (
-                  <th key={m.id} style={{ ...thStyle, textAlign: 'center', fontSize: 10, padding: '7px 6px', maxWidth: 70 }}>{m.label}</th>
+                  <th key={m.id} style={{ ...thStyle, textAlign: 'center', fontSize: 10, padding: '7px 4px', width: 68 }}>{m.label}</th>
                 ))}
-                <th style={{ ...thStyle, width: 64 }}></th>
+                <th style={{ ...thStyle, width: 48 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -230,11 +230,11 @@ export default function SettingsPage() {
                     transition: 'background 0.1s',
                   }}>
                     {/* User ID */}
-                    <td style={{ ...tdStyle, fontWeight: 800, color: '#3730a3', fontSize: 12, letterSpacing: '0.04em', width: 60 }}>
+                    <td style={{ ...tdStyle, fontWeight: 800, color: '#3730a3', fontSize: 12, letterSpacing: '0.04em', width: 52 }}>
                       {u.userid}
                     </td>
                     {/* Store */}
-                    <td style={{ ...tdStyle, width: 60 }}>
+                    <td style={{ ...tdStyle, width: 52 }}>
                       <span style={{ background: purpleLight, color: purple, border: `1px solid ${border}`, borderRadius: 5, padding: '2px 6px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                         onClick={async () => {
                           const idx = STORES.indexOf(u.store)
@@ -246,7 +246,7 @@ export default function SettingsPage() {
                       </span>
                     </td>
                     {/* Location */}
-                    <td style={{ ...tdStyle, width: 110 }}>
+                    <td style={{ ...tdStyle, width: 100 }}>
                       <select
                         value={u.location || ''}
                         onChange={async e => {
@@ -267,7 +267,7 @@ export default function SettingsPage() {
                     {ALL_MODULES.map(m => {
                       const checked = mods.includes(m.id)
                       return (
-                        <td key={m.id} style={{ ...tdStyle, textAlign: 'center', padding: '7px 6px' }}>
+                        <td key={m.id} style={{ ...tdStyle, textAlign: 'center', padding: '7px 4px', width: 68 }}>
                           <input
                             type="checkbox"
                             checked={checked}
@@ -278,8 +278,8 @@ export default function SettingsPage() {
                       )
                     })}
                     {/* Save / Delete */}
-                    <td style={{ ...tdStyle, textAlign: 'center', padding: '8px 10px' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
+                    <td style={{ ...tdStyle, textAlign: 'center', padding: '7px 4px', width: 48 }}>
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
                         <button
                           onClick={() => saveRow(u)}
                           disabled={saving === u.id || !rowDirty}
