@@ -41,6 +41,7 @@ export default function ICLogPage() {
   const [newOrder, setNewOrder] = useState('')
   const [newNote, setNewNote] = useState('')
   const [adding, setAdding] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type)
@@ -122,6 +123,7 @@ export default function ICLogPage() {
     if (error) { showToast(`❌ ${error.message || error.code || 'Insert failed'}`, 'err'); setAdding(false); return }
     setNewOrder(''); setNewNote('')
     setAdding(false)
+    setShowAddModal(false)
     showToast('✅ Order logged')
     fetchEntries()
   }
@@ -193,34 +195,6 @@ export default function ICLogPage() {
         </div>
       </div>
 
-      {/* Add form */}
-      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '10px 20px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: purpleD, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Log a New Order</div>
-        <form onSubmit={addEntry} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={labelSt}>StoreID:</label>
-            <select value={newStore} onChange={e => setNewStore(e.target.value)} style={inputSt}>
-              {STORES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <span style={{ fontSize: 16, color: '#9b8ec4', margin: '0 2px' }}>—</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={labelSt}>Invoice #:</label>
-            <input value={newOrder} onChange={e => setNewOrder(e.target.value)}
-              placeholder="e.g. 2976440" style={{ ...inputSt, width: 130 }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={labelSt}>Note:</label>
-            <input value={newNote} onChange={e => setNewNote(e.target.value)}
-              placeholder="optional…" style={{ ...inputSt, width: 160 }} />
-          </div>
-          <button type="submit" disabled={adding}
-            style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: adding ? 0.7 : 1 }}>
-            {adding ? '…' : '✓ Log Order'}
-          </button>
-        </form>
-      </div>
-
       {/* Filter bar */}
       <div style={{ background: purpleLight, borderBottom: `1px solid ${border}`, padding: '6px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <label style={{ ...labelSt, color: purpleD }}>Filter:</label>
@@ -228,7 +202,49 @@ export default function ICLogPage() {
           placeholder="store, order #, note, date…"
           style={{ ...inputSt, width: 200 }} />
         <span style={{ fontSize: 12, color: '#9b8ec4', marginLeft: 'auto' }}>{filtered.length} entries</span>
+        <button onClick={() => setShowAddModal(true)}
+          style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          + Log Order
+        </button>
       </div>
+
+      {/* Add Order Modal */}
+      {showAddModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: 340, boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: purpleD, marginBottom: 18, textAlign: 'center' }}>Log a New Order</div>
+            <form onSubmit={addEntry} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>StoreID</label>
+                <select value={newStore} onChange={e => setNewStore(e.target.value)} style={{ ...inputSt, width: '100%' }}>
+                  {STORES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>Invoice #</label>
+                <input value={newOrder} onChange={e => setNewOrder(e.target.value)}
+                  placeholder="e.g. 2976440" autoFocus style={{ ...inputSt, width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>Note (optional)</label>
+                <input value={newNote} onChange={e => setNewNote(e.target.value)}
+                  placeholder="optional…" style={{ ...inputSt, width: '100%' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button type="button" onClick={() => setShowAddModal(false)}
+                  style={{ flex: 1, background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 7, padding: '9px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={adding}
+                  style={{ flex: 2, background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '9px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: adding ? 0.7 : 1 }}>
+                  {adding ? '…' : '✓ Log Order'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
