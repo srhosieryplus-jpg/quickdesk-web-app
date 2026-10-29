@@ -131,7 +131,7 @@ export default function SettingsPage() {
       <div style={{
         background: '#f0eef8',
         borderBottom: `1px solid ${border}`,
-        padding: '10px 20px',
+        padding: '8px 16px',
         display: 'flex',
         alignItems: 'center',
         gap: 10,
@@ -155,10 +155,10 @@ export default function SettingsPage() {
       <form onSubmit={addUser} style={{
         background: '#fff',
         borderBottom: `1px solid ${border}`,
-        padding: '10px 20px',
+        padding: '8px 16px',
         display: 'flex',
         alignItems: 'center',
-        gap: 14,
+        gap: 10,
         flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -188,7 +188,7 @@ export default function SettingsPage() {
         <button type="submit" disabled={adding}
           style={{
             background: purple, color: '#fff', border: 'none', borderRadius: 6,
-            padding: '7px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
             opacity: adding ? 0.7 : 1,
           }}>
           {adding ? '…' : '+ Add User'}
@@ -207,7 +207,7 @@ export default function SettingsPage() {
                 <th style={thStyle}>Store</th>
                 <th style={thStyle}>Location</th>
                 {ALL_MODULES.map(m => (
-                  <th key={m.id} style={{ ...thStyle, textAlign: 'center', fontSize: 11, padding: '10px 8px' }}>{m.label}</th>
+                  <th key={m.id} style={{ ...thStyle, textAlign: 'center', fontSize: 10, padding: '7px 6px', maxWidth: 70 }}>{m.label}</th>
                 ))}
                 <th style={{ ...thStyle, width: 64 }}></th>
               </tr>
@@ -230,12 +230,12 @@ export default function SettingsPage() {
                     transition: 'background 0.1s',
                   }}>
                     {/* User ID */}
-                    <td style={{ ...tdStyle, fontWeight: 800, color: '#3730a3', fontSize: 14, letterSpacing: '0.04em', width: 80 }}>
+                    <td style={{ ...tdStyle, fontWeight: 800, color: '#3730a3', fontSize: 12, letterSpacing: '0.04em', width: 60 }}>
                       {u.userid}
                     </td>
                     {/* Store */}
-                    <td style={{ ...tdStyle, width: 80 }}>
-                      <span style={{ background: purpleLight, color: purple, border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                    <td style={{ ...tdStyle, width: 60 }}>
+                      <span style={{ background: purpleLight, color: purple, border: `1px solid ${border}`, borderRadius: 5, padding: '2px 6px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                         onClick={async () => {
                           const idx = STORES.indexOf(u.store)
                           const next = STORES[(idx + 1) % STORES.length]
@@ -246,7 +246,7 @@ export default function SettingsPage() {
                       </span>
                     </td>
                     {/* Location */}
-                    <td style={{ ...tdStyle, width: 140 }}>
+                    <td style={{ ...tdStyle, width: 110 }}>
                       <select
                         value={u.location || ''}
                         onChange={async e => {
@@ -256,8 +256,8 @@ export default function SettingsPage() {
                         }}
                         style={{
                           background: 'transparent', border: 'none', color: '#374151',
-                          fontSize: 13, fontWeight: 600, cursor: 'pointer', outline: 'none',
-                          fontFamily: 'Inter, sans-serif',
+                          fontSize: 12, fontWeight: 600, cursor: 'pointer', outline: 'none',
+                          fontFamily: 'Inter, sans-serif', maxWidth: 110,
                         }}>
                         <option value="">—</option>
                         {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
@@ -267,12 +267,12 @@ export default function SettingsPage() {
                     {ALL_MODULES.map(m => {
                       const checked = mods.includes(m.id)
                       return (
-                        <td key={m.id} style={{ ...tdStyle, textAlign: 'center', padding: '10px 8px' }}>
+                        <td key={m.id} style={{ ...tdStyle, textAlign: 'center', padding: '7px 6px' }}>
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => toggleModule(u, m.id)}
-                            style={{ width: 15, height: 15, accentColor: purple, cursor: 'pointer' }}
+                            style={{ width: 13, height: 13, accentColor: purple, cursor: 'pointer' }}
                           />
                         </td>
                       )
@@ -338,17 +338,17 @@ const labelStyle: React.CSSProperties = {
 
 const inlineInput: React.CSSProperties = {
   background: '#fff', border: '1px solid #d1d5db', borderRadius: 5,
-  padding: '5px 9px', fontSize: 13, color: '#111', outline: 'none',
+  padding: '4px 7px', fontSize: 12, color: '#111', outline: 'none',
   fontFamily: 'Inter, sans-serif',
 }
 
 const thStyle: React.CSSProperties = {
-  padding: '10px 14px', textAlign: 'left',
-  fontSize: 12, fontWeight: 700, color: '#6d28d9',
+  padding: '7px 8px', textAlign: 'left',
+  fontSize: 11, fontWeight: 700, color: '#6d28d9',
   letterSpacing: '0.02em', whiteSpace: 'nowrap',
 }
 
 const tdStyle: React.CSSProperties = {
-  padding: '10px 14px', fontSize: 13,
+  padding: '7px 8px', fontSize: 12,
   color: '#333', verticalAlign: 'middle',
 }
