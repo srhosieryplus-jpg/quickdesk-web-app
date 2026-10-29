@@ -201,6 +201,13 @@ export default function QDPage() {
     showToast('🗑 Deleted')
   }
 
+  async function goHome() {
+    if (session && session.order_list.length) {
+      await saveSession()
+    }
+    router.push('/selector')
+  }
+
   function clearSession() {
     if (!session || !confirm('Clear all scans?')) return
     setSession(prev => prev ? { ...prev, order_list: [], data: {} } : prev)
@@ -259,20 +266,47 @@ export default function QDPage() {
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
 
       {/* Header */}
-      <div style={{ background: '#e8e4f8', borderBottom: `2px solid ${border}`, padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', position: 'relative' }}>
-        <Btn color="ghost" onClick={() => router.push('/selector')}>← Home</Btn>
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center', pointerEvents: 'none' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>▌▌▌ UPC SCANNER</div>
-          <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 400 }}>
-            {session ? `${session.name} — ${session.store}` : 'No Active Session'}
-          </div>
+      <div style={{
+        padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        position: 'relative', borderBottom: '1px solid #d4c8f0',
+        background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
+      }}>
+        {/* Left: home + user info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={goHome} style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>← Home</button>
+          <div style={{ width: 1, height: 16, background: '#d4c8f0' }} />
+          <span style={{ fontSize: 12, color: '#9b8ec4' }}>
+            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{currentUser?.userid}</span>
+            {currentUser?.store ? <> · {currentUser.store === 'ALL' ? 'All Stores' : currentUser.store}</> : ''}
+          </span>
         </div>
-        <div style={{ flex: 1 }} />
-        <Btn color="primary" onClick={() => setShowModal(true)}>+ New Invoice #</Btn>
-        <Btn color="yellow" onClick={saveSession} disabled={saving || !session?.order_list.length}>
-          {saving ? '…' : '💾 Save'}
-        </Btn>
-        <Btn color="green" onClick={() => exportCSV()}>↓ Export CSV</Btn>
+
+        {/* Center: logo + title */}
+        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
+          <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
+            <polygon points="11,1 21,7 21,19 11,25 1,19 1,7" fill="none" stroke="#7c3aed" strokeWidth="2" />
+          </svg>
+          <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>UPC SCANNER</span>
+          {/* Live / offline pill */}
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: session ? '#dcfce7' : '#fee2e2',
+            color: session ? '#166534' : '#dc2626',
+            borderRadius: 20, padding: '2px 9px', fontSize: 11, fontWeight: 700,
+            pointerEvents: 'auto',
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: session ? '#22c55e' : '#ef4444', display: 'inline-block' }} />
+            {session ? 'LIVE' : 'IDLE'}
+          </span>
+        </div>
+
+        {/* Right: actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Btn color="primary" onClick={() => setShowModal(true)}>+ New Invoice #</Btn>
+          <Btn color="yellow" onClick={saveSession} disabled={saving || !session?.order_list.length}>
+            {saving ? '…' : '💾 Save'}
+          </Btn>
+        </div>
       </div>
 
       {/* Tab bar */}
