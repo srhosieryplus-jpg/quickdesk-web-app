@@ -26,9 +26,14 @@ export default function AutoCSVPage() {
 
   // Invoice Processor state
   const [vendorCSV, setVendorCSV] = useState('')
-  const [vendorSummary, setVendorSummary] = useState('')
   const [posQuery, setPosQuery] = useState('')
   const [posSummary, setPosSummary] = useState('')
+
+  interface SummaryRow {
+    invoice: string; poNum: string; customer: string; qty: number; dupes: number; alreadyLogged: boolean
+  }
+  const [vendorSummaryRows, setVendorSummaryRows] = useState<SummaryRow[]>([])
+  const [vendorFooter, setVendorFooter] = useState('')
 
   // Log Book state
   const [logEntries, setLogEntries] = useState<LogBookEntry[]>([])
@@ -47,15 +52,27 @@ export default function AutoCSVPage() {
     if (activeTab === 'logbook') fetchLogEntries()
   }, [activeTab])
 
+  // keep a set of already-logged invoice nums for dupe detection
+  const [loggedInvoices, setLoggedInvoices] = useState<Set<string>>(new Set())
+
   async function fetchLogEntries() {
     setLogLoading(true)
     const { data } = await supabase
       .from('autocsv_log')
       .select('*')
       .order('exported_at', { ascending: false })
-    setLogEntries(data || [])
+    const entries = data || []
+    setLogEntries(entries)
+    setLoggedInvoices(new Set(entries.map((e: LogBookEntry) => e.invoice_num)))
     setLogLoading(false)
   }
+
+  // Load logged invoices on mount so dupe check works without visiting Log Book tab
+  useEffect(() => {
+    supabase.from('autocsv_log').select('invoice_num').then(({ data }) => {
+      if (data) setLoggedInvoices(new Set(data.map((r: { invoice_num: string }) => r.invoice_num)))
+    })
+  }, [])
 
   function showToast(msg: string) {
     setToast(msg)
@@ -64,40 +81,56 @@ export default function AutoCSVPage() {
 
   function processVendorCSV() {
     if (!vendorCSV.trim()) { showToast('⚠️ Paste vendor CSV data first'); return }
-    const lines = vendorCSV.trim().split('\n').filter(l => l.trim())
-    // Parse tab or whitespace separated: InvoiceNoCompany PONum Customer Style UPC ShippedQty
-    const parsed: Record<string, { poNum: string; customer: string; qty: number; dupes: number }> = {}
-    let total = 0
-    const seen = new Set<string>()
+    const allLines = vendorCSV.trim().split('\n')
+    // Skip header row if it starts with "InvoiceNoCompany" (case-insensitive)
+    const dataLines = allLines.filter(l => {
+      const t = l.trim()
+      return t && !/^invoicenocompany/i.test(t)
+    })
 
-    for (const line of lines) {
-      const parts = line.trim().split(/\s+/)
+    // Parse: InvoiceNoCompany PONum Customer Style UPC ShippedQty (tab or space separated)
+    const parsed: Record<string, { poNum: string; customer: string; qty: number; dupes: number }> = {}
+    const seen = new Set<string>()
+    let totalQty = 0
+
+    for (const line of dataLines) {
+      // Split on tabs first, fall back to multiple spaces
+      const parts = line.includes('\t')
+        ? line.split('\t').map(s => s.trim())
+        : line.trim().split(/\s{2,}/)
       if (parts.length < 6) continue
       const [invoice, poNum, customer, , upc, qtyStr] = parts
       const qty = parseInt(qtyStr) || 0
-      const key = `${invoice}|${upc}`
-      if (seen.has(key)) {
-        if (parsed[invoice]) parsed[invoice].dupes++
+      const dupeKey = `${invoice}|${upc}`
+
+      if (!parsed[invoice]) {
+        parsed[invoice] = { poNum, customer, qty: 0, dupes: 0 }
+      }
+      if (seen.has(dupeKey)) {
+        parsed[invoice].dupes++
       } else {
-        seen.add(key)
-        if (!parsed[invoice]) {
-          parsed[invoice] = { poNum, customer, qty: 0, dupes: 0 }
-        }
+        seen.add(dupeKey)
         parsed[invoice].qty += qty
-        total += qty
+        totalQty += qty
       }
     }
 
-    const rows = Object.entries(parsed)
-    const uniqueCount = rows.length
-    const totalDupes = rows.reduce((s, [, v]) => s + v.dupes, 0)
+    const rows = Object.entries(parsed).map(([invoice, v]) => ({
+      invoice,
+      poNum: v.poNum,
+      customer: v.customer,
+      qty: v.qty,
+      dupes: v.dupes,
+      alreadyLogged: loggedInvoices.has(invoice),
+    }))
 
-    // Build summary text
-    const header = 'InvoiceNoCompany\tPONum\tCustomer\tShippedQty (sum)\tDupes'
-    const body = rows.map(([inv, v]) => `${inv}\t${v.poNum}\t${v.customer}\t${v.qty}\t${v.dupes || ''}`).join('\n')
-    setVendorSummary([header, body].join('\n'))
-
-    showToast(`✅ ${lines.length} rows · ${uniqueCount} unique · ${totalDupes} dupes`)
+    const alreadyLoggedCount = rows.filter(r => r.alreadyLogged).length
+    setVendorSummaryRows(rows)
+    setVendorFooter(
+      `Unique invoices: ${rows.length} | Total shipped qty: ${totalQty}` +
+      (alreadyLoggedCount > 0 ? ` | ⚠ ${alreadyLoggedCount} invoice(s) already in log — possible double import!` : '')
+    )
+    showToast(`✅ ${dataLines.length} rows · ${rows.length} unique`)
   }
 
   function processPosQuery() {
@@ -130,16 +163,10 @@ export default function AutoCSVPage() {
     showToast(`✅ Processed · ${errors} with errors`)
   }
 
-  function copyText(text: string) {
-    if (!text) { showToast('Nothing to copy'); return }
-    navigator.clipboard.writeText(text)
-      .then(() => showToast('📋 Copied'))
-      .catch(() => showToast('❌ Clipboard not available'))
-  }
-
   function clearAll() {
     setVendorCSV('')
-    setVendorSummary('')
+    setVendorSummaryRows([])
+    setVendorFooter('')
     setPosQuery('')
     setPosSummary('')
   }
@@ -272,10 +299,7 @@ export default function AutoCSVPage() {
             <div style={panelHeaderStyle}>
               <span style={panelLabelStyle}>Vendor CSV</span>
               <span style={{ fontSize: 10, color: '#b8aed8' }}>InvoiceNoCompany · PONum · Customer · Style · UPC · ShippedQty</span>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => setVendorCSV('')} style={smBtn('#fee2e2', '#dc2626')}>Clear</button>
-                <button onClick={processVendorCSV} style={smBtn(purple, '#fff')}>▶ Process</button>
-              </div>
+              <button onClick={processVendorCSV} style={smBtn(purple, '#fff')}>▶ Process</button>
             </div>
             <div style={{ flex: 1, overflow: 'hidden' }}>
               <textarea
@@ -287,7 +311,7 @@ export default function AutoCSVPage() {
             </div>
             <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
               {vendorCSV.trim()
-                ? `${vendorCSV.trim().split('\n').filter(l => l.trim()).length} rows`
+                ? `✓ ${vendorCSV.trim().split('\n').filter(l => l.trim() && !/^invoicenocompany/i.test(l.trim())).length} rows`
                 : 'No data'}
             </div>
           </div>
@@ -296,28 +320,31 @@ export default function AutoCSVPage() {
           <div style={panelStyle}>
             <div style={panelHeaderStyle}>
               <span style={panelLabelStyle}>Summary + Errors</span>
-              <button onClick={() => copyText(vendorSummary)} style={smBtn('#dbeafe', '#1e40af')}>📋 Copy</button>
             </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
-              {vendorSummary ? (
+              {vendorSummaryRows.length > 0 ? (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
+                      {['InvoiceNoCompany','PONum','Customer','ShippedQty (sum)','Dupes','⚠ Already Logged?'].map(h => (
+                        <th key={h} style={{ padding: '7px 10px', fontWeight: 800, color: purple, textAlign: 'left', whiteSpace: 'nowrap', fontSize: 10, letterSpacing: '0.04em' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
                   <tbody>
-                    {vendorSummary.split('\n').map((line, i) => {
-                      const cells = line.split('\t')
-                      return (
-                        <tr key={i} style={{ background: i === 0 ? purpleLight : i % 2 === 0 ? '#fff' : '#faf8ff', borderBottom: `1px solid ${border}` }}>
-                          {cells.map((cell, j) => (
-                            <td key={j} style={{
-                              padding: '6px 10px',
-                              fontWeight: i === 0 ? 800 : 400,
-                              color: i === 0 ? purple : '#333',
-                              fontFamily: i === 0 ? 'inherit' : 'monospace',
-                              whiteSpace: 'nowrap',
-                            }}>{cell}</td>
-                          ))}
-                        </tr>
-                      )
-                    })}
+                    {vendorSummaryRows.map((row, i) => (
+                      <tr key={i} style={{
+                        background: row.alreadyLogged ? '#fff1f2' : i % 2 === 0 ? '#fff' : '#faf8ff',
+                        borderBottom: `1px solid ${border}`,
+                      }}>
+                        <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: row.alreadyLogged ? '#dc2626' : '#2d1f6e', fontWeight: 600 }}>{row.invoice}</td>
+                        <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#555' }}>{row.poNum}</td>
+                        <td style={{ padding: '6px 10px', color: '#555' }}>{row.customer}</td>
+                        <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#333', fontWeight: 600 }}>{row.qty}</td>
+                        <td style={{ padding: '6px 10px', color: row.dupes > 0 ? '#f59e0b' : '#aaa' }}>{row.dupes > 0 ? row.dupes : ''}</td>
+                        <td style={{ padding: '6px 10px', color: '#dc2626', fontWeight: 700 }}>{row.alreadyLogged ? '⚠ DUPLICATE' : ''}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               ) : (
@@ -326,11 +353,9 @@ export default function AutoCSVPage() {
                 </div>
               )}
             </div>
-            {vendorSummary && (
-              <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
-                {vendorSummary.split('\n').length - 1} unique invoices
-              </div>
-            )}
+            <div style={{ padding: '6px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: vendorFooter.includes('⚠') ? '#dc2626' : '#9b8ec4' }}>
+              {vendorFooter || ' '}
+            </div>
           </div>
 
           {/* BOTTOM-LEFT: POS Query input */}
@@ -339,7 +364,7 @@ export default function AutoCSVPage() {
               <span style={panelLabelStyle}>POS Query</span>
               <span style={{ fontSize: 10, color: '#b8aed8' }}>InvoiceNoCompany · PONum · Customer · UPC · ValidUPC ...</span>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => setPosQuery('')} style={smBtn('#fee2e2', '#dc2626')}>Clear</button>
+                <button onClick={() => {}} style={smBtn('#fff3cd', '#92400e')}>⚠ View Errors</button>
                 <button onClick={processPosQuery} style={smBtn(purple, '#fff')}>▶ Process + Log</button>
               </div>
             </div>
@@ -353,7 +378,7 @@ export default function AutoCSVPage() {
             </div>
             <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
               {posQuery.trim()
-                ? `${posQuery.trim().split('\n').filter(l => l.trim()).length} rows`
+                ? `✓ ${posQuery.trim().split('\n').filter(l => l.trim()).length} rows`
                 : 'No data'}
             </div>
           </div>
@@ -362,7 +387,6 @@ export default function AutoCSVPage() {
           <div style={panelStyle}>
             <div style={panelHeaderStyle}>
               <span style={panelLabelStyle}>POS Summary + Errors</span>
-              <button onClick={() => copyText(posSummary)} style={smBtn('#dbeafe', '#1e40af')}>📋 Copy</button>
             </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
               {posSummary ? (
@@ -370,19 +394,17 @@ export default function AutoCSVPage() {
                   <tbody>
                     {posSummary.split('\n').map((line, i) => {
                       const cells = line.split('\t')
-                      const hasError = cells.some(c => c && c !== '' && (cells[5] !== '' || cells[6] === '✓'))
+                      const hasError = i > 0 && (cells[5] || cells[6] === '✓')
                       return (
                         <tr key={i} style={{
-                          background: i === 0 ? purpleLight : hasError && i > 0 ? '#fff1f2' : i % 2 === 0 ? '#fff' : '#faf8ff',
+                          background: i === 0 ? purpleLight : hasError ? '#fff1f2' : i % 2 === 0 ? '#fff' : '#faf8ff',
                           borderBottom: `1px solid ${border}`,
                         }}>
                           {cells.map((cell, j) => (
                             <td key={j} style={{
-                              padding: '6px 10px',
-                              fontWeight: i === 0 ? 800 : 400,
-                              color: i === 0 ? purple : hasError && i > 0 ? '#dc2626' : '#333',
-                              fontFamily: i === 0 ? 'inherit' : 'monospace',
-                              whiteSpace: 'nowrap',
+                              padding: '6px 10px', fontWeight: i === 0 ? 800 : 400,
+                              color: i === 0 ? purple : hasError ? '#dc2626' : '#333',
+                              fontFamily: i === 0 ? 'inherit' : 'monospace', whiteSpace: 'nowrap',
                             }}>{cell}</td>
                           ))}
                         </tr>
