@@ -42,6 +42,7 @@ export default function ICLogPage() {
   const [newNote, setNewNote] = useState('')
   const [adding, setAdding] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null)
 
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type)
@@ -136,10 +137,18 @@ export default function ICLogPage() {
   }
 
   async function deleteEntry(id: string) {
-    if (!confirm('Delete this entry?')) return
+    const pw = prompt('Enter password to delete:')
+    if (pw === null) return
+    if (pw.toLowerCase() !== 'delete') { showToast('❌ Incorrect password', 'err'); return }
     await supabase.from('ic_log').delete().eq('id', id)
     setEntries(prev => prev.filter(e => e.id !== id))
+    setContextMenu(null)
     showToast('🗑 Deleted')
+  }
+
+  function handleRowRightClick(e: React.MouseEvent, id: string) {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY, id })
   }
 
   const filtered = entries.filter(e => {
@@ -232,21 +241,22 @@ export default function ICLogPage() {
       </div>
 
       {/* Table */}
-      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} onClick={() => setContextMenu(null)}>
         {loading ? (
           <p style={{ padding: 24, color: '#9b8ec4', fontSize: 13 }}>Loading…</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 16px' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', maxWidth: 900 }}>
             <thead>
               <tr style={{ background: '#e8e4f8', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Date','User','Store','Invoice #','Status','In Push Log','PO #','Qty Pushed','Note',''].map(h => (
+                {['Date','User','Store','Invoice #','Status','In Push Log','PO #','Qty Pushed','Note'].map(h => (
                   <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: purpleD, borderBottom: `2px solid ${border}`, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No entries yet.</td></tr>
+                <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No entries yet.</td></tr>
               )}
               {filtered.map((e, i) => {
                 const pushed = e.status === 'Pushed In'
@@ -256,7 +266,8 @@ export default function ICLogPage() {
                 const textColor = pushed ? '#86efac' : '#1f2937'
                 const dimColor = pushed ? '#4ade80' : '#6b7280'
                 return (
-                  <tr key={e.id} style={{ background: rowBg }}>
+                  <tr key={e.id} style={{ background: rowBg, cursor: 'context-menu' }}
+                    onContextMenu={ev => handleRowRightClick(ev, e.id)}>
                     <td style={{ ...tdBase, color: dimColor, whiteSpace: 'nowrap' }}>{formatDate(e.saved_at)}</td>
                     <td style={{ ...tdBase, color: pushed ? '#86efac' : purple, fontWeight: 700 }}>{e.userid}</td>
                     <td style={{ ...tdBase, color: textColor, fontWeight: 600 }}>{e.store}</td>
@@ -277,17 +288,33 @@ export default function ICLogPage() {
                     <td style={{ ...tdBase, color: pushed ? '#fff' : '#374151', fontWeight: pushed ? 600 : 400 }}>{e.po_num || ''}</td>
                     <td style={{ ...tdBase, color: pushed ? '#fff' : '#374151', fontWeight: pushed ? 600 : 400 }}>{pushed ? e.qty_pushed : ''}</td>
                     <td style={{ ...tdBase, color: dimColor }}>{e.note}</td>
-                    <td style={{ ...tdBase, textAlign: 'center' }}>
-                      <button onClick={() => deleteEntry(e.id)}
-                        style={{ background: 'none', border: 'none', color: pushed ? '#86efac' : '#dc2626', cursor: 'pointer', fontSize: 13, opacity: 0.7 }}>✕</button>
-                    </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
+
+      {/* Context menu */}
+      {contextMenu && (
+        <div style={{
+          position: 'fixed', top: contextMenu.y, left: contextMenu.x,
+          background: '#fff', border: `1px solid ${border}`, borderRadius: 8,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: 200, overflow: 'hidden', minWidth: 120,
+        }} onClick={e => e.stopPropagation()}>
+          <button onClick={() => setContextMenu(null)}
+            style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: purpleD, fontWeight: 600, cursor: 'pointer' }}>
+            ✏️ Edit
+          </button>
+          <div style={{ height: 1, background: border }} />
+          <button onClick={() => deleteEntry(contextMenu.id)}
+            style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>
+            🗑 Delete
+          </button>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
