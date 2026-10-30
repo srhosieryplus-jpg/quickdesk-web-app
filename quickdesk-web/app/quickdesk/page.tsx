@@ -264,13 +264,59 @@ export default function QDPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
+      <style>{`
+        .qd-header {
+          padding: 10px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 6px;
+          border-bottom: 1px solid #d4c8f0;
+          background: rgba(255,255,255,0.6);
+          backdrop-filter: blur(8px);
+        }
+        .qd-center {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex: 1;
+          justify-content: center;
+          pointer-events: none;
+        }
+        .qd-right {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        @media (max-width: 600px) {
+          .qd-center { order: 3; width: 100%; }
+          .qd-right { gap: 4px; }
+          .qd-right button { font-size: 11px !important; padding: 4px 8px !important; }
+        }
+        .qd-scanner-layout {
+          display: grid;
+          grid-template-columns: 220px 1fr;
+          flex: 1;
+          min-height: 0;
+          height: calc(100vh - 80px);
+        }
+        @media (max-width: 700px) {
+          .qd-scanner-layout {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+            height: auto;
+            min-height: calc(100vh - 80px);
+          }
+          .qd-left-panel {
+            border-right: none !important;
+            border-bottom: 1px solid #c4b5fd;
+          }
+        }
+      `}</style>
 
       {/* Header */}
-      <div style={{
-        padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'relative', borderBottom: '1px solid #d4c8f0',
-        background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
-      }}>
+      <div className="qd-header">
         {/* Left: home + user info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={goHome} style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>← Home</button>
@@ -282,7 +328,7 @@ export default function QDPage() {
         </div>
 
         {/* Center: logo + title */}
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
+        <div className="qd-center">
           <span style={{ fontSize: 18, fontWeight: 900, color: '#7c3aed', letterSpacing: '0.05em' }}>▌▌▌</span>
           <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>UPC SCANNER</span>
           {/* Live / offline pill */}
@@ -299,7 +345,7 @@ export default function QDPage() {
         </div>
 
         {/* Right: actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="qd-right">
           <Btn color="primary" onClick={() => setShowModal(true)}>+ New Invoice #</Btn>
           <Btn color="yellow" onClick={saveSession} disabled={saving || !session?.order_list.length}>
             {saving ? '…' : '💾 Save'}
@@ -319,10 +365,10 @@ export default function QDPage() {
 
       {/* Scanner tab */}
       {tab === 'scanner' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', flex: 1, minHeight: 0, height: 'calc(100vh - 80px)' }}>
+        <div className="qd-scanner-layout">
 
           {/* Left panel */}
-          <div style={{ background: '#fff', borderRight: `1px solid ${border}`, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
+          <div className="qd-left-panel" style={{ background: '#fff', borderRight: `1px solid ${border}`, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <label style={labelSt}>Scan Barcode / UPC</label>
