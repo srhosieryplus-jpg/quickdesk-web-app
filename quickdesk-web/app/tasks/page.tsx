@@ -142,15 +142,23 @@ export default function TasksPage() {
   return (
     <div style={{ minHeight: '100vh', background: tealLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}
       onClick={() => setContextMenu(null)}>
+      <style>{`
+        .tasks-header { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid ${border}; background: rgba(255,255,255,0.6); backdrop-filter: blur(8px); }
+        .tasks-center { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; pointer-events: none; }
+        .tasks-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        .tasks-search { width: 100%; max-width: 900px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .tasks-search input[type=text] { flex: 1; min-width: 120px; }
+        @media (max-width: 600px) {
+          .tasks-center { order: 3; width: 100%; }
+          .tasks-form { gap: 8px; }
+          .tasks-form input { width: 100% !important; }
+        }
+      `}</style>
 
       {/* Header */}
-      <div style={{
-        padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'relative', borderBottom: `1px solid ${border}`,
-        background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
-      }}>
+      <div className="tasks-header">
         {/* Left */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <button onClick={goHome}
             style={{ background: 'none', border: 'none', fontSize: 13, color: '#5eead4', cursor: 'pointer', fontWeight: 600 }}>
             ← Home
@@ -163,14 +171,14 @@ export default function TasksPage() {
         </div>
 
         {/* Center */}
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
+        <div className="tasks-center">
           <span style={{ fontSize: 18, color: teal }}>☑</span>
-          <span style={{ fontSize: 16, fontWeight: 900, color: tealD, letterSpacing: '0.06em' }}>QUICKDESK</span>
-          <span style={{ color: '#5eead4', fontSize: 14 }}>— Tasks</span>
+          <span style={{ fontSize: 15, fontWeight: 900, color: tealD, letterSpacing: '0.06em' }}>QUICKDESK</span>
+          <span style={{ color: '#5eead4', fontSize: 13 }}>— Tasks</span>
         </div>
 
         {/* Right */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button onClick={() => user && fetchTasks(user)}
             style={{ background: '#dcfce7', border: 'none', color: '#166534', borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             🔄 Refresh
@@ -180,7 +188,7 @@ export default function TasksPage() {
 
       {/* Submit form */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '10px 20px' }}>
-        <form onSubmit={addTask} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <form onSubmit={addTask} className="tasks-form">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <label style={labelSt}>Task:</label>
             <input value={newTask} onChange={e => setNewTask(e.target.value)}
