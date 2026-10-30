@@ -403,12 +403,12 @@ export default function AutoCSVPage() {
 
       {/* Header */}
       <div style={{
-        padding: '12px 24px', display: 'flex', alignItems: 'center',
+        padding: '10px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
         justifyContent: 'space-between', borderBottom: `1px solid ${border}`,
         background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
         position: 'sticky', top: 0, zIndex: 10, flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <button onClick={() => router.push('/selector')}
             style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer', color: '#5b21b6', fontWeight: 600 }}>
             ← Back
@@ -418,13 +418,13 @@ export default function AutoCSVPage() {
           </span>
         </div>
 
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center' }}>
-          <h2 style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.04em', margin: 0 }}>
+        <div style={{ display: 'flex', flex: 1, justifyContent: 'center', pointerEvents: 'none' }}>
+          <h2 style={{ fontSize: 15, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.04em', margin: 0 }}>
             ⚡ AUTO CSV
           </h2>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           {activeTab === 'processor' && (
             <button onClick={clearAll}
               style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
