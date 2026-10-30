@@ -226,15 +226,21 @@ export default function ICLogPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
+      <style>{`
+        .iclog-header { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid ${border}; background: rgba(255,255,255,0.6); backdrop-filter: blur(8px); }
+        .iclog-center { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; pointer-events: none; }
+        .iclog-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        @media (max-width: 600px) {
+          .iclog-center { order: 3; width: 100%; }
+          .iclog-form { gap: 8px; }
+          .iclog-form input, .iclog-form select { width: 100% !important; }
+        }
+      `}</style>
 
       {/* Header */}
-      <div style={{
-        padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'relative', borderBottom: `1px solid ${border}`,
-        background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
-      }}>
+      <div className="iclog-header">
         {/* Left */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <button onClick={() => router.push('/selector')}
             style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>
             ← Home
@@ -247,14 +253,14 @@ export default function ICLogPage() {
         </div>
 
         {/* Center */}
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
-          <span style={{ fontSize: 20, color: purple }}>∞</span>
-          <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>INFINITY CLASSICS</span>
-          <span style={{ color: '#c4b5fd', fontSize: 14 }}>— Order Log</span>
+        <div className="iclog-center">
+          <span style={{ fontSize: 18, color: purple }}>∞</span>
+          <span style={{ fontSize: 15, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>INFINITY CLASSICS</span>
+          <span style={{ color: '#c4b5fd', fontSize: 13 }}>— Order Log</span>
         </div>
 
         {/* Right */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button onClick={refresh} disabled={saving}
             style={{ background: '#dcfce7', border: 'none', color: '#166534', borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             {saving ? '…' : '🔄 Refresh'}
@@ -264,7 +270,7 @@ export default function ICLogPage() {
 
       {/* Add form */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '10px 20px' }}>
-        <form onSubmit={addEntry} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <form onSubmit={addEntry} className="iclog-form">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <label style={labelSt}>StoreID:</label>
             <select value={newStore} onChange={e => setNewStore(e.target.value)} style={inputSt}>
