@@ -68,14 +68,17 @@ export default function ICLogPage() {
     if (!pending.length) return
 
     const orderNums = pending.map(e => e.order_num)
-    const { data: matches } = await supabase
+    let didUpdate = false
+
+    // 1) Try matching order_num against invoice_num (exact match, any time)
+    const { data: invoiceMatches } = await supabase
       .from('autocsv_log')
       .select('*')
       .in('invoice_num', orderNums)
 
-    if (!matches || !matches.length) return
+    const matchedEntryIds = new Set<string>()
 
-    for (const match of matches) {
+    for (const match of invoiceMatches || []) {
       const entry = pending.find(e => e.order_num === match.invoice_num && e.store === match.store)
       if (!entry) continue
       await supabase.from('ic_log').update({
@@ -85,9 +88,40 @@ export default function ICLogPage() {
         in_push_log: true,
         note_pushed: true,
       }).eq('id', entry.id)
+      matchedEntryIds.add(entry.id)
+      didUpdate = true
     }
 
-    if (matches.length) fetchEntries()
+    // 2) For still-unmatched entries, try matching order_num against po_num
+    //    but restrict to current month only to avoid false positives
+    const stillPending = pending.filter(e => !matchedEntryIds.has(e.id))
+    if (stillPending.length) {
+      const now = new Date()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString()
+
+      const { data: poMatches } = await supabase
+        .from('autocsv_log')
+        .select('*')
+        .in('po_num', stillPending.map(e => e.order_num))
+        .gte('exported_at', monthStart)
+        .lte('exported_at', monthEnd)
+
+      for (const match of poMatches || []) {
+        const entry = stillPending.find(e => e.order_num === match.po_num && e.store === match.store)
+        if (!entry) continue
+        await supabase.from('ic_log').update({
+          status: 'Pushed In',
+          po_num: match.po_num || '',
+          qty_pushed: match.qty_total || 0,
+          in_push_log: true,
+          note_pushed: true,
+        }).eq('id', entry.id)
+        didUpdate = true
+      }
+    }
+
+    if (didUpdate) fetchEntries()
   }, [currentUser, fetchEntries])
 
   useEffect(() => {
