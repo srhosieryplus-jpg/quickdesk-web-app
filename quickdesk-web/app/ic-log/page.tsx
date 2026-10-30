@@ -130,7 +130,8 @@ export default function AutoCSVPage() {
         .select('order_num, userid, status, note')
         .in('order_num', allLookupNums)
       // Build a quick lookup: order_num → ic info
-      const icByOrderNum: Record<string, typeof icData[0]> = {}
+      type IcRow = { order_num: string; userid: string; status: string; note: string }
+      const icByOrderNum: Record<string, IcRow> = {}
       for (const ic of icData || []) {
         icByOrderNum[ic.order_num] = ic
       }
