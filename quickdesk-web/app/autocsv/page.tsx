@@ -771,13 +771,14 @@ export default function AutoCSVPage() {
                   const posQty = e.pos_qty ?? null
                   const match = posQty !== null ? csvQty === posQty : null
                   const hasIC = !!e.ic_order_num
+                  const isComplete = hasIC && posQty !== null && match === true
                   const isSel = selectedIds.has(e.id)
                   const d = new Date(e.exported_at)
                   const ts = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${String(d.getHours()%12||12).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
                   return (
                     <tr key={e.id} style={{
-                      borderTop: i === 0 ? 'none' : `1px solid #f0ebff`,
-                      background: isSel ? '#ede9fe' : i % 2 === 0 ? '#fff' : '#faf8ff',
+                      borderTop: i === 0 ? 'none' : `1px solid ${isComplete ? '#bbf7d0' : '#f0ebff'}`,
+                      background: isSel ? '#ede9fe' : isComplete ? (i % 2 === 0 ? '#dcfce7' : '#d1fae5') : i % 2 === 0 ? '#fff' : '#faf8ff',
                     }}>
                       <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                         <input type="checkbox" checked={isSel} onChange={() => toggleSelect(e.id)} style={{ cursor: 'pointer' }} />
