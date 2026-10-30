@@ -427,13 +427,13 @@ export default function AutoCSVPage() {
         <div style={{ display: 'flex', gap: 8 }}>
           {activeTab === 'processor' && (
             <button onClick={clearAll}
-              style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
               🗑 Clear All
             </button>
           )}
           {activeTab === 'logbook' && (
             <button onClick={fetchLogEntries}
-              style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: purple }}>
+              style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: purple }}>
               🔄 Refresh
             </button>
           )}
@@ -447,7 +447,7 @@ export default function AutoCSVPage() {
       }}>
         {(['processor', 'logbook'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
-            padding: '12px 24px', fontSize: 13, fontWeight: 700,
+            padding: '7px 16px', fontSize: 12, fontWeight: 700,
             background: 'none', border: 'none', cursor: 'pointer',
             color: activeTab === tab ? purple : '#9b8ec4',
             borderBottom: activeTab === tab ? `3px solid ${purple}` : '3px solid transparent',
@@ -783,7 +783,7 @@ export default function AutoCSVPage() {
                   const posQty = e.pos_qty ?? null
                   const match = posQty !== null ? csvQty === posQty : null
                   const hasIC = !!e.ic_order_num
-                  const isComplete = hasIC && posQty !== null && match === true
+                  const isComplete = hasIC && posQty !== null
                   const isSel = selectedIds.has(e.id)
                   const d = new Date(e.exported_at)
                   const ts = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${String(d.getHours()%12||12).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
