@@ -118,16 +118,28 @@ export default function AutoCSVPage() {
       .order('exported_at', { ascending: false })
     const pushRows = pushData || []
 
-    // Fetch matching ic_log rows keyed by order_num (= invoice_num)
+    // Fetch matching ic_log rows — match order_num against invoice_num OR po_num
     const invoiceNums = pushRows.map((r: { invoice_num: string }) => r.invoice_num)
+    const poNums = pushRows.map((r: { po_num: string }) => r.po_num).filter(Boolean)
+    const allLookupNums = Array.from(new Set([...invoiceNums, ...poNums]))
+    // icMap keyed by the autocsv_log invoice_num for easy merge
     let icMap: Record<string, { ic_order_num: string; ic_logged_by: string; ic_status: string; ic_note: string }> = {}
-    if (invoiceNums.length) {
+    if (allLookupNums.length) {
       const { data: icData } = await supabase
         .from('ic_log')
         .select('order_num, userid, status, note')
-        .in('order_num', invoiceNums)
+        .in('order_num', allLookupNums)
+      // Build a quick lookup: order_num → ic info
+      type IcRow = { order_num: string; userid: string; status: string; note: string }
+      const icByOrderNum: Record<string, IcRow> = {}
       for (const ic of icData || []) {
-        icMap[ic.order_num] = {
+        icByOrderNum[ic.order_num] = ic
+      }
+      // Map back to each autocsv_log row: prefer invoice_num match, fall back to po_num
+      for (const row of pushRows) {
+        const ic = icByOrderNum[row.invoice_num] ?? icByOrderNum[row.po_num] ?? null
+        if (!ic) continue
+        icMap[row.invoice_num] = {
           ic_order_num: ic.order_num,
           ic_logged_by: ic.userid,
           ic_status: ic.status,
