@@ -222,18 +222,27 @@ export default function ICLogPage() {
     return `${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`
   }
 
-  const tdBase: React.CSSProperties = { padding: '5px 10px', fontSize: 12, verticalAlign: 'middle', borderBottom: '1px solid #e5e7eb' }
+  const tdBase: React.CSSProperties = { padding: '3px 7px', fontSize: 11, verticalAlign: 'middle', borderBottom: '1px solid #e5e7eb' }
 
   return (
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         .iclog-header { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid ${border}; background: rgba(255,255,255,0.6); backdrop-filter: blur(8px); }
         .iclog-center { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; pointer-events: none; }
-        .iclog-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        .iclog-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .iclog-store-inv { display: flex; align-items: center; gap: 6px; }
         @media (max-width: 600px) {
           .iclog-center { order: 3; width: 100%; }
-          .iclog-form { gap: 8px; }
+          .iclog-form { gap: 6px; }
           .iclog-form input, .iclog-form select { width: 100% !important; }
+          .iclog-store-inv { width: 100%; }
+        }
+        .ic-table { border-collapse: collapse; font-size: 11px; width: 100%; max-width: 900px; }
+        .ic-table th { padding: 5px 8px; text-align: left; font-size: 10px; font-weight: 700; color: ${purpleD}; border-bottom: 2px solid ${border}; white-space: nowrap; }
+        .ic-table td { padding: 3px 7px; font-size: 11px; vertical-align: middle; border-bottom: 1px solid #e5e7eb; }
+        @media (max-width: 700px) {
+          .ic-table th, .ic-table td { padding: 3px 5px; font-size: 10px; }
+          .ic-col-hide { display: none; }
         }
       `}</style>
 
@@ -271,22 +280,21 @@ export default function ICLogPage() {
       {/* Add form */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '10px 20px' }}>
         <form onSubmit={addEntry} className="iclog-form">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* StoreID + Invoice # side by side */}
+          <div className="iclog-store-inv">
             <label style={labelSt}>StoreID:</label>
-            <select value={newStore} onChange={e => setNewStore(e.target.value)} style={inputSt}>
+            <select value={newStore} onChange={e => setNewStore(e.target.value)} style={{ ...inputSt, width: 80 }}>
               {STORES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <span style={{ fontSize: 16, color: '#9b8ec4', margin: '0 2px' }}>—</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 14, color: '#c4b5fd', margin: '0 2px' }}>|</span>
             <label style={labelSt}>Invoice #:</label>
             <input value={newOrder} onChange={e => setNewOrder(e.target.value)}
-              placeholder="e.g. 2976440" style={{ ...inputSt, width: 130 }} />
+              placeholder="e.g. 2976440" style={{ ...inputSt, width: 120 }} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <label style={labelSt}>Note:</label>
             <input value={newNote} onChange={e => setNewNote(e.target.value)}
-              placeholder="optional…" style={{ ...inputSt, width: 160 }} />
+              placeholder="optional…" style={{ ...inputSt, width: 150 }} />
           </div>
           <button type="submit" disabled={adding}
             style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: adding ? 0.7 : 1 }}>
@@ -311,13 +319,19 @@ export default function ICLogPage() {
         {loading ? (
           <p style={{ padding: 24, color: '#9b8ec4', fontSize: 13 }}>Loading…</p>
         ) : (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 16px' }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', maxWidth: 900 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 8px' }}>
+          <table className="ic-table">
             <thead>
               <tr style={{ background: '#e8e4f8', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Date','User','Store','Invoice #','Status','In Push Log','PO #','Qty Pushed','Note'].map(h => (
-                  <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: purpleD, borderBottom: `2px solid ${border}`, whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
+                <th>Date</th>
+                <th>User</th>
+                <th>Store</th>
+                <th>Invoice #</th>
+                <th>Status</th>
+                <th className="ic-col-hide">In Log</th>
+                <th className="ic-col-hide">PO #</th>
+                <th className="ic-col-hide">Qty</th>
+                <th>Note</th>
               </tr>
             </thead>
             <tbody>
@@ -334,26 +348,27 @@ export default function ICLogPage() {
                 return (
                   <tr key={e.id} style={{ background: rowBg, cursor: 'context-menu' }}
                     onContextMenu={ev => handleRowRightClick(ev, e.id)}>
-                    <td style={{ ...tdBase, color: dimColor, whiteSpace: 'nowrap' }}>{formatDate(e.saved_at)}</td>
-                    <td style={{ ...tdBase, color: pushed ? '#86efac' : purple, fontWeight: 700 }}>{e.userid}</td>
-                    <td style={{ ...tdBase, color: textColor, fontWeight: 600 }}>{e.store}</td>
-                    <td style={{ ...tdBase, color: pushed ? '#fff' : purpleD, fontWeight: 700 }}>{e.order_num}</td>
-                    <td style={{ ...tdBase }}>
+                    <td style={{ color: dimColor, whiteSpace: 'nowrap' }}>{formatDate(e.saved_at)}</td>
+                    <td style={{ color: pushed ? '#86efac' : purple, fontWeight: 700 }}>{e.userid}</td>
+                    <td style={{ color: textColor, fontWeight: 600 }}>{e.store}</td>
+                    <td style={{ color: pushed ? '#fff' : purpleD, fontWeight: 700 }}>{e.order_num}</td>
+                    <td>
                       <span style={{
-                        display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                        display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700,
                         background: pushed ? '#166534' : '#fef3c7',
                         color: pushed ? '#86efac' : '#92400e',
                         border: pushed ? '1px solid #4ade80' : '1px solid #fcd34d',
+                        whiteSpace: 'nowrap',
                       }}>
-                        {pushed ? '[Pushed In]' : 'Pending'}
+                        {pushed ? '✓ Pushed' : 'Pending'}
                       </span>
                     </td>
-                    <td style={{ ...tdBase, textAlign: 'center', color: pushed ? '#4ade80' : '#d1d5db' }}>
+                    <td className="ic-col-hide" style={{ textAlign: 'center', color: pushed ? '#4ade80' : '#d1d5db' }}>
                       {pushed ? '✓' : ''}
                     </td>
-                    <td style={{ ...tdBase, color: pushed ? '#fff' : '#374151', fontWeight: pushed ? 600 : 400 }}>{e.po_num || ''}</td>
-                    <td style={{ ...tdBase, color: pushed ? '#fff' : '#374151', fontWeight: pushed ? 600 : 400 }}>{pushed ? e.qty_pushed : ''}</td>
-                    <td style={{ ...tdBase, color: dimColor }}>{e.note}</td>
+                    <td className="ic-col-hide" style={{ color: pushed ? '#fff' : '#374151', fontWeight: pushed ? 600 : 400 }}>{e.po_num || ''}</td>
+                    <td className="ic-col-hide" style={{ color: pushed ? '#fff' : '#374151', fontWeight: pushed ? 600 : 400 }}>{pushed ? e.qty_pushed : ''}</td>
+                    <td style={{ color: dimColor, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.note}</td>
                   </tr>
                 )
               })}
