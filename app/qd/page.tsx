@@ -9,16 +9,22 @@ const STORES = ['PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13'
 const DELETE_PASSWORD = 'delete'
 const ADMINS = ['SR', 'STAR']
 
-interface ScanData { qty: number; [col: string]: string | number }
+// Each row in a session — identified by a stable row_id (not UPC)
+interface ScanRow {
+  row_id: string        // stable identifier (uuid-ish)
+  upc: string          // empty until scanned
+  qty: number
+  [col: string]: string | number
+}
+
 interface UPCSession {
   id?: string
   name: string
   store: string
   userid?: string
   saved_at?: string
-  order_list: string[]
-  data: Record<string, ScanData>
-  extra_cols: string[]
+  rows: ScanRow[]       // ordered list of rows
+  extra_cols: string[]  // non-UPC columns (Pcode, Color, Size, etc.)
 }
 
 const purple = '#7c3aed'
@@ -28,6 +34,15 @@ const border = '#c4b5fd'
 
 type Tab = 'scanner' | 'history'
 
+let rowIdCounter = 0
+function newRowId() { return `r${Date.now()}_${++rowIdCounter}` }
+
+function emptyRow(extra_cols: string[]): ScanRow {
+  const r: ScanRow = { row_id: newRowId(), upc: '', qty: 0 }
+  extra_cols.forEach(c => { r[c] = '' })
+  return r
+}
+
 export default function QDPage() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -36,10 +51,10 @@ export default function QDPage() {
 
   const [tab, setTab] = useState<Tab>('scanner')
   const [session, setSession] = useState<UPCSession | null>(null)
+  const [activeRowId, setActiveRowId] = useState<string | null>(null)
   const [recentSessions, setRecentSessions] = useState<(UPCSession & { id: string })[]>([])
   const [allSessions, setAllSessions] = useState<(UPCSession & { id: string })[]>([])
   const [historySearch, setHistorySearch] = useState('')
-  const [sortAsc, setSortAsc] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
 
@@ -49,12 +64,10 @@ export default function QDPage() {
 
   const [colPrompt, setColPrompt] = useState(false)
   const [colName, setColName] = useState('')
-  const pendingScanRef = useRef<string>('')
 
   const [showSmartPaste, setShowSmartPaste] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pastePreview, setPastePreview] = useState<{ headers: string[]; rows: string[][] } | null>(null)
-  const [pasteUpcCol, setPasteUpcCol] = useState('')
 
   useEffect(() => {
     const u = getSession()
@@ -73,9 +86,7 @@ export default function QDPage() {
     const user = u || currentUser
     if (!user) return
     let query = supabase.from('upc_sessions').select('*').order('saved_at', { ascending: false })
-    if (!isAdmin(user)) {
-      query = query.eq('userid', user.userid)
-    }
+    if (!isAdmin(user)) query = query.eq('userid', user.userid)
     const { data } = await query
     const all = (data || []) as (UPCSession & { id: string })[]
     setAllSessions(all)
@@ -88,17 +99,11 @@ export default function QDPage() {
       name: newName.trim(),
       store: newStore,
       userid: currentUser?.userid,
-      order_list: [],
-      data: {},
+      rows: [emptyRow([])],
       extra_cols: [],
     }
-    const pending = pendingScanRef.current
-    if (pending) {
-      newSess.order_list = [pending]
-      newSess.data[pending] = { qty: 1 }
-      pendingScanRef.current = ''
-    }
     setSession(newSess)
+    setActiveRowId(newSess.rows[0].row_id)
     setShowModal(false)
     setNewName('')
     setTimeout(() => inputRef.current?.focus(), 100)
@@ -106,46 +111,134 @@ export default function QDPage() {
   }
 
   function loadSessionData(s: UPCSession & { id: string }) {
-    setSession({ ...s })
+    // Support old sessions that used order_list/data format
+    const loaded = migrateSession(s)
+    setSession(loaded)
+    // Set active to first row with no UPC, or last row
+    const firstEmpty = loaded.rows.find(r => !r.upc)
+    setActiveRowId(firstEmpty?.row_id ?? loaded.rows[loaded.rows.length - 1]?.row_id ?? null)
     setTab('scanner')
     setTimeout(() => inputRef.current?.focus(), 100)
   }
 
+  // Migrate old sessions (order_list/data) to new rows format
+  function migrateSession(s: UPCSession & { id: string }): UPCSession & { id: string } {
+    if (s.rows) return s
+    // Old format: order_list + data
+    const old = s as unknown as { order_list?: string[]; data?: Record<string, {qty:number;[k:string]:string|number}>; extra_cols?: string[] }
+    if (old.order_list && old.data) {
+      const extra = old.extra_cols || []
+      const rows: ScanRow[] = old.order_list.map(upc => {
+        const d = old.data![upc]
+        const r: ScanRow = { row_id: newRowId(), upc, qty: d.qty as number }
+        extra.forEach(c => { r[c] = d[c] || '' })
+        return r
+      })
+      return { ...s, rows, extra_cols: extra }
+    }
+    return { ...s, rows: [emptyRow(s.extra_cols || [])], extra_cols: s.extra_cols || [] }
+  }
+
+  // Find the active row index; fall back to first empty row or last row
+  function getActiveIdx(rows: ScanRow[], activeId: string | null): number {
+    if (activeId) {
+      const i = rows.findIndex(r => r.row_id === activeId)
+      if (i >= 0) return i
+    }
+    const emptyIdx = rows.findIndex(r => !r.upc)
+    return emptyIdx >= 0 ? emptyIdx : rows.length - 1
+  }
+
   function handleScan(upc: string) {
     upc = upc.trim()
-    if (!session) { pendingScanRef.current = upc; setShowModal(true); return }
     if (!upc) return
+    if (!session) { setShowModal(true); return }
+
     setSession(prev => {
       if (!prev) return prev
-      const d = { ...prev.data }
-      if (d[upc]) {
-        d[upc] = { ...d[upc], qty: (d[upc].qty as number) + 1 }
-      } else {
-        const empty: ScanData = { qty: 1 }
-        prev.extra_cols.forEach(c => { empty[c] = '' })
-        d[upc] = empty
+      const rows = [...prev.rows]
+
+      // Check if this UPC already exists in another row — increment qty there
+      const existingIdx = rows.findIndex(r => r.upc === upc)
+      if (existingIdx >= 0) {
+        rows[existingIdx] = { ...rows[existingIdx], qty: rows[existingIdx].qty + 1 }
+        setActiveRowId(rows[existingIdx].row_id)
+        return { ...prev, rows }
       }
-      const order = d[upc].qty === 1 ? [...prev.order_list, upc] : prev.order_list
-      return { ...prev, order_list: order, data: d }
+
+      // Fill active row with this UPC
+      const activeIdx = getActiveIdx(rows, activeRowId)
+      rows[activeIdx] = { ...rows[activeIdx], upc, qty: 1 }
+
+      // Auto-advance: find next empty row after this one, or append a new one
+      const nextEmptyIdx = rows.findIndex((r, i) => i > activeIdx && !r.upc)
+      if (nextEmptyIdx >= 0) {
+        setActiveRowId(rows[nextEmptyIdx].row_id)
+      } else {
+        // Append a new empty row if there are no more empty rows after active
+        const hasMoreEmpty = rows.some((r, i) => i !== activeIdx && !r.upc)
+        if (!hasMoreEmpty) {
+          const newRow = emptyRow(prev.extra_cols)
+          rows.push(newRow)
+          setActiveRowId(newRow.row_id)
+        } else {
+          // Wrap to first empty before active
+          const firstEmpty = rows.find(r => !r.upc)
+          setActiveRowId(firstEmpty?.row_id ?? null)
+        }
+      }
+
+      return { ...prev, rows }
     })
   }
 
-  function updateQty(upc: string, val: string) {
-    const q = parseInt(val, 10)
-    if (isNaN(q) || q <= 0) { removeUpc(upc); return }
-    setSession(prev => prev ? { ...prev, data: { ...prev.data, [upc]: { ...prev.data[upc], qty: q } } } : prev)
+  function setActiveRow(row_id: string) {
+    setActiveRowId(row_id)
+    setTimeout(() => inputRef.current?.focus(), 50)
   }
 
-  function updateExtra(upc: string, col: string, val: string) {
-    setSession(prev => prev ? { ...prev, data: { ...prev.data, [upc]: { ...prev.data[upc], [col]: val } } } : prev)
-  }
-
-  function removeUpc(upc: string) {
+  function updateRowUpc(row_id: string, upc: string) {
     setSession(prev => {
       if (!prev) return prev
-      const d = { ...prev.data }; delete d[upc]
-      return { ...prev, order_list: prev.order_list.filter(u => u !== upc), data: d }
+      return { ...prev, rows: prev.rows.map(r => r.row_id === row_id ? { ...r, upc } : r) }
     })
+  }
+
+  function updateRowQty(row_id: string, val: string) {
+    const q = parseInt(val, 10)
+    setSession(prev => {
+      if (!prev) return prev
+      if (isNaN(q) || q < 0) return prev
+      return { ...prev, rows: prev.rows.map(r => r.row_id === row_id ? { ...r, qty: q } : r) }
+    })
+  }
+
+  function updateRowExtra(row_id: string, col: string, val: string) {
+    setSession(prev => {
+      if (!prev) return prev
+      return { ...prev, rows: prev.rows.map(r => r.row_id === row_id ? { ...r, [col]: val } : r) }
+    })
+  }
+
+  function removeRow(row_id: string) {
+    setSession(prev => {
+      if (!prev) return prev
+      const rows = prev.rows.filter(r => r.row_id !== row_id)
+      // Keep at least one row
+      if (rows.length === 0) rows.push(emptyRow(prev.extra_cols))
+      if (activeRowId === row_id) setActiveRowId(rows[0].row_id)
+      return { ...prev, rows }
+    })
+  }
+
+  function addEmptyRow() {
+    setSession(prev => {
+      if (!prev) return prev
+      const r = emptyRow(prev.extra_cols)
+      setActiveRowId(r.row_id)
+      return { ...prev, rows: [...prev.rows, r] }
+    })
+    setTimeout(() => inputRef.current?.focus(), 50)
   }
 
   function addExtraCol() {
@@ -154,9 +247,11 @@ export default function QDPage() {
     if (session?.extra_cols.includes(n)) { showToast('Column already exists'); return }
     setSession(prev => {
       if (!prev) return prev
-      const d = { ...prev.data }
-      prev.order_list.forEach(upc => { d[upc] = { ...d[upc], [n]: '' } })
-      return { ...prev, extra_cols: [...prev.extra_cols, n], data: d }
+      return {
+        ...prev,
+        extra_cols: [...prev.extra_cols, n],
+        rows: prev.rows.map(r => ({ ...r, [n]: r[n] ?? '' })),
+      }
     })
     setColName('')
     setColPrompt(false)
@@ -166,19 +261,18 @@ export default function QDPage() {
     if (!confirm(`Remove column "${col}"?`)) return
     setSession(prev => {
       if (!prev) return prev
-      const d = { ...prev.data }
-      prev.order_list.forEach(upc => { const r = { ...d[upc] }; delete r[col]; d[upc] = r })
-      return { ...prev, extra_cols: prev.extra_cols.filter(c => c !== col), data: d }
+      const rows = prev.rows.map(r => { const nr = { ...r }; delete nr[col]; return nr })
+      return { ...prev, extra_cols: prev.extra_cols.filter(c => c !== col), rows }
     })
   }
+
+  // ── Smart Paste ──────────────────────────────────────────────────────────────
 
   function parsePasteText(text: string): { headers: string[]; rows: string[][] } | null {
     const lines = text.trim().split(/\r?\n/).filter(l => l.trim())
     if (lines.length < 2) return null
     const splitLine = (line: string) => {
-      // Try tab-separated first, then comma
       if (line.includes('\t')) return line.split('\t').map(c => c.trim())
-      // Simple CSV split (handles quoted fields)
       const result: string[] = []
       let cur = '', inQ = false
       for (let i = 0; i < line.length; i++) {
@@ -197,28 +291,13 @@ export default function QDPage() {
 
   function handlePasteChange(text: string) {
     setPasteText(text)
-    const parsed = parsePasteText(text)
-    setPastePreview(parsed)
-    if (parsed) {
-      // Auto-detect UPC column — only set if we find a clear match, otherwise leave blank
-      const upcIdx = parsed.headers.findIndex(h => /upc|barcode|ean|scan/i.test(h))
-      setPasteUpcCol(upcIdx >= 0 ? parsed.headers[upcIdx] : '')
-    } else {
-      setPasteUpcCol('')
-    }
+    setPastePreview(parsePasteText(text))
   }
 
   function applySmartPaste() {
     if (!pastePreview) return
-    const { headers, rows } = pastePreview
-    if (!pasteUpcCol) { showToast('⚠ Select which column has the UPC/barcode'); return }
-    const upcIdx = headers.indexOf(pasteUpcCol)
-    if (upcIdx < 0) { showToast('⚠ UPC column not found'); return }
+    const { headers, rows: dataRows } = pastePreview
 
-    // All non-UPC columns become extra cols
-    const extraHeaders = headers.filter((_, i) => i !== upcIdx)
-
-    // If no session, require one first
     if (!session) {
       showToast('Start a session first, then use Smart Paste')
       setShowSmartPaste(false)
@@ -228,55 +307,49 @@ export default function QDPage() {
 
     setSession(prev => {
       if (!prev) return prev
+
+      // All columns from paste become extra_cols
       const newExtra = [...prev.extra_cols]
-      extraHeaders.forEach(h => { if (!newExtra.includes(h)) newExtra.push(h) })
+      headers.forEach(h => { if (!newExtra.includes(h)) newExtra.push(h) })
 
-      const d = { ...prev.data }
-      const order = [...prev.order_list]
+      // Build new rows from paste data; each row starts with no UPC
+      const pastedRows: ScanRow[] = dataRows
+        .filter(r => r.some(c => c.trim())) // skip blank rows
+        .map(r => {
+          const row: ScanRow = { row_id: newRowId(), upc: '', qty: 0 }
+          headers.forEach((h, i) => { row[h] = r[i] || '' })
+          return row
+        })
 
-      rows.forEach(row => {
-        const upc = row[upcIdx]?.trim()
-        if (!upc) return
-        const existing = d[upc]
-        if (!existing) {
-          // Pre-populate: qty 0 means "expected but not scanned"
-          const entry: ScanData = { qty: 0 }
-          newExtra.forEach(col => { entry[col] = '' })
-          extraHeaders.forEach(col => {
-            const ci = headers.indexOf(col)
-            entry[col] = ci >= 0 ? (row[ci] || '') : ''
-          })
-          d[upc] = entry
-          order.push(upc)
-        } else {
-          // Merge extra col data into existing row
-          extraHeaders.forEach(col => {
-            const ci = headers.indexOf(col)
-            if (ci >= 0 && row[ci]) d[upc] = { ...d[upc], [col]: row[ci] }
-          })
-        }
-      })
+      // Remove existing empty rows, keep any already-scanned rows, append pasted rows
+      const existingScanned = prev.rows.filter(r => r.upc)
+      const merged = [...existingScanned, ...pastedRows]
 
-      return { ...prev, extra_cols: newExtra, order_list: order, data: d }
+      // Set active to first row with no upc
+      const firstEmpty = merged.find(r => !r.upc)
+      setActiveRowId(firstEmpty?.row_id ?? merged[merged.length - 1]?.row_id ?? null)
+
+      return { ...prev, extra_cols: newExtra, rows: merged }
     })
 
-    const count = rows.filter(r => r[upcIdx]?.trim()).length
-    showToast(`✓ Loaded ${count} UPCs from paste`)
+    showToast(`✓ ${dataRows.filter(r => r.some(c => c.trim())).length} rows loaded — ready to scan!`)
     setShowSmartPaste(false)
     setPasteText('')
     setPastePreview(null)
-    setPasteUpcCol('')
   }
 
+  // ── Save / Delete / Export ───────────────────────────────────────────────────
+
   async function saveSession() {
-    if (!session || !session.order_list.length) { showToast('Nothing to save yet'); return }
+    if (!session) return
+    const hasData = session.rows.some(r => r.upc || r.qty > 0)
+    if (!hasData) { showToast('Nothing to save yet'); return }
     setSaving(true)
     const payload = {
       name: session.name,
       store: session.store,
       userid: currentUser?.userid || '',
-      order_list: session.order_list,
-      data: session.data,
+      rows: session.rows,
       extra_cols: session.extra_cols,
       saved_at: new Date().toISOString(),
     }
@@ -303,26 +376,25 @@ export default function QDPage() {
   }
 
   async function goHome() {
-    if (session && session.order_list.length) {
-      await saveSession()
-    }
+    if (session && session.rows.some(r => r.upc)) await saveSession()
     router.push('/selector')
   }
 
   function clearSession() {
     if (!session || !confirm('Clear all scans?')) return
-    setSession(prev => prev ? { ...prev, order_list: [], data: {} } : prev)
+    const fresh = [emptyRow(session.extra_cols)]
+    setSession(prev => prev ? { ...prev, rows: fresh } : prev)
+    setActiveRowId(fresh[0].row_id)
   }
 
   function exportCSV(s?: UPCSession) {
     const src = s || session
-    if (!src || !src.order_list.length) { showToast('Nothing to export'); return }
+    if (!src) { showToast('Nothing to export'); return }
+    const scanned = src.rows.filter(r => r.upc)
+    if (!scanned.length) { showToast('No scanned UPCs yet'); return }
     const extra = src.extra_cols
     const headers = ['UPC', 'Qty', ...extra, 'Store ID', 'Session', 'User']
-    const rows = src.order_list.map(upc => {
-      const d = src.data[upc]
-      return [upc, d.qty, ...extra.map(n => d[n] || ''), src.store, src.name, src.userid || '']
-    })
+    const rows = scanned.map(r => [r.upc, r.qty, ...extra.map(n => r[n] || ''), src.store, src.name, src.userid || ''])
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
@@ -331,9 +403,10 @@ export default function QDPage() {
     showToast('✓ CSV downloaded!')
   }
 
-  const totalQty = session ? Object.values(session.data).reduce((s, r) => s + (r.qty as number), 0) : 0
-  const uniqueCount = session?.order_list.length ?? 0
-  const rows = session ? (sortAsc ? session.order_list : [...session.order_list].reverse()) : []
+  const scannedRows = session?.rows.filter(r => r.upc) ?? []
+  const totalQty = scannedRows.reduce((s, r) => s + r.qty, 0)
+  const totalRows = session?.rows.length ?? 0
+  const scannedCount = scannedRows.length
 
   const filteredHistory = allSessions.filter(s => {
     const q = historySearch.toLowerCase()
@@ -341,7 +414,9 @@ export default function QDPage() {
   })
 
   function SessionCard({ s, showUser }: { s: UPCSession & { id: string }; showUser?: boolean }) {
-    const total = Object.values(s.data).reduce((a, r) => a + (r.qty as number), 0)
+    const loaded = s.rows ? s : migrateSession(s)
+    const scanned = loaded.rows.filter(r => r.upc)
+    const total = scanned.reduce((a, r) => a + r.qty, 0)
     const date = s.saved_at ? new Date(s.saved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
     return (
       <div style={{ background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '5px 6px' }}>
@@ -352,16 +427,18 @@ export default function QDPage() {
           </span>
         </div>
         <div style={{ fontSize: 10, color: '#6b7280', margin: '2px 0' }}>
-          {s.store}{showUser && s.userid ? ` · ${s.userid}` : ''} · {s.order_list.length} UPCs · {total} qty{date ? ` · ${date}` : ''}
+          {s.store}{showUser && s.userid ? ` · ${s.userid}` : ''} · {scanned.length}/{loaded.rows.length} scanned · {total} qty{date ? ` · ${date}` : ''}
         </div>
         <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
           <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px', flex: 1 }}>Load</button>
-          <button onClick={() => exportCSV(s)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 7px', flex: 1 }}>↓ CSV</button>
+          <button onClick={() => exportCSV(loaded)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 7px', flex: 1 }}>↓ CSV</button>
           <button onClick={() => deleteSession(s)} style={{ ...btnSt('red'), fontSize: 10, padding: '2px 6px' }}>✕</button>
         </div>
       </div>
     )
   }
+
+  const activeIdx = session ? getActiveIdx(session.rows, activeRowId) : -1
 
   return (
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -372,7 +449,6 @@ export default function QDPage() {
         position: 'relative', borderBottom: '1px solid #d4c8f0',
         background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
       }}>
-        {/* Left: home + user info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={goHome} style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>← Home</button>
           <div style={{ width: 1, height: 16, background: '#d4c8f0' }} />
@@ -382,11 +458,9 @@ export default function QDPage() {
           </span>
         </div>
 
-        {/* Center: logo + title */}
         <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
           <span style={{ fontSize: 18, fontWeight: 900, color: '#7c3aed', letterSpacing: '0.05em' }}>▌▌▌</span>
           <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>UPC SCANNER</span>
-          {/* Live / offline pill */}
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
             background: session ? '#dcfce7' : '#fee2e2',
@@ -399,10 +473,9 @@ export default function QDPage() {
           </span>
         </div>
 
-        {/* Right: actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Btn color="primary" onClick={() => setShowModal(true)}>+ New Invoice #</Btn>
-          <Btn color="yellow" onClick={saveSession} disabled={saving || !session?.order_list.length}>
+          <Btn color="yellow" onClick={saveSession} disabled={saving || !session?.rows.some(r => r.upc)}>
             {saving ? '…' : '💾 Save'}
           </Btn>
         </div>
@@ -427,20 +500,24 @@ export default function QDPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <label style={labelSt}>Scan Barcode / UPC</label>
-              <input ref={inputRef} type="text" placeholder="Scan or type code…"
+              <input ref={inputRef} type="text" placeholder="Scan or type UPC…"
                 style={{ ...inputSt, fontSize: 11, fontWeight: 600, letterSpacing: '0.8px' }}
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
-                    const v = (e.target as HTMLInputElement).value;
+                    const v = (e.target as HTMLInputElement).value.trim()
                     if (v) { handleScan(v); (e.target as HTMLInputElement).value = '' }
                   }
                 }} />
             </div>
 
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[['Total Qty', totalQty], ['Unique', uniqueCount]].map(([lbl, num]) => (
+            {/* Progress stats */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[
+                ['Scanned', `${scannedCount}/${totalRows}`],
+                ['Total Qty', totalQty],
+              ].map(([lbl, num]) => (
                 <div key={lbl as string} style={{ flex: 1, background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '3px 6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: purple }}>{num}</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: purple }}>{num}</div>
                   <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 600 }}>{lbl}</div>
                 </div>
               ))}
@@ -483,7 +560,7 @@ export default function QDPage() {
 
             <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
 
-            {/* Recent sessions (last 5) */}
+            {/* Recent sessions */}
             <div style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 6, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: purpleD, textTransform: 'uppercase', letterSpacing: '0.4px', flex: 1 }}>Recent (last 5)</span>
@@ -514,49 +591,67 @@ export default function QDPage() {
           {/* Right panel — scan table */}
           <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ background: '#e8e4f8', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: `1px solid ${border}` }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>Session Table</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>
+                {session?.name ? `📋 ${session.name}` : 'Session Table'}
+              </span>
               <div style={{ flex: 1 }} />
-              <button onClick={() => setSortAsc(a => !a)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>⇅ Sort</button>
+              <button onClick={addEmptyRow} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>+ Row</button>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              {!session || session.order_list.length === 0 ? (
+              {!session ? (
                 <div style={{ textAlign: 'center', color: '#6b7280', padding: '50px 20px', fontSize: 13 }}>
-                  {session ? 'Start scanning barcodes.' : 'Start a session and scan barcodes to begin.'}
+                  Start a session or load one from the left panel.
                 </div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
                       <th style={thSt}>#</th>
-                      <th style={thSt}>UPC</th>
+                      <th style={{ ...thSt, minWidth: 80 }}>UPC</th>
                       <th style={thSt}>Qty</th>
                       {session.extra_cols.map(c => <th key={c} style={thSt}>{c}</th>)}
                       <th style={{ ...thSt, width: 32 }}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((upc, ri) => {
-                      const row = session.data[upc]
+                    {session.rows.map((row, ri) => {
+                      const isActive = row.row_id === activeRowId
+                      const isScanned = !!row.upc
                       return (
-                        <tr key={upc} style={{ background: ri % 2 === 0 ? purpleLight : '#fafafa', borderBottom: `1px solid #ede9fe` }}>
-                          <td style={{ ...tdSt, color: '#6b7280', fontSize: 10 }}>{ri + 1}</td>
-                          <td style={{ ...tdSt, fontFamily: 'Courier New, monospace', fontWeight: 600, letterSpacing: '0.4px' }}>{upc}</td>
-                          <td style={tdSt}>
-                            <input type="number" min="0" defaultValue={row.qty}
+                        <tr key={row.row_id}
+                          onClick={() => setActiveRow(row.row_id)}
+                          style={{
+                            background: isActive ? '#e0d9fb' : isScanned ? '#f0fdf4' : (ri % 2 === 0 ? purpleLight : '#fafafa'),
+                            borderBottom: `1px solid ${isActive ? '#a78bfa' : '#ede9fe'}`,
+                            cursor: 'pointer',
+                            outline: isActive ? `2px solid #7c3aed` : 'none',
+                            outlineOffset: -1,
+                          }}>
+                          <td style={{ ...tdSt, color: '#6b7280', fontSize: 10, userSelect: 'none' }}>
+                            {isActive ? <span style={{ color: purple, fontWeight: 900 }}>▶</span> : ri + 1}
+                          </td>
+                          <td style={{ ...tdSt, fontFamily: 'Courier New, monospace', fontWeight: 600, letterSpacing: '0.4px' }}>
+                            {isScanned ? (
+                              <span style={{ color: isActive ? purpleD : '#374151' }}>{row.upc}</span>
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: 11 }}>{isActive ? '⬅ scan now' : '—'}</span>
+                            )}
+                          </td>
+                          <td style={tdSt} onClick={e => e.stopPropagation()}>
+                            <input type="number" min="0" value={row.qty}
                               style={{ width: 52, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 700, color: purple, textAlign: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}
-                              onChange={e => updateQty(upc, e.target.value)}
-                              onBlur={e => { if (!e.target.value || +e.target.value <= 0) removeUpc(upc) }} />
+                              onChange={e => updateRowQty(row.row_id, e.target.value)} />
                           </td>
                           {session.extra_cols.map(col => (
-                            <td key={col} style={tdSt}>
-                              <input type="text" defaultValue={row[col] as string || ''}
-                                style={{ width: 72, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif' }}
-                                onChange={e => updateExtra(upc, col, e.target.value)} />
+                            <td key={col} style={tdSt} onClick={e => e.stopPropagation()}>
+                              <input type="text" value={row[col] as string || ''}
+                                style={{ width: 80, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif' }}
+                                onChange={e => updateRowExtra(row.row_id, col, e.target.value)} />
                             </td>
                           ))}
-                          <td style={tdSt}>
-                            <button onClick={() => removeUpc(upc)}
+                          <td style={tdSt} onClick={e => e.stopPropagation()}>
+                            <button onClick={() => removeRow(row.row_id)}
                               style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 13, cursor: 'pointer', padding: '1px 5px', borderRadius: 3 }}>✕</button>
                           </td>
                         </tr>
@@ -637,8 +732,8 @@ export default function QDPage() {
                 style={{ background: 'none', border: 'none', fontSize: 16, color: '#6b7280', cursor: 'pointer' }}>✕</button>
             </div>
 
-            <p style={{ fontSize: 11, color: '#6b7280', margin: 0, lineHeight: 1.5 }}>
-              Paste a table (from Excel, Google Sheets, or CSV). The <strong>first row</strong> should be headers (e.g. Style, Color, UPC). Rows with a UPC will be pre-loaded — staff just scans to confirm qty.
+            <p style={{ fontSize: 11, color: '#6b7280', margin: 0, lineHeight: 1.6 }}>
+              Paste a table from Excel or Sheets (first row = headers like <strong>Pcode, Color, Size</strong>). Each row becomes a slot in the session — staff scans barcodes in order to fill them in. Tap any row to jump to it.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -646,34 +741,20 @@ export default function QDPage() {
               <textarea
                 value={pasteText}
                 onChange={e => handlePasteChange(e.target.value)}
-                placeholder={'Style\tColor\tUPC\nABC123\tBlack\t012345678901\nABC123\tWhite\t012345678902'}
-                rows={6}
+                placeholder={'Pcode\tColor\tSize\n8060\tIvory\tXS\n8060\tWine\tS'}
+                rows={7}
                 style={{ width: '100%', padding: '7px 10px', border: `1.5px solid ${border}`, borderRadius: 5, fontFamily: 'Courier New, monospace', fontSize: 11, background: purpleLight, color: '#1f2937', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
 
             {pastePreview && (
               <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <label style={labelSt}>Which column has the UPC / Barcode? <span style={{ color: '#dc2626' }}>*</span></label>
-                  <select value={pasteUpcCol} onChange={e => setPasteUpcCol(e.target.value)}
-                    style={{ ...inputSt, borderColor: !pasteUpcCol ? '#f87171' : border }}>
-                    <option value="">— select a column —</option>
-                    {pastePreview.headers.map(h => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                  {!pasteUpcCol && (
-                    <span style={{ fontSize: 10, color: '#dc2626' }}>Pick which column contains the UPC / barcode number</span>
-                  )}
-                </div>
-
-                <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', maxHeight: 200 }}>
+                <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', maxHeight: 220 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>
                       <tr style={{ background: '#CFC5ED' }}>
                         {pastePreview.headers.map(h => (
-                          <th key={h} style={{ ...thSt, fontSize: 10, background: h === pasteUpcCol ? '#a78bfa' : undefined, color: h === pasteUpcCol ? '#fff' : undefined }}>
-                            {h === pasteUpcCol ? `🔑 ${h}` : h}
-                          </th>
+                          <th key={h} style={{ ...thSt, fontSize: 10 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -681,7 +762,7 @@ export default function QDPage() {
                       {pastePreview.rows.slice(0, 8).map((row, ri) => (
                         <tr key={ri} style={{ background: ri % 2 === 0 ? purpleLight : '#fafafa' }}>
                           {row.map((cell, ci) => (
-                            <td key={ci} style={{ ...tdSt, fontSize: 10, fontFamily: pastePreview.headers[ci] === pasteUpcCol ? 'Courier New, monospace' : undefined }}>
+                            <td key={ci} style={{ ...tdSt, fontSize: 10 }}>
                               {cell || <span style={{ color: '#d1d5db' }}>—</span>}
                             </td>
                           ))}
@@ -696,10 +777,10 @@ export default function QDPage() {
                   )}
                 </div>
 
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, padding: '7px 10px', fontSize: 11, color: '#166534' }}>
-                  ✓ <strong>{pastePreview.rows.filter(r => r[pastePreview.headers.indexOf(pasteUpcCol)]?.trim()).length} UPCs</strong> will be pre-loaded
-                  {pastePreview.headers.filter(h => h !== pasteUpcCol).length > 0 && (
-                    <> with columns: <strong>{pastePreview.headers.filter(h => h !== pasteUpcCol).join(', ')}</strong></>
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#166534' }}>
+                  ✓ <strong>{pastePreview.rows.filter(r => r.some(c => c.trim())).length} rows</strong> ready to load as scan slots
+                  {pastePreview.headers.length > 0 && (
+                    <> · columns: <strong>{pastePreview.headers.join(', ')}</strong></>
                   )}
                 </div>
               </>
@@ -709,7 +790,7 @@ export default function QDPage() {
               <button onClick={() => { setShowSmartPaste(false); setPasteText(''); setPastePreview(null) }} style={btnSt('ghost')}>Cancel</button>
               <button onClick={applySmartPaste} disabled={!pastePreview}
                 style={{ ...btnSt('primary'), opacity: pastePreview ? 1 : 0.4 }}>
-                📋 Apply Paste
+                📋 Load Rows
               </button>
             </div>
           </div>
