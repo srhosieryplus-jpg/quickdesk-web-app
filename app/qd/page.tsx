@@ -342,7 +342,7 @@ export default function QDPage() {
 
   async function saveSession() {
     if (!session) return
-    const hasData = session.rows.some(r => r.upc || r.qty > 0)
+    const hasData = session.rows.some(r => r.upc || r.qty > 0 || session.extra_cols.some(c => r[c]))
     if (!hasData) { showToast('Nothing to save yet'); return }
     setSaving(true)
     const payload = {
@@ -376,7 +376,7 @@ export default function QDPage() {
   }
 
   async function goHome() {
-    if (session && session.rows.some(r => r.upc)) await saveSession()
+    if (session && session.rows.length > 0) await saveSession()
     router.push('/selector')
   }
 
@@ -475,7 +475,7 @@ export default function QDPage() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Btn color="primary" onClick={() => setShowModal(true)}>+ New Invoice #</Btn>
-          <Btn color="yellow" onClick={saveSession} disabled={saving || !session?.rows.some(r => r.upc)}>
+          <Btn color="yellow" onClick={saveSession} disabled={saving || !session}>
             {saving ? '…' : '💾 Save'}
           </Btn>
         </div>
