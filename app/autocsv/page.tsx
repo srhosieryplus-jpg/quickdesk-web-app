@@ -355,6 +355,7 @@ export default function AutoCSVPage() {
           /* Summary panels: tall so data is readable */
           .acsv-panel-summary { min-height: 300px; }
           /* Log book: tighter table on mobile */
+          .log-title-block { display: none; }
           .log-col-hide { display: none; }
           .log-table td, .log-table th { padding: 5px 6px !important; font-size: 10px !important; }
           .log-table th { font-size: 9px !important; letter-spacing: 0 !important; }
@@ -670,7 +671,7 @@ export default function AutoCSVPage() {
         <div style={{ padding: '12px 16px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
           <div className="log-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexShrink: 0 }}>
-            <div style={{ flexShrink: 0 }}>
+            <div className="log-title-block" style={{ flexShrink: 0 }}>
               <h3 style={{ fontSize: 13, fontWeight: 800, color: '#3b1f8c', margin: 0 }}>Push Log &amp; IC Cross-Reference</h3>
               <p style={{ fontSize: 10, color: '#9b8ec4', margin: 0 }}>
                 {filteredLog.length} entr{filteredLog.length !== 1 ? 'ies' : 'y'}
@@ -683,10 +684,10 @@ export default function AutoCSVPage() {
               value={logFilter}
               onChange={e => setLogFilter(e.target.value)}
               onBlur={blurZoomReset}
-              placeholder="Search invoice, PO, store, user…"
+              placeholder="Search"
               style={{
                 flex: 1, background: '#f5f3ff', border: `1.5px solid ${border}`,
-                borderRadius: 8, padding: '8px 14px', fontSize: 16,
+                borderRadius: 8, padding: '8px 12px', fontSize: 13,
                 color: '#3b1f8c', fontWeight: 600, outline: 'none', minWidth: 0,
               }}
             />
