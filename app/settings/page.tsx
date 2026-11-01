@@ -17,7 +17,7 @@ const ALL_MODULES = [
   { id: 'settings',   label: 'Settings' },
 ]
 
-const STORES = ['ALL','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
+const DEFAULT_STORES = ['ALL','PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
 const LOCATIONS = ['Hosiery Plus','Tiptoe','Purple Orchid']
 const DELETE_PASSWORD = 'star'
 
@@ -1485,7 +1485,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
   const [toastType, setToastType] = useState<'ok' | 'err'>('ok')
-  const [tab, setTab] = useState<'users' | 'vendors'>('users')
+  const [tab, setTab] = useState<'users' | 'vendors' | 'stores'>('users')
   const [goingHome, setGoingHome] = useState(false)
   const [dirty, setDirty] = useState<Record<string, string[]>>({})
 
@@ -1497,6 +1497,15 @@ export default function SettingsPage() {
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
   const [editUser, setEditUser] = useState<DBUser | null>(null)
 
+  // Stores tab
+  const [stores, setStores] = useState<string[]>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('qd_stores') : null
+      return saved ? JSON.parse(saved) : DEFAULT_STORES
+    } catch { return DEFAULT_STORES }
+  })
+  const [newStoreId, setNewStoreId] = useState('')
+
   // Vendor tab
   const [vendors, setVendors] = useState<VendorRow[]>(VENDOR_DATA_ORIG)
   const [vendorSearch, setVendorSearch] = useState('')
@@ -1506,6 +1515,27 @@ export default function SettingsPage() {
   const [newBrand, setNewBrand] = useState('')
 
   const ctxRef = useRef<HTMLDivElement>(null)
+
+  function saveStores(next: string[]) {
+    setStores(next)
+    try { localStorage.setItem('qd_stores', JSON.stringify(next)) } catch {}
+  }
+
+  function addStore(e: React.FormEvent) {
+    e.preventDefault()
+    const s = newStoreId.trim().toUpperCase()
+    if (!s) return
+    if (stores.includes(s)) { showToast(`❌ "${s}" already exists`, 'err'); return }
+    saveStores([...stores, s])
+    setNewStoreId('')
+    showToast(`✅ Store "${s}" added`)
+  }
+
+  function removeStore(s: string) {
+    if (s === 'ALL') { showToast('❌ Cannot remove ALL', 'err'); return }
+    saveStores(stores.filter(x => x !== s))
+    showToast(`🗑 Store "${s}" removed`)
+  }
 
   useEffect(() => {
     const u = getSession()
@@ -1714,6 +1744,7 @@ export default function SettingsPage() {
       <div className="settings-tabs">
         <button className={`settings-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>👤 User IDs</button>
         <button className={`settings-tab ${tab === 'vendors' ? 'active' : ''}`} onClick={() => setTab('vendors')}>🏷 Vendors / Brands</button>
+        <button className={`settings-tab ${tab === 'stores' ? 'active' : ''}`} onClick={() => setTab('stores')}>🏪 Store IDs</button>
       </div>
 
       {/* ══ USER IDs TAB ══════════════════════════════════════════════════════ */}
@@ -1727,7 +1758,7 @@ export default function SettingsPage() {
             <label style={labelStyle}>Store:</label>
             <select value={newStore} onChange={e => setNewStore(e.target.value)} style={{ ...inlineInput, width: 88 }}>
               <option value="">—</option>
-              {STORES.map(s => <option key={s}>{s}</option>)}
+              {stores.map(s => <option key={s}>{s}</option>)}
             </select>
             <label style={labelStyle}>Location:</label>
             <select value={newLocation} onChange={e => setNewLocation(e.target.value)} style={{ ...inlineInput, width: 130 }}>
@@ -1779,7 +1810,7 @@ export default function SettingsPage() {
                               await supabase.from('users').update({ store: next }).eq('id', u.id)
                               setUsers(prev => prev.map(x => x.id === u.id ? { ...x, store: next } : x))
                             }} style={{ ...cellInput, cursor: 'pointer' }}>
-                              {STORES.map(s => <option key={s}>{s}</option>)}
+                              {stores.map(s => <option key={s}>{s}</option>)}
                             </select>
                           </td>
                           <td>
@@ -1877,6 +1908,46 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ══ STORE IDs TAB ════════════════════════════════════════════════════ */}
+      {tab === 'stores' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {/* Add store */}
+          <form onSubmit={addStore} style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <label style={labelStyle}>New Store ID:</label>
+            <input value={newStoreId} onChange={e => setNewStoreId(e.target.value.toUpperCase())} maxLength={10}
+              placeholder="e.g. BK1" style={{ ...inlineInput, width: 90, textTransform: 'uppercase', fontWeight: 700 }} />
+            <button type="submit"
+              style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              + Add Store
+            </button>
+            <span style={{ fontSize: 11, color: '#9b8ec4', marginLeft: 8 }}>Store IDs are saved in your browser and used across User ID dropdowns.</span>
+          </form>
+
+          {/* Store list */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px 60px' }}>
+            <div style={{ maxWidth: 480 }}>
+              {stores.map(s => (
+                <div key={s} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', border: `1px solid ${border}`, borderRadius: 7, padding: '7px 12px', marginBottom: 6 }}>
+                  <span style={{ fontWeight: 800, color: '#3730a3', fontSize: 13, letterSpacing: '0.06em' }}>{s}</span>
+                  {s === 'ALL' ? (
+                    <span style={{ fontSize: 11, color: '#b8aed8' }}>reserved</span>
+                  ) : (
+                    <button onClick={() => removeStore(s)}
+                      style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 5, padding: '3px 9px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ padding: '5px 14px', background: purpleLight, borderTop: `1px solid ${border}`, fontSize: 11, color: '#9b8ec4', position: 'sticky', bottom: 0 }}>
+            {stores.length} store{stores.length !== 1 ? 's' : ''} · Changes apply immediately to all dropdowns
+          </div>
+        </div>
+      )}
+
       {/* ── CONTEXT MENU (Users) ── */}
       {ctxMenu && (
         <div ref={ctxRef} className="ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }}>
@@ -1916,7 +1987,7 @@ export default function SettingsPage() {
             <input value={editUser.userid} onChange={e => setEditUser(u => u ? { ...u, userid: e.target.value.toUpperCase() } : u)} maxLength={10} />
             <label>Store</label>
             <select value={editUser.store} onChange={e => setEditUser(u => u ? { ...u, store: e.target.value } : u)}>
-              {STORES.map(s => <option key={s}>{s}</option>)}
+              {stores.map(s => <option key={s}>{s}</option>)}
             </select>
             <label>Location</label>
             <select value={editUser.location || ''} onChange={e => setEditUser(u => u ? { ...u, location: e.target.value } : u)}>
