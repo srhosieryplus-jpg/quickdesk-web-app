@@ -7,7 +7,7 @@ import { User } from '@/lib/types'
 
 const STORES = ['PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
 const DELETE_PASSWORD = 'delete'
-const ADMINS = ['SR', 'STAR']
+const ADMINS = ['STEPH']
 
 // Each row in a session — identified by a stable row_id (not UPC)
 interface ScanRow {
