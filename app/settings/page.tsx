@@ -25,9 +25,6 @@ interface DBUser { id: string; userid: string; store: string; location: string; 
 interface VendorRow { vendor_id: string; brand: string }
 interface CtxMenu { x: number; y: number; kind: 'user'; userId: string }
 interface VCtxMenu { x: number; y: number; kind: 'vendor'; idx: number }
-interface AWRow { id: string; store: string; brand: string; invoice_no: string; po_no: string | null; qty: number | null; logged: boolean; logged_by: string | null; logged_at: string | null; note: string | null; flagged: boolean; created_at: string }
-
-const AW_STORES = ['HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
 
 const VENDOR_DATA_ORIG: VendorRow[] = [
   {vendor_id:"365",brand:"365"},
@@ -1488,7 +1485,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
   const [toastType, setToastType] = useState<'ok' | 'err'>('ok')
-  const [tab, setTab] = useState<'users' | 'vendors' | 'aw'>('users')
+  const [tab, setTab] = useState<'users' | 'vendors'>('users')
   const [goingHome, setGoingHome] = useState(false)
   const [dirty, setDirty] = useState<Record<string, string[]>>({})
 
@@ -1499,20 +1496,6 @@ export default function SettingsPage() {
   const [adding, setAdding] = useState(false)
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
   const [editUser, setEditUser] = useState<DBUser | null>(null)
-
-  // AW Season tab
-  const [awRows, setAwRows] = useState<AWRow[]>([])
-  const [awLoading, setAwLoading] = useState(false)
-  const [awFilter, setAwFilter] = useState('')
-  const [awCtxMenu, setAwCtxMenu] = useState<{ x: number; y: number; row: AWRow } | null>(null)
-  const [editAW, setEditAW] = useState<AWRow | null>(null)
-  const [awStore, setAwStore] = useState(AW_STORES[0])
-  const [newAWInv, setNewAWInv] = useState('')
-  const [newAWPO, setNewAWPO] = useState('')
-  const [newAWQty, setNewAWQty] = useState('')
-  const [newAWBrand, setNewAWBrand] = useState('')
-  const [addingAW, setAddingAW] = useState(false)
-  const [clearing, setClearing] = useState(false)
 
   // Vendor tab
   const [vendors, setVendors] = useState<VendorRow[]>(VENDOR_DATA_ORIG)
@@ -1678,77 +1661,6 @@ export default function SettingsPage() {
 
   const anyDirty = Object.keys(dirty).length > 0
 
-  // ── AW helpers ───────────────────────────────────────────────────────────────
-  async function fetchAW() {
-    setAwLoading(true)
-    const { data } = await supabase.from('season_aw').select('*').order('created_at', { ascending: false })
-    setAwRows((data || []) as AWRow[])
-    setAwLoading(false)
-  }
-
-  useEffect(() => { if (tab === 'aw') fetchAW() }, [tab])
-
-  const filteredAW = useMemo(() => {
-    const q = awFilter.toLowerCase().trim()
-    if (!q) return awRows
-    return awRows.filter(r =>
-      r.invoice_no.toLowerCase().includes(q) ||
-      r.brand.toLowerCase().includes(q) ||
-      r.store.toLowerCase().includes(q) ||
-      (r.po_no || '').toLowerCase().includes(q)
-    )
-  }, [awRows, awFilter])
-
-  async function addAWRow(e: React.FormEvent) {
-    e.preventDefault()
-    const inv = newAWInv.trim(); const brand = newAWBrand.trim()
-    if (!inv || !brand) { showToast('❌ Invoice # and Brand required', 'err'); return }
-    setAddingAW(true)
-    const { error } = await supabase.from('season_aw').insert({
-      store: awStore, brand, invoice_no: inv,
-      po_no: newAWPO.trim() || null,
-      qty: newAWQty ? parseInt(newAWQty) : null,
-      logged: false, flagged: false,
-    })
-    setAddingAW(false)
-    if (error) { showToast('❌ ' + error.message, 'err'); return }
-    showToast('✅ Row added')
-    setNewAWInv(''); setNewAWPO(''); setNewAWQty(''); setNewAWBrand('')
-    fetchAW()
-  }
-
-  async function deleteAWRow(id: string) {
-    const { error } = await supabase.from('season_aw').delete().eq('id', id)
-    if (error) { showToast('❌ ' + error.message, 'err'); return }
-    setAwRows(prev => prev.filter(r => r.id !== id))
-    showToast('🗑 Deleted')
-  }
-
-  async function saveEditAW() {
-    if (!editAW) return
-    const { error } = await supabase.from('season_aw').update({
-      store: editAW.store, brand: editAW.brand,
-      invoice_no: editAW.invoice_no, po_no: editAW.po_no,
-      qty: editAW.qty, note: editAW.note,
-    }).eq('id', editAW.id)
-    if (error) { showToast('❌ ' + error.message, 'err'); return }
-    setAwRows(prev => prev.map(r => r.id === editAW.id ? { ...r, ...editAW } : r))
-    setEditAW(null); showToast('✅ Saved')
-  }
-
-  async function clearSeason() {
-    const pw = prompt('Enter password to clear ALL AW Season data:')
-    if (pw === null) return
-    if (pw.toLowerCase() !== 'star') { showToast('❌ Incorrect password', 'err'); return }
-    const confirm2 = window.confirm(`This will permanently delete ALL ${awRows.length} rows. Are you sure?`)
-    if (!confirm2) return
-    setClearing(true)
-    const { error } = await supabase.from('season_aw').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    setClearing(false)
-    if (error) { showToast('❌ ' + error.message, 'err'); return }
-    setAwRows([]); showToast('🗑 Season cleared')
-  }
-
   // ── RENDER ──────────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: '100vh', background: '#eeeaf6', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', fontSize: 12 }}>
@@ -1802,7 +1714,6 @@ export default function SettingsPage() {
       <div className="settings-tabs">
         <button className={`settings-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>👤 User IDs</button>
         <button className={`settings-tab ${tab === 'vendors' ? 'active' : ''}`} onClick={() => setTab('vendors')}>🏷 Vendors / Brands</button>
-        <button className={`settings-tab ${tab === 'aw' ? 'active' : ''}`} onClick={() => setTab('aw')}>✻ AW Season</button>
       </div>
 
       {/* ══ USER IDs TAB ══════════════════════════════════════════════════════ */}
@@ -1993,136 +1904,6 @@ export default function SettingsPage() {
             deleteVendorRow(vCtxMenu.idx)
             setVCtxMenu(null)
           }}>🗑 Delete</div>
-        </div>
-      )}
-
-      {/* ══ AW SEASON TAB ════════════════════════════════════════════════════ */}
-      {tab === 'aw' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {/* Toolbar */}
-          <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <label style={labelStyle}>Store:</label>
-            <select value={awStore} onChange={e => setAwStore(e.target.value)} style={{ ...inlineInput, width: 88 }}>
-              {AW_STORES.map(s => <option key={s}>{s}</option>)}
-            </select>
-            <form onSubmit={addAWRow} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, flexWrap: 'wrap' }}>
-              <label style={labelStyle}>Invoice #:</label>
-              <input value={newAWInv} onChange={e => setNewAWInv(e.target.value)} placeholder="Invoice #" style={{ ...inlineInput, width: 110 }} />
-              <label style={labelStyle}>PO #:</label>
-              <input value={newAWPO} onChange={e => setNewAWPO(e.target.value)} placeholder="optional" style={{ ...inlineInput, width: 100 }} />
-              <label style={labelStyle}>Qty:</label>
-              <input value={newAWQty} onChange={e => setNewAWQty(e.target.value)} placeholder="#" type="number" min="0" style={{ ...inlineInput, width: 60 }} />
-              <label style={labelStyle}>Brand:</label>
-              <input value={newAWBrand} onChange={e => setNewAWBrand(e.target.value)} placeholder="Brand name" style={{ ...inlineInput, flex: 1, minWidth: 120 }} />
-              <button type="submit" disabled={addingAW}
-                style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: addingAW ? 0.7 : 1 }}>
-                {addingAW ? '…' : '+ Add'}
-              </button>
-            </form>
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={labelStyle}>Search:</label>
-              <input value={awFilter} onChange={e => setAwFilter(e.target.value)} placeholder="invoice, brand, store…" style={{ ...inlineInput, width: 160 }} />
-              <button onClick={clearSeason} disabled={clearing || awRows.length === 0}
-                style={{ background: '#7f1d1d', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: clearing ? 0.7 : 1, whiteSpace: 'nowrap' }}>
-                {clearing ? '…' : '🗑 Clear Season'}
-              </button>
-            </div>
-          </div>
-
-          {/* Spreadsheet */}
-          {awLoading ? (
-            <p style={{ padding: 24, color: '#9b8ec4' }}>Loading…</p>
-          ) : (
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 60px' }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table className="ss-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: 28, textAlign: 'center' }}>#</th>
-                      <th style={{ width: 70 }}>Store</th>
-                      <th style={{ width: 160 }}>Brand</th>
-                      <th style={{ width: 120 }}>Invoice #</th>
-                      <th style={{ width: 100 }}>PO #</th>
-                      <th style={{ width: 60, textAlign: 'center' }}>Qty</th>
-                      <th style={{ width: 70, textAlign: 'center' }}>Status</th>
-                      <th style={{ width: 90 }}>Logged by</th>
-                      <th>Note</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAW.length === 0 && (
-                      <tr><td colSpan={9} style={{ textAlign: 'center', color: '#b8aed8', padding: 28 }}>
-                        {awRows.length === 0 ? 'No rows yet — use the form above to add invoices.' : 'No matches.'}
-                      </td></tr>
-                    )}
-                    {filteredAW.map((row, i) => (
-                      <tr key={row.id}
-                        style={{ background: row.flagged ? '#fffbeb' : row.logged ? '#f0fdf4' : i % 2 === 0 ? '#fff' : '#faf8ff', cursor: 'default' }}
-                        onContextMenu={e => { e.preventDefault(); setAwCtxMenu({ x: e.clientX, y: e.clientY, row }); setCtxMenu(null); setVCtxMenu(null) }}>
-                        <td style={{ textAlign: 'center', color: '#aaa', fontSize: 10 }}>{i + 1}</td>
-                        <td style={{ fontWeight: 700, color: '#3730a3', fontSize: 11 }}>{row.store}</td>
-                        <td style={{ fontWeight: 600, color: '#1e293b' }}>{row.brand}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{row.invoice_no}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{row.po_no || '—'}</td>
-                        <td style={{ textAlign: 'center' }}>{row.qty ?? '—'}</td>
-                        <td style={{ textAlign: 'center' }}>
-                          {row.flagged ? (
-                            <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>⚑ Flagged</span>
-                          ) : row.logged ? (
-                            <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px' }}>✓ Logged</span>
-                          ) : (
-                            <span style={{ background: purpleLight, color: purpleD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px' }}>Pending</span>
-                          )}
-                        </td>
-                        <td style={{ fontSize: 11, color: '#6b7280' }}>{row.logged_by || '—'}</td>
-                        <td style={{ fontSize: 11, color: row.flagged ? '#92400e' : '#6b7280', fontWeight: row.flagged ? 700 : 400 }}>{row.note || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          <div style={{ padding: '5px 14px', background: purpleLight, borderTop: `1px solid ${border}`, fontSize: 11, color: '#9b8ec4', position: 'sticky', bottom: 0, display: 'flex', justifyContent: 'space-between' }}>
-            <span>{filteredAW.length} of {awRows.length} rows · {awRows.filter(r => r.logged).length} logged · {awRows.filter(r => r.flagged).length} flagged</span>
-            <span>Right-click a row to edit or delete</span>
-          </div>
-        </div>
-      )}
-
-      {/* ── AW CONTEXT MENU ── */}
-      {awCtxMenu && (
-        <div ref={ctxRef} className="ctx-menu" style={{ left: awCtxMenu.x, top: awCtxMenu.y }}>
-          <div className="ctx-item" onClick={() => { setEditAW({ ...awCtxMenu.row }); setAwCtxMenu(null) }}>✏️ Edit</div>
-          <div className="ctx-item danger" onClick={() => { deleteAWRow(awCtxMenu.row.id); setAwCtxMenu(null) }}>🗑 Delete</div>
-        </div>
-      )}
-
-      {/* ── EDIT AW MODAL ── */}
-      {editAW && (
-        <div className="modal-overlay" onClick={() => setEditAW(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>Edit Invoice</h3>
-            <label>Store</label>
-            <select value={editAW.store} onChange={e => setEditAW(v => v ? { ...v, store: e.target.value } : v)}>
-              {AW_STORES.map(s => <option key={s}>{s}</option>)}
-            </select>
-            <label>Brand</label>
-            <input value={editAW.brand} onChange={e => setEditAW(v => v ? { ...v, brand: e.target.value } : v)} />
-            <label>Invoice #</label>
-            <input value={editAW.invoice_no} onChange={e => setEditAW(v => v ? { ...v, invoice_no: e.target.value } : v)} />
-            <label>PO #</label>
-            <input value={editAW.po_no || ''} onChange={e => setEditAW(v => v ? { ...v, po_no: e.target.value } : v)} />
-            <label>Qty</label>
-            <input type="number" value={editAW.qty ?? ''} onChange={e => setEditAW(v => v ? { ...v, qty: e.target.value ? parseInt(e.target.value) : null } : v)} />
-            <label>Note</label>
-            <input value={editAW.note || ''} onChange={e => setEditAW(v => v ? { ...v, note: e.target.value } : v)} />
-            <div className="modal-btns">
-              <button className="btn-cancel" onClick={() => setEditAW(null)}>Cancel</button>
-              <button className="btn-save" onClick={saveEditAW}>Save</button>
-            </div>
-          </div>
         </div>
       )}
 
