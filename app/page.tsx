@@ -148,6 +148,7 @@ export default function LoginPage() {
             </label>
             <input
               autoFocus
+              type="password"
               value={userid}
               onChange={e => setUserid(e.target.value)}
               style={{

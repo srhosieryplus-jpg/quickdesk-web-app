@@ -102,6 +102,21 @@ export default function AutoCSVPage() {
     setUser(u)
   }, [router])
 
+  // ── return to selector after screen lock / idle ───────────────────────────
+  useEffect(() => {
+    let hiddenAt: number | null = null
+    const IDLE_MS = 5 * 60 * 1000
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') { hiddenAt = Date.now() }
+      else if (document.visibilityState === 'visible') {
+        if (hiddenAt !== null && Date.now() - hiddenAt >= IDLE_MS) router.push('/selector')
+        hiddenAt = null
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [router])
+
   useEffect(() => {
     if (activeTab === 'logbook') fetchLogEntries()
   }, [activeTab])
@@ -783,7 +798,7 @@ export default function AutoCSVPage() {
                   const posQty = e.pos_qty ?? null
                   const match = posQty !== null ? csvQty === posQty : null
                   const hasIC = !!e.ic_order_num
-                  const isComplete = hasIC && posQty !== null
+                  const isComplete = hasIC
                   const isSel = selectedIds.has(e.id)
                   const d = new Date(e.exported_at)
                   const ts = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${String(d.getHours()%12||12).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`

@@ -264,13 +264,81 @@ export default function QDPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
+      <style>{`
+        .qd-header {
+          padding: 10px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 6px;
+          border-bottom: 1px solid #d4c8f0;
+          background: rgba(255,255,255,0.6);
+          backdrop-filter: blur(8px);
+        }
+        .qd-center {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex: 1;
+          justify-content: center;
+          pointer-events: none;
+        }
+        .qd-right {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        /* Tab bar action buttons — hidden on desktop, shown on mobile */
+        .qd-tab-actions {
+          display: none;
+          align-items: center;
+          gap: 4px;
+          margin-left: auto;
+          padding-right: 8px;
+        }
+        @media (max-width: 700px) {
+          .qd-center { order: 3; width: 100%; }
+          /* Hide header action buttons on mobile */
+          .qd-header-actions { display: none !important; }
+          /* Show tab bar action buttons on mobile */
+          .qd-tab-actions { display: flex; }
+        }
+        .qd-scanner-layout {
+          display: grid;
+          grid-template-columns: 220px 1fr;
+          flex: 1;
+          min-height: 0;
+          height: calc(100vh - 80px);
+        }
+        @media (max-width: 700px) {
+          .qd-scanner-layout {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+            height: auto;
+            min-height: calc(100vh - 80px);
+          }
+          .qd-left-panel {
+            border-right: none !important;
+            border-bottom: 1px solid #c4b5fd;
+          }
+          /* Hide Recent sessions panel on mobile */
+          .qd-recent-panel { display: none !important; }
+          .qd-recent-hr { display: none !important; }
+          /* Replace full custom columns box with inline chip row */
+          .qd-cols-desktop { display: none !important; }
+          .qd-cols-mobile { display: flex !important; }
+        }
+        .qd-cols-mobile {
+          display: none;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 4px;
+        }
+      `}</style>
 
       {/* Header */}
-      <div style={{
-        padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'relative', borderBottom: '1px solid #d4c8f0',
-        background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
-      }}>
+      <div className="qd-header">
         {/* Left: home + user info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={goHome} style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>← Home</button>
@@ -282,10 +350,9 @@ export default function QDPage() {
         </div>
 
         {/* Center: logo + title */}
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
+        <div className="qd-center">
           <span style={{ fontSize: 18, fontWeight: 900, color: '#7c3aed', letterSpacing: '0.05em' }}>▌▌▌</span>
           <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>UPC SCANNER</span>
-          {/* Live / offline pill */}
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
             background: session ? '#dcfce7' : '#fee2e2',
@@ -298,8 +365,8 @@ export default function QDPage() {
           </span>
         </div>
 
-        {/* Right: actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Right: actions — hidden on mobile, shown in tab bar instead */}
+        <div className="qd-right qd-header-actions">
           <Btn color="primary" onClick={() => setShowModal(true)}>+ New Invoice #</Btn>
           <Btn color="yellow" onClick={saveSession} disabled={saving || !session?.order_list.length}>
             {saving ? '…' : '💾 Save'}
@@ -308,21 +375,30 @@ export default function QDPage() {
       </div>
 
       {/* Tab bar */}
-      <div style={{ background: '#e8e4f8', borderBottom: `1px solid ${border}`, display: 'flex', gap: 0 }}>
+      <div style={{ background: '#e8e4f8', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 0 }}>
         {(['scanner', 'history'] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
             style={{ padding: '7px 18px', fontSize: 12, fontWeight: 700, border: 'none', borderBottom: tab === t ? `2px solid ${purple}` : '2px solid transparent', background: 'none', color: tab === t ? purple : '#6b7280', cursor: 'pointer', textTransform: 'capitalize', fontFamily: 'Inter, sans-serif' }}>
             {t === 'scanner' ? '📷 Scanner' : '🗂 History'}
           </button>
         ))}
+        {/* Action buttons in tab bar — only visible on mobile */}
+        <div className="qd-tab-actions">
+          <button onClick={() => setShowModal(true)}
+            style={{ ...btnSt('primary'), fontSize: 11, padding: '4px 10px' }}>+ New</button>
+          <button onClick={saveSession} disabled={saving || !session?.order_list.length}
+            style={{ ...btnSt('yellow'), fontSize: 11, padding: '4px 10px', opacity: (!session?.order_list.length) ? 0.5 : 1 }}>
+            {saving ? '…' : '💾'}
+          </button>
+        </div>
       </div>
 
       {/* Scanner tab */}
       {tab === 'scanner' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', flex: 1, minHeight: 0, height: 'calc(100vh - 80px)' }}>
+        <div className="qd-scanner-layout">
 
           {/* Left panel */}
-          <div style={{ background: '#fff', borderRight: `1px solid ${border}`, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
+          <div className="qd-left-panel" style={{ background: '#fff', borderRight: `1px solid ${border}`, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <label style={labelSt}>Scan Barcode / UPC</label>
@@ -347,8 +423,8 @@ export default function QDPage() {
 
             <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
 
-            {/* Custom columns */}
-            <div style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 8 }}>
+            {/* Custom columns — desktop: full box; mobile: compact chip row */}
+            <div className="qd-cols-desktop" style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 8 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: purpleD, marginBottom: 6 }}>Custom Columns</div>
               {session?.extra_cols.map(col => (
                 <div key={col} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
@@ -374,10 +450,35 @@ export default function QDPage() {
               )}
             </div>
 
-            <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
+            {/* Mobile: compact column chips */}
+            <div className="qd-cols-mobile">
+              <span style={{ fontSize: 10, fontWeight: 700, color: purpleD, whiteSpace: 'nowrap' }}>Cols:</span>
+              {session?.extra_cols.map(col => (
+                <span key={col} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: purpleLight, border: `1px solid ${border}`, borderRadius: 10, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: purpleD }}>
+                  {col}
+                  <button onClick={() => removeExtraCol(col)}
+                    style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 10, padding: '0 1px', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                </span>
+              ))}
+              {colPrompt ? (
+                <>
+                  <input value={colName} onChange={e => setColName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addExtraCol()}
+                    autoFocus placeholder="name…"
+                    style={{ ...inputSt, width: 80, fontSize: 11, padding: '2px 6px' }} />
+                  <button onClick={addExtraCol} style={{ ...btnSt('primary'), fontSize: 10, padding: '2px 7px' }}>Add</button>
+                  <button onClick={() => { setColPrompt(false); setColName('') }} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 5px' }}>✕</button>
+                </>
+              ) : (
+                <button onClick={() => setColPrompt(true)}
+                  style={{ ...btnSt('ghost'), fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>+ col</button>
+              )}
+            </div>
 
-            {/* Recent sessions (last 5) */}
-            <div style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 6, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <hr className="qd-recent-hr" style={{ border: 'none', borderTop: `1px solid ${border}` }} />
+
+            {/* Recent sessions (last 5) — hidden on mobile */}
+            <div className="qd-recent-panel" style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 6, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: purpleD, textTransform: 'uppercase', letterSpacing: '0.4px', flex: 1 }}>Recent (last 5)</span>
                 <button onClick={() => loadSessions()} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 6px' }}>🔄</button>

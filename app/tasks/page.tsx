@@ -5,10 +5,10 @@ import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { Task, User } from '@/lib/types'
 
-const teal = '#0d9488'
-const tealD = '#0f766e'
-const tealLight = '#f0fdfa'
-const border = '#99f6e4'
+const teal = '#1e40af'
+const tealD = '#1e3a8a'
+const tealLight = '#eff6ff'
+const border = '#93c5fd'
 
 export default function TasksPage() {
   const router = useRouter()
@@ -31,6 +31,21 @@ export default function TasksPage() {
     if (!u) { router.push('/'); return }
     setUser(u)
     fetchTasks(u)
+  }, [router])
+
+  // ── return to selector after screen lock / idle ───────────────────────────
+  useEffect(() => {
+    let hiddenAt: number | null = null
+    const IDLE_MS = 5 * 60 * 1000
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') { hiddenAt = Date.now() }
+      else if (document.visibilityState === 'visible') {
+        if (hiddenAt !== null && Date.now() - hiddenAt >= IDLE_MS) router.push('/selector')
+        hiddenAt = null
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
   }, [router])
 
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
@@ -160,11 +175,11 @@ export default function TasksPage() {
         {/* Left */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <button onClick={goHome}
-            style={{ background: 'none', border: 'none', fontSize: 13, color: '#5eead4', cursor: 'pointer', fontWeight: 600 }}>
+            style={{ background: 'none', border: 'none', fontSize: 13, color: '#60a5fa', cursor: 'pointer', fontWeight: 600 }}>
             ← Home
           </button>
           <div style={{ width: 1, height: 16, background: border }} />
-          <span style={{ fontSize: 12, color: '#5eead4' }}>
+          <span style={{ fontSize: 12, color: '#60a5fa' }}>
             <span style={{ fontWeight: 700, color: tealD }}>{user?.userid}</span>
             {user?.store ? <> · {user.store === 'ALL' ? 'All Stores' : user.store}</> : ''}
           </span>
@@ -172,37 +187,32 @@ export default function TasksPage() {
 
         {/* Center */}
         <div className="tasks-center">
-          <span style={{ fontSize: 18, color: teal }}>☑</span>
-          <span style={{ fontSize: 15, fontWeight: 900, color: tealD, letterSpacing: '0.06em' }}>QUICKDESK</span>
-          <span style={{ color: '#5eead4', fontSize: 13 }}>— Tasks</span>
+          <span style={{ fontSize: 18, color: '#1d4ed8' }}>☑</span>
+          <span style={{ fontSize: 15, fontWeight: 900, color: tealD, letterSpacing: '0.06em' }}>Tasks</span>
         </div>
 
         {/* Right */}
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button onClick={() => user && fetchTasks(user)}
-            style={{ background: '#dcfce7', border: 'none', color: '#166534', borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ background: '#dbeafe', border: 'none', color: '#1e3a8a', borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             🔄 Refresh
           </button>
         </div>
       </div>
 
       {/* Submit form */}
-      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '10px 20px' }}>
-        <form onSubmit={addTask} className="tasks-form">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={labelSt}>Task:</label>
-            <input value={newTask} onChange={e => setNewTask(e.target.value)}
-              placeholder="Describe the task…"
-              style={{ ...inputSt, width: 260 }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={labelSt}>Note:</label>
-            <input value={newNote} onChange={e => setNewNote(e.target.value)}
-              placeholder="optional…"
-              style={{ ...inputSt, width: 180 }} />
-          </div>
+      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', justifyContent: 'center' }}>
+        <form onSubmit={addTask} style={{ width: '100%', maxWidth: 900, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <label style={{ ...labelSt, color: tealD }}>Task:</label>
+          <input value={newTask} onChange={e => setNewTask(e.target.value)}
+            placeholder="Describe the task…"
+            style={{ ...inputSt, flex: 1, minWidth: 160 }} />
+          <label style={{ ...labelSt, color: tealD }}>Note:</label>
+          <input value={newNote} onChange={e => setNewNote(e.target.value)}
+            placeholder="optional…"
+            style={{ ...inputSt, width: 160 }} />
           <button type="submit" disabled={saving || !newTask.trim()}
-            style={{ background: teal, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 12, fontWeight: 700, cursor: saving || !newTask.trim() ? 'default' : 'pointer', opacity: saving || !newTask.trim() ? 0.6 : 1 }}>
+            style={{ background: teal, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: saving || !newTask.trim() ? 'default' : 'pointer', opacity: saving || !newTask.trim() ? 0.6 : 1, whiteSpace: 'nowrap' }}>
             {saving ? '…' : '✓ Submit Task'}
           </button>
         </form>
@@ -211,7 +221,7 @@ export default function TasksPage() {
       {/* Search bar */}
       <div style={{ background: tealLight, borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
         <div style={{ width: '100%', maxWidth: 900, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <label style={{ ...labelSt, color: tealD }}>Search:</label>
+          <label style={{ ...labelSt, color: tealD, fontWeight: 700 }}>Search:</label>
           <input value={filter} onChange={e => setFilter(e.target.value)}
             placeholder="task, note, store, user…"
             style={{ ...inputSt, flex: 1 }} />
@@ -231,7 +241,7 @@ export default function TasksPage() {
           <div style={{ display: 'flex', justifyContent: 'center', padding: '0 16px' }}>
             <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', maxWidth: 900 }}>
               <thead>
-                <tr style={{ background: '#ccfbf1', position: 'sticky', top: 0, zIndex: 1 }}>
+                <tr style={{ background: '#dbeafe', position: 'sticky', top: 0, zIndex: 1 }}>
                   {['Date', 'Submitted By', 'Store ID', 'Task', 'Note', 'Done'].map(h => (
                     <th key={h} style={{ padding: '6px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: tealD, borderBottom: `2px solid ${border}`, whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
@@ -244,14 +254,14 @@ export default function TasksPage() {
                 {filtered.map((t, i) => {
                   const rowBg = t.done
                     ? (i % 2 === 0 ? '#dcfce7' : '#d1fae5')
-                    : (i % 2 === 0 ? '#fff' : '#f0fdfa')
+                    : (i % 2 === 0 ? '#fff' : '#eff6ff')
                   const textColor = t.done ? '#15803d' : '#111827'
                   const dimColor = t.done ? '#16a34a' : '#6b7280'
                   return (
                     <tr key={t.id} style={{ background: rowBg, cursor: 'context-menu' }}
                       onContextMenu={ev => handleRowRightClick(ev, t.id)}>
                       <td style={{ ...tdSt, color: dimColor, whiteSpace: 'nowrap', fontSize: 11 }}>{formatDate(t.saved_at)}</td>
-                      <td style={{ ...tdSt, color: t.done ? '#15803d' : teal, fontWeight: 700 }}>{t.logged_by}</td>
+                      <td style={{ ...tdSt, color: t.done ? '#15803d' : '#1d4ed8', fontWeight: 700 }}>{t.logged_by}</td>
                       <td style={{ ...tdSt, color: textColor, fontWeight: 600 }}>{t.store}</td>
                       <td style={{ ...tdSt, color: textColor, textDecoration: t.done ? 'line-through' : 'none' }}>{t.task}</td>
                       <td style={{ ...tdSt, color: dimColor }}>{t.note || ''}</td>
@@ -261,7 +271,7 @@ export default function TasksPage() {
                             style={{ cursor: 'pointer', width: 14, height: 14, accentColor: teal }} />
                         ) : (
                           t.done
-                            ? <span style={{ color: teal, fontWeight: 800, fontSize: 14 }}>✓</span>
+                            ? <span style={{ color: '#15803d', fontWeight: 800, fontSize: 14 }}>✓</span>
                             : <span style={{ color: '#d1d5db' }}>—</span>
                         )}
                       </td>
@@ -331,7 +341,7 @@ export default function TasksPage() {
       {toast && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: toastType === 'err' ? '#7f1d1d' : '#134e4a',
+          background: toastType === 'err' ? '#7f1d1d' : '#1e3a8a',
           color: '#fff', padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999,
         }}>{toast}</div>
       )}
