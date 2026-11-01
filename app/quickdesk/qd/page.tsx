@@ -102,7 +102,23 @@ export default function QDPage() {
   }
 
   function loadSessionData(s: UPCSession & { id: string }) {
-    setSession({ ...s })
+    // Migrate new-schema sessions (rows[]) back to old-schema (order_list/data)
+    const raw = s as UPCSession & { id: string; rows?: { upc: string; qty: number; [k: string]: string | number }[]; extra_cols?: string[] }
+    if (raw.rows && raw.rows.length > 0 && (!s.order_list || s.order_list.length === 0)) {
+      const extra_cols = raw.extra_cols || []
+      const order_list: string[] = []
+      const data: Record<string, ScanData> = {}
+      for (const r of raw.rows) {
+        if (!r.upc) continue
+        if (!order_list.includes(r.upc)) order_list.push(r.upc)
+        const entry: ScanData = { qty: r.qty || 0 }
+        extra_cols.forEach(c => { entry[c] = r[c] ?? '' })
+        data[r.upc] = entry
+      }
+      setSession({ ...s, order_list, data, extra_cols })
+    } else {
+      setSession({ ...s })
+    }
     setTab('scanner')
     setTimeout(() => inputRef.current?.focus(), 100)
   }
@@ -241,7 +257,17 @@ export default function QDPage() {
   })
 
   function SessionCard({ s, showUser }: { s: UPCSession & { id: string }; showUser?: boolean }) {
-    const total = Object.values(s.data).reduce((a, r) => a + (r.qty as number), 0)
+    const raw = s as UPCSession & { id: string; rows?: { upc: string; qty: number }[] }
+    // Support both old schema (order_list/data) and new schema (rows)
+    let total = 0, upcCount = 0
+    if (raw.rows) {
+      const scanned = raw.rows.filter(r => r.upc)
+      total = scanned.reduce((a, r) => a + (r.qty || 0), 0)
+      upcCount = scanned.length
+    } else {
+      total = Object.values(s.data || {}).reduce((a, r) => a + (r.qty as number), 0)
+      upcCount = (s.order_list || []).length
+    }
     const date = s.saved_at ? new Date(s.saved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
     return (
       <div style={{ background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '5px 6px' }}>
@@ -252,7 +278,7 @@ export default function QDPage() {
           </span>
         </div>
         <div style={{ fontSize: 10, color: '#6b7280', margin: '2px 0' }}>
-          {s.store}{showUser && s.userid ? ` · ${s.userid}` : ''} · {s.order_list.length} UPCs · {total} qty{date ? ` · ${date}` : ''}
+          {s.store || '—'}{showUser && s.userid ? ` · ${s.userid}` : ''} · {upcCount} UPCs · {total} qty{date ? ` · ${date}` : ''}
         </div>
         <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
           <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px', flex: 1 }}>Load</button>
