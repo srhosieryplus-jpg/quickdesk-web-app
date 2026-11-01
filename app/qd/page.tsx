@@ -644,10 +644,13 @@ export default function QDPage() {
                               onChange={e => updateRowQty(row.row_id, e.target.value)} />
                           </td>
                           {session.extra_cols.map(col => (
-                            <td key={col} style={tdSt} onClick={e => e.stopPropagation()}>
-                              <input type="text" value={row[col] as string || ''}
-                                style={{ width: 80, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif' }}
-                                onChange={e => updateRowExtra(row.row_id, col, e.target.value)} />
+                            <td key={col} style={{ ...tdSt, maxWidth: 120 }} onClick={e => e.stopPropagation()}>
+                              {/* Show as bold readable text; click the value to edit inline */}
+                              <EditableCell
+                                value={row[col] as string || ''}
+                                onChange={val => updateRowExtra(row.row_id, col, val)}
+                                isActive={isActive}
+                              />
                             </td>
                           ))}
                           <td style={tdSt} onClick={e => e.stopPropagation()}>
@@ -802,6 +805,46 @@ export default function QDPage() {
           {toast}
         </div>
       )}
+    </div>
+  )
+}
+
+function EditableCell({ value, onChange, isActive }: { value: string; onChange: (v: string) => void; isActive: boolean }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => { onChange(draft); setEditing(false) }}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { onChange(draft); setEditing(false) } }}
+        style={{ width: '100%', minWidth: 60, padding: '2px 5px', border: `1.5px solid #7c3aed`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif', outline: 'none' }}
+      />
+    )
+  }
+
+  return (
+    <div
+      onClick={() => { setDraft(value); setEditing(true) }}
+      title="Click to edit"
+      style={{
+        display: 'inline-block',
+        fontSize: 12,
+        fontWeight: value ? 700 : 400,
+        color: value ? (isActive ? '#4c1d95' : '#1f2937') : '#9ca3af',
+        background: value ? (isActive ? '#ddd6fe' : '#ede9fe') : 'transparent',
+        borderRadius: 4,
+        padding: value ? '2px 7px' : '2px 4px',
+        cursor: 'text',
+        whiteSpace: 'nowrap',
+        userSelect: 'none',
+        minWidth: 24,
+      }}
+    >
+      {value || '—'}
     </div>
   )
 }
