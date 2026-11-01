@@ -7,7 +7,7 @@ import { User } from '@/lib/types'
 
 const STORES = ['PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
 const DELETE_PASSWORD = 'delete'
-const ADMINS = ['STEPH']
+const ADMINS = ['STEPH', 'STAR', 'SR']
 
 interface ScanData { qty: number; [col: string]: string | number }
 interface UPCSession {
@@ -55,7 +55,8 @@ export default function QDPage() {
     const u = getSession()
     if (!u) { router.push('/'); return }
     setCurrentUser(u)
-    if (u.store) setNewStore(u.store.toUpperCase())
+    const userStore = u.store?.toUpperCase() || ''
+    setNewStore(userStore === 'ALL' ? 'PO' : userStore)
     loadSessions(u)
   }, [router])
 
@@ -69,7 +70,7 @@ export default function QDPage() {
     if (!user) return
     let query = supabase.from('upc_sessions').select('*').order('saved_at', { ascending: false })
     if (!isAdmin(user)) {
-      query = query.eq('userid', user.userid)
+      query = query.eq('store', user.store)
     }
     const { data } = await query
     const all = (data || []) as (UPCSession & { id: string })[]
@@ -236,7 +237,7 @@ export default function QDPage() {
 
   const filteredHistory = allSessions.filter(s => {
     const q = historySearch.toLowerCase()
-    return !q || s.name.toLowerCase().includes(q) || s.store.toLowerCase().includes(q) || (s.userid || '').toLowerCase().includes(q)
+    return !q || (s.name || '').toLowerCase().includes(q) || (s.store || '').toLowerCase().includes(q) || (s.userid || '').toLowerCase().includes(q)
   })
 
   function SessionCard({ s, showUser }: { s: UPCSession & { id: string }; showUser?: boolean }) {
