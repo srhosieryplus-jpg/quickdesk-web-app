@@ -73,7 +73,9 @@ export default function QDPage() {
     const u = getSession()
     if (!u) { router.push('/'); return }
     setCurrentUser(u)
-    if (u.store) setNewStore(u.store.toUpperCase())
+    // For admin (store=ALL), default to first real store; otherwise use their store
+    const userStore = u.store?.toUpperCase() || ''
+    setNewStore(userStore === 'ALL' ? (STORES[0] || 'PO') : userStore)
     loadSessions(u)
   }, [router])
 
@@ -594,6 +596,14 @@ export default function QDPage() {
               <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>
                 {session?.name ? `📋 ${session.name}` : 'Session Table'}
               </span>
+              {session && (
+                <select
+                  value={session.store}
+                  onChange={e => setSession(prev => prev ? { ...prev, store: e.target.value } : prev)}
+                  style={{ fontSize: 11, fontWeight: 700, color: purple, background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 4, padding: '1px 4px', cursor: 'pointer', outline: 'none' }}>
+                  {STORES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              )}
               <div style={{ flex: 1 }} />
               <button onClick={addEmptyRow} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>+ Row</button>
             </div>
