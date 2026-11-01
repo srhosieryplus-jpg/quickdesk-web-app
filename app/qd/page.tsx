@@ -412,7 +412,7 @@ export default function QDPage() {
 
   const filteredHistory = allSessions.filter(s => {
     const q = historySearch.toLowerCase()
-    return !q || s.name.toLowerCase().includes(q) || s.store.toLowerCase().includes(q) || (s.userid || '').toLowerCase().includes(q)
+    return !q || (s.name || '').toLowerCase().includes(q) || (s.store || '').toLowerCase().includes(q) || (s.userid || '').toLowerCase().includes(q)
   })
 
   function SessionCard({ s, showUser }: { s: UPCSession & { id: string }; showUser?: boolean }) {
@@ -429,7 +429,7 @@ export default function QDPage() {
           </span>
         </div>
         <div style={{ fontSize: 10, color: '#6b7280', margin: '2px 0' }}>
-          {s.store}{showUser && s.userid ? ` · ${s.userid}` : ''} · {scanned.length}/{loaded.rows.length} scanned · {total} qty{date ? ` · ${date}` : ''}
+          {s.store || '—'}{showUser && s.userid ? ` · ${s.userid}` : ''} · {scanned.length}/{loaded.rows.length} scanned · {total} qty{date ? ` · ${date}` : ''}
         </div>
         <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
           <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px', flex: 1 }}>Load</button>
