@@ -379,27 +379,28 @@ export default function AutoCSVPage() {
 
       {/* Header */}
       <div style={{
-        padding: '14px 20px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+        padding: '10px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
         justifyContent: 'space-between', borderBottom: `1px solid ${border}`,
         background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
         position: 'sticky', top: 0, zIndex: 10, flexShrink: 0,
       }}>
-        {/* Left: user info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9b8ec4', flexShrink: 0 }}>
-          <span style={{ fontSize: 14 }}>👤</span>
-          <span style={{ fontWeight: 700, color: '#5b21b6' }}>{user.userid}</span>
-          <span>·</span>
-          <span>{user.store === 'ALL' ? 'All Stores' : user.store}</span>
+        {/* Left: Home + divider + user */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <button onClick={() => router.push('/selector')}
+            style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>
+            ← Home
+          </button>
+          <div style={{ width: 1, height: 16, background: border }} />
+          <span style={{ fontSize: 12, color: '#9b8ec4' }}>
+            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{user.userid}</span>
+            {' · '}{user.store === 'ALL' ? 'All Stores' : user.store}
+          </span>
         </div>
 
-        {/* Center: logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'center' }}>
-          <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
-            <polygon points="11,1 21,7 21,19 11,25 1,19 1,7" fill="none" stroke="#7c3aed" strokeWidth="2" />
-          </svg>
-          <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>QUICKDESK</span>
-          <span style={{ color: '#c4b5fd', fontSize: 16, fontWeight: 300, margin: '0 4px' }}>—</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#7c3aed' }}>Auto CSV</span>
+        {/* Center: module name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center' }}>
+          <span style={{ fontSize: 15, color: purple }}>⚡</span>
+          <span style={{ fontSize: 15, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>AUTO CSV</span>
         </div>
 
         {/* Right: actions */}
@@ -410,10 +411,6 @@ export default function AutoCSVPage() {
               🗑 Clear
             </button>
           )}
-          <button onClick={() => router.push('/selector')}
-            style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
-            Home
-          </button>
         </div>
       </div>
 
