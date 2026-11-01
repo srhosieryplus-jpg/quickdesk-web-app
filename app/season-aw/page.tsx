@@ -44,7 +44,7 @@ type SearchState =
   | { phase: 'brand';    results: AWRow[] }
   | { phase: 'create';   invoice: string }
 
-// columns: Date(0) VendorID(1) Brand(2) Store(3) CI(4) Invoice#(5) PO#(6) Season(7) Source(8) Qty(9) ...
+// columns: Date(0) VendorID(1) Brand(2) Store(3) CI(4) Invoice#(5) PO#(6) Season(7) Source(8) Qty(9)
 function parsePasteData(raw: string): { brand: string; store: string; invoice_no: string; po_no: string | null; qty: number | null }[] {
   const lines = raw.split('\n').map(l => l.trimEnd()).filter(l => l.trim())
   const results: { brand: string; store: string; invoice_no: string; po_no: string | null; qty: number | null }[] = []
@@ -53,7 +53,8 @@ function parsePasteData(raw: string): { brand: string; store: string; invoice_no
     if (cols.length < 6) continue
     const invoice_no = cols[5]?.trim()
     const brand      = cols[2]?.trim()
-    const store      = cols[3]?.trim()
+    const storeRaw   = cols[3]?.trim()
+    const store      = storeRaw ? storeRaw.toUpperCase() : ''
     if (!invoice_no || !brand || !store) continue
     // skip header row
     if (invoice_no.toLowerCase() === 'invoice #' || brand.toLowerCase() === 'brand') continue
@@ -63,6 +64,15 @@ function parsePasteData(raw: string): { brand: string; store: string; invoice_no
     results.push({ brand, store, invoice_no, po_no: po_no || null, qty })
   }
   return results
+}
+
+function fmtTs(ts: string | null): string {
+  if (!ts) return '—'
+  try {
+    const d = new Date(ts)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  } catch { return ts }
 }
 
 export default function SeasonAWPage() {
@@ -81,27 +91,20 @@ export default function SeasonAWPage() {
   const [submitting, setSubmitting] = useState(false)
   const [logNote, setLogNote]       = useState('')
   const [logging, setLogging]       = useState(false)
+  const [loggedRow, setLoggedRow]   = useState<AWRow | null>(null)  // stays visible after log
   const [toast, setToast]           = useState('')
   const [toastType, setToastType]   = useState<'ok'|'err'>('ok')
   const inputRef = useRef<HTMLInputElement>(null)
 
   // ── admin POs modal state ─────────────────────────────────────────────────
   const [showModal, setShowModal]   = useState(false)
-  const [modalTab, setModalTab]     = useState<'view'|'add'|'paste'>('view')
+  const [modalTab, setModalTab]     = useState<'view'|'paste'>('paste')
 
   // view tab
   const [awRows, setAwRows]         = useState<AWRow[]>([])
   const [awLoading, setAwLoading]   = useState(false)
   const [awFilter, setAwFilter]     = useState('')
   const [awStoreFilter, setAwStoreFilter] = useState('ALL')
-
-  // add tab
-  const [newStore, setNewStore]     = useState('')
-  const [newBrand, setNewBrand]     = useState('')
-  const [newInv, setNewInv]         = useState('')
-  const [newPO, setNewPO]           = useState('')
-  const [newQty, setNewQty]         = useState('')
-  const [adding, setAdding]         = useState(false)
 
   // paste tab
   const [pasteText, setPasteText]   = useState('')
@@ -196,6 +199,7 @@ export default function SeasonAWPage() {
     const inv = query.trim()
     if (!inv || !user) return
     setSearching(true)
+    setLoggedRow(null)
     const { data } = await supabase
       .from('season_aw').select('*')
       .eq('store', user.store).ilike('invoice_no', inv).maybeSingle()
@@ -211,7 +215,7 @@ export default function SeasonAWPage() {
     setSearching(true)
     const { data } = await supabase
       .from('season_aw').select('*')
-      .eq('store', user.store).eq('logged', false).ilike('brand', `%${b}%`)
+      .eq('store', user.store).ilike('brand', `%${b}%`)
       .order('created_at', { ascending: false })
     setSearching(false)
     setState({ phase: 'brand', results: (data || []) as AWRow[] })
@@ -220,13 +224,31 @@ export default function SeasonAWPage() {
   async function logRow(row: AWRow) {
     if (!user) return
     setLogging(true)
+    const loggedAt = new Date().toISOString()
     const { error } = await supabase.from('season_aw')
-      .update({ logged: true, logged_by: user.userid, logged_at: new Date().toISOString(), note: logNote.trim() || row.note })
+      .update({ logged: true, logged_by: user.userid, logged_at: loggedAt, note: logNote.trim() || row.note })
       .eq('id', row.id)
     setLogging(false)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
+    // Keep card visible, show the updated row with green PO# box
+    const updatedRow: AWRow = { ...row, logged: true, logged_by: user.userid, logged_at: loggedAt, note: logNote.trim() || row.note }
+    setLoggedRow(updatedRow)
+    setState({ phase: 'found', row: updatedRow })
+    setLogNote('')
     showToast('✅ Invoice logged!')
-    reset()
+  }
+
+  async function unlogRow(row: AWRow) {
+    if (!user) return
+    const { error } = await supabase.from('season_aw')
+      .update({ logged: false, logged_by: null, logged_at: null })
+      .eq('id', row.id)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    const updated: AWRow = { ...row, logged: false, logged_by: null, logged_at: null }
+    setLoggedRow(null)
+    setState({ phase: 'found', row: updated })
+    showToast('↩ Invoice un-logged')
+    fetchAW()
   }
 
   async function submitCreateRequest(e: React.FormEvent) {
@@ -248,26 +270,11 @@ export default function SeasonAWPage() {
 
   function reset() {
     setState({ phase: 'idle' })
+    setLoggedRow(null)
     setQuery(''); setBrandQuery('')
     setCrNote('PRIORITY — items on floor, not in system')
     setCrBrand(''); setCrPO(''); setCrQty(''); setLogNote('')
     setTimeout(() => inputRef.current?.focus(), 50)
-  }
-
-  // ── admin: add row ────────────────────────────────────────────────────────
-  async function addRow() {
-    if (!newStore || !newBrand.trim() || !newInv.trim()) return
-    setAdding(true)
-    const { error } = await supabase.from('season_aw').insert({
-      store: newStore, brand: newBrand.trim(), invoice_no: newInv.trim(),
-      po_no: newPO.trim() || null, qty: newQty ? parseInt(newQty) : null,
-      logged: false, flagged: false,
-    })
-    setAdding(false)
-    if (error) { showToast('❌ ' + error.message, 'err'); return }
-    showToast('✅ Row added')
-    setNewBrand(''); setNewInv(''); setNewPO(''); setNewQty('')
-    fetchAW()
   }
 
   // ── admin: paste processor ────────────────────────────────────────────────
@@ -285,7 +292,6 @@ export default function SeasonAWPage() {
       store: r.store, brand: r.brand, invoice_no: r.invoice_no,
       po_no: r.po_no, qty: r.qty, logged: false, flagged: false,
     }))
-    // insert in batches of 50
     let ok = 0; let skip = 0
     for (let i = 0; i < rows.length; i += 50) {
       const batch = rows.slice(i, i + 50)
@@ -299,7 +305,7 @@ export default function SeasonAWPage() {
     if (skip > 0) showToast(`⚠️ ${skip} rows failed`, 'err')
   }
 
-  // ── admin: edit / delete ──────────────────────────────────────────────────
+  // ── admin: edit / delete / unlog (from view table) ────────────────────────
   function openEdit(row: AWRow) {
     setEditRow(row)
     setEditStore(row.store); setEditBrand(row.brand); setEditInv(row.invoice_no)
@@ -327,6 +333,16 @@ export default function SeasonAWPage() {
     const { error } = await supabase.from('season_aw').delete().eq('id', id)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     showToast('🗑 Deleted')
+    fetchAW()
+  }
+
+  async function unlogRowAdmin(row: AWRow) {
+    setCtxMenu(null)
+    const { error } = await supabase.from('season_aw')
+      .update({ logged: false, logged_by: null, logged_at: null })
+      .eq('id', row.id)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    showToast('↩ Un-logged')
     fetchAW()
   }
 
@@ -374,6 +390,7 @@ export default function SeasonAWPage() {
         .aw-btn-amber   { background: ${amber}; color: #fff; }
         .aw-btn-gray    { background: #f3f4f6; color: #374151; }
         .aw-btn-red     { background: #dc2626; color: #fff; }
+        .aw-btn-green   { background: #16a34a; color: #fff; }
         .result-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; padding: 16px; margin: 0; box-shadow: 0 2px 12px rgba(30,64,175,0.07); }
         .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
         .brand-row:hover { background: ${blueL}; border-color: ${border}; }
@@ -381,11 +398,11 @@ export default function SeasonAWPage() {
         .ss-table th { background: #e0e7ff; color: #1e3a8a; font-size: 10px; font-weight: 800; padding: 5px 8px; text-align: left; border: 1px solid #c7d2fe; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
         .ss-table td { padding: 3px 8px; border: 1px solid #e0e7ff; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
         .ss-table tr:hover td { filter: brightness(0.97); }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 20px 12px; overflow-y: auto; }
-        .modal-box { background: #fff; border-radius: 14px; box-shadow: 0 8px 48px rgba(0,0,0,0.22); width: 100%; max-width: 900px; display: flex; flex-direction: column; max-height: 90vh; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 16px 12px; overflow-y: auto; }
+        .modal-box { background: #fff; border-radius: 14px; box-shadow: 0 8px 48px rgba(0,0,0,0.22); width: 100%; max-width: 1000px; display: flex; flex-direction: column; min-height: 80vh; max-height: 94vh; }
         .modal-head { padding: 14px 18px; border-bottom: 1px solid #e0e7ff; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
         .modal-tabs { display: flex; gap: 2px; padding: 8px 16px 0; border-bottom: 1px solid #e0e7ff; flex-shrink: 0; }
-        .modal-tab { padding: 7px 16px; border: none; background: none; font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 8px 8px 0 0; color: #64748b; }
+        .modal-tab { padding: 7px 18px; border: none; background: none; font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 8px 8px 0 0; color: #64748b; }
         .modal-tab.active { background: ${blue}; color: #fff; }
         .modal-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
         .qs-header { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid ${blueD}; background: ${blue}; }
@@ -393,8 +410,11 @@ export default function SeasonAWPage() {
         @media (max-width: 600px) {
           .qs-logo { order: 3; width: 100%; justify-content: center; }
         }
-        .paste-area { width: 100%; height: 160px; border: 1.5px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 11px; font-family: monospace; resize: vertical; outline: none; }
+        .paste-layout { display: grid; grid-template-columns: 300px 1fr; gap: 14px; height: 100%; min-height: 0; }
+        @media (max-width: 700px) { .paste-layout { grid-template-columns: 1fr; } }
+        .paste-area { width: 100%; height: 100%; min-height: 200px; border: 1.5px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 11px; font-family: monospace; resize: none; outline: none; }
         .paste-area:focus { border-color: ${border}; }
+        .po-badge { display: inline-block; background: #dcfce7; color: #15803d; border: 1.5px solid #86efac; border-radius: 8px; padding: '4px 14px'; font-size: 13px; font-weight: 800; letter-spacing: 0.03em; }
       `}</style>
 
       {/* ── HEADER ── */}
@@ -413,10 +433,22 @@ export default function SeasonAWPage() {
           </span>
         </div>
 
-        {/* Center: title */}
+        {/* Center: title with snowflake */}
         <div className="qs-logo">
-          <svg width="20" height="24" viewBox="0 0 22 26" fill="none">
-            <polygon points="11,1 21,7 21,19 11,25 1,19 1,7" fill="none" stroke="#bfdbfe" strokeWidth="2" />
+          {/* Snowflake SVG */}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#bfdbfe" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="2" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+            <line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/>
+            <line x1="12" y1="2" x2="10" y2="5"/>
+            <line x1="12" y1="2" x2="14" y2="5"/>
+            <line x1="12" y1="22" x2="10" y2="19"/>
+            <line x1="12" y1="22" x2="14" y2="19"/>
+            <line x1="2" y1="12" x2="5" y2="10"/>
+            <line x1="2" y1="12" x2="5" y2="14"/>
+            <line x1="22" y1="12" x2="19" y2="10"/>
+            <line x1="22" y1="12" x2="19" y2="14"/>
           </svg>
           <span style={{ fontSize: 16, fontWeight: 900, color: '#fff', letterSpacing: '0.08em' }}>AW SEASON</span>
           <span style={{ color: '#60a5fa', fontSize: 16, fontWeight: 300, margin: '0 4px' }}>—</span>
@@ -426,7 +458,7 @@ export default function SeasonAWPage() {
         {/* Right: POs AW button (admin only) */}
         <div style={{ flexShrink: 0, minWidth: 80, display: 'flex', justifyContent: 'flex-end' }}>
           {isAdmin && (
-            <button onClick={() => { setShowModal(true); setModalTab('view') }}
+            <button onClick={() => { setShowModal(true); setModalTab('paste') }}
               style={{ background: amber, border: 'none', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', borderRadius: 7, padding: '6px 14px', letterSpacing: '0.04em', boxShadow: '0 2px 8px rgba(217,119,6,0.4)' }}>
               🗂 POs AW
             </button>
@@ -435,22 +467,37 @@ export default function SeasonAWPage() {
       </div>
 
       {/* ── SEARCH BAR ── */}
-      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '8px 16px', display: 'flex', justifyContent: 'center' }}>
-        <form onSubmit={handleSearch} style={{ width: '100%', maxWidth: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <label style={labelSt}>Invoice #:</label>
-          <input
-            ref={inputRef} autoFocus value={query}
-            onChange={e => { setQuery(e.target.value); if (state.phase !== 'idle') setState({ phase: 'idle' }) }}
-            placeholder="Enter invoice number…"
-            style={{ ...inputSt, flex: 1 }}
-          />
-          <button type="submit" disabled={!query.trim() || searching} className="aw-btn aw-btn-primary">
-            {searching ? '…' : '🔍 Search'}
-          </button>
-          {state.phase !== 'idle' && (
+      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '8px 16px' }}>
+        <div style={{ width: '100%', maxWidth: 680, margin: '0 auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+          {/* Invoice # search */}
+          <form onSubmit={handleSearch} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
+            <label style={labelSt}>Invoice #:</label>
+            <input
+              ref={inputRef} autoFocus value={query}
+              onChange={e => { setQuery(e.target.value); if (state.phase !== 'idle' && state.phase !== 'found') setState({ phase: 'idle' }) }}
+              placeholder="Enter invoice number…"
+              style={{ ...inputSt, flex: 1 }}
+            />
+            <button type="submit" disabled={!query.trim() || searching} className="aw-btn aw-btn-primary">
+              {searching ? '…' : '🔍'}
+            </button>
+          </form>
+
+          {/* Brand search */}
+          <form onSubmit={handleBrandSearch} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 180 }}>
+            <label style={labelSt}>Brand:</label>
+            <input value={brandQuery} onChange={e => setBrandQuery(e.target.value)}
+              placeholder="Search brand…"
+              style={{ ...inputSt, flex: 1 }} />
+            <button type="submit" disabled={!brandQuery.trim() || searching} className="aw-btn aw-btn-outline">
+              {searching ? '…' : '🔍'}
+            </button>
+          </form>
+
+          {(state.phase !== 'idle') && (
             <button type="button" onClick={reset} className="aw-btn aw-btn-gray">✕ Clear</button>
           )}
-        </form>
+        </div>
       </div>
 
       {/* ── MAIN CONTENT ── */}
@@ -458,26 +505,47 @@ export default function SeasonAWPage() {
 
         {state.phase === 'idle' && (
           <div style={{ color: '#93c5fd', fontSize: 13, marginTop: 40, textAlign: 'center' }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>✻</div>
-            Search by invoice # to log a delivery
+            <div style={{ fontSize: 32, marginBottom: 10 }}>❄</div>
+            Search by invoice # or brand to log a delivery
           </div>
         )}
 
+        {/* ── FOUND ── */}
         {state.phase === 'found' && (
           <div className="result-card" style={{ width: '100%', maxWidth: 520 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: blueD }}>Invoice Found</span>
               {state.row.logged && (
                 <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>
-                  ✓ Already logged by {state.row.logged_by}
+                  ✓ Logged by {state.row.logged_by}
                 </span>
               )}
             </div>
+
+            {/* Green PO# badge — appears after logging */}
+            {loggedRow && loggedRow.id === state.row.id && (
+              <div style={{ background: '#dcfce7', border: '1.5px solid #86efac', borderRadius: 8, padding: '8px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18 }}>✅</span>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', marginBottom: 2 }}>Logged successfully</div>
+                  {loggedRow.po_no && (
+                    <div style={{ fontSize: 14, fontWeight: 900, color: '#166534', fontFamily: 'monospace', letterSpacing: '0.04em' }}>
+                      PO# {loggedRow.po_no}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <InfoRow label="Invoice #" value={state.row.invoice_no} />
             <InfoRow label="Brand"     value={state.row.brand} />
             <InfoRow label="PO #"      value={state.row.po_no} />
             <InfoRow label="Qty"       value={state.row.qty} />
             {state.row.note && <InfoRow label="Note" value={state.row.note} />}
+            {state.row.logged && state.row.logged_at && (
+              <InfoRow label="Logged at" value={fmtTs(state.row.logged_at)} />
+            )}
+
             {!state.row.logged && (
               <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -493,8 +561,14 @@ export default function SeasonAWPage() {
                 </div>
               </div>
             )}
+
             {state.row.logged && (
-              <div style={{ marginTop: 12, textAlign: 'right' }}>
+              <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                {isAdmin && (
+                  <button onClick={() => unlogRow(state.row)} className="aw-btn aw-btn-amber" style={{ fontSize: 11 }}>
+                    ↩ Un-log
+                  </button>
+                )}
                 <button onClick={reset} className="aw-btn aw-btn-gray">← Back</button>
               </div>
             )}
@@ -528,18 +602,9 @@ export default function SeasonAWPage() {
 
         {state.phase === 'brand' && (
           <div style={{ width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <form onSubmit={handleBrandSearch}
-              style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 8, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={labelSt}>Brand:</label>
-              <input value={brandQuery} onChange={e => setBrandQuery(e.target.value)}
-                placeholder="e.g. Autumn Cashmere…" style={{ ...inputSt, flex: 1 }} autoFocus />
-              <button type="submit" disabled={!brandQuery.trim() || searching} className="aw-btn aw-btn-primary">
-                {searching ? '…' : '🔍 Search'}
-              </button>
-            </form>
             {state.results.length === 0 && brandQuery && !searching && (
               <div style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 8, padding: 16, color: '#6b7280', fontSize: 13 }}>
-                No unlogged invoices found for "{brandQuery}" at store {user?.store}.
+                No invoices found for "{brandQuery}" at store {user?.store}.
                 <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
                   <button onClick={() => setState({ phase: 'create', invoice: query })} className="aw-btn aw-btn-amber">⚑ Create log request</button>
                   <button onClick={reset} className="aw-btn aw-btn-gray">← Back</button>
@@ -549,13 +614,14 @@ export default function SeasonAWPage() {
             {state.results.length > 0 && (
               <div className="result-card">
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', marginBottom: 10 }}>
-                  {state.results.length} unlogged invoice{state.results.length !== 1 ? 's' : ''} found
+                  {state.results.length} invoice{state.results.length !== 1 ? 's' : ''} found for "{brandQuery}"
                 </div>
                 {state.results.map(row => (
                   <div key={row.id} className="brand-row" onClick={() => { setState({ phase: 'found', row }); setQuery(row.invoice_no) }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: blueD }}>{row.brand}</div>
                       <div style={{ fontSize: 11, color: '#6b7280' }}>Invoice: {row.invoice_no}{row.po_no ? ` · PO: ${row.po_no}` : ''}{row.qty ? ` · Qty: ${row.qty}` : ''}</div>
+                      {row.logged && <div style={{ fontSize: 10, color: '#15803d', fontWeight: 700 }}>✓ Already logged by {row.logged_by} · {fmtTs(row.logged_at)}</div>}
                     </div>
                     <span style={{ fontSize: 11, color: '#60a5fa', fontWeight: 700 }}>Select →</span>
                   </div>
@@ -629,17 +695,97 @@ export default function SeasonAWPage() {
               </button>
             </div>
 
-            {/* Tabs */}
+            {/* Tabs: Paste Processor | View All */}
             <div className="modal-tabs">
-              {(['view','add','paste'] as const).map(t => (
+              {(['paste','view'] as const).map(t => (
                 <button key={t} className={`modal-tab${modalTab === t ? ' active' : ''}`}
                   onClick={() => { setModalTab(t); if (t === 'view') fetchAW() }}>
-                  {t === 'view' ? '📋 View All' : t === 'add' ? '＋ Add Row' : '⚡ Paste Processor'}
+                  {t === 'paste' ? '⚡ Paste Processor' : '📋 View All'}
                 </button>
               ))}
             </div>
 
-            {/* ── VIEW TAB ── */}
+            {/* ── PASTE PROCESSOR TAB ── */}
+            {modalTab === 'paste' && (
+              <div className="modal-body" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10, flexShrink: 0 }}>
+                  Copy rows from your Excel PO log and paste on the left. Preview appears on the right.
+                  Columns: <strong>Date · Vendor ID · Brand · Store · C.I. · Invoice # · PO # · Season · Source · Qty</strong>
+                </p>
+                <div className="paste-layout" style={{ flex: 1, minHeight: 0 }}>
+                  {/* Left: narrow paste panel */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <label style={{ ...labelSt, fontSize: 10 }}>PASTE EXCEL DATA HERE</label>
+                    <textarea
+                      className="paste-area"
+                      value={pasteText}
+                      onChange={e => handlePasteChange(e.target.value)}
+                      placeholder="Paste tab-separated rows here (copy directly from Excel)…"
+                      style={{ flex: 1, minHeight: 300 }}
+                    />
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button onClick={submitPaste} disabled={pasting || pastePreview.length === 0}
+                        className="aw-btn aw-btn-primary">
+                        {pasting ? '…inserting…' : `⚡ Insert ${pastePreview.length} rows`}
+                      </button>
+                      <button onClick={() => { setPasteText(''); setPastePreview([]); setPasteResult(null) }}
+                        className="aw-btn aw-btn-gray">Clear</button>
+                      {pasteResult && (
+                        <span style={{ fontSize: 12, fontWeight: 700, color: pasteResult.skip > 0 ? '#dc2626' : '#15803d' }}>
+                          ✓ {pasteResult.ok} inserted{pasteResult.skip > 0 ? ` · ✕ ${pasteResult.skip} failed` : ''}
+                        </span>
+                      )}
+                    </div>
+                    {pasteText && pastePreview.length === 0 && (
+                      <div style={{ fontSize: 12, color: '#dc2626' }}>
+                        No rows parsed. Make sure you copy directly from Excel with all columns present.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: wide preview */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+                    <label style={{ ...labelSt, fontSize: 10 }}>
+                      PREVIEW — {pastePreview.length} ROW{pastePreview.length !== 1 ? 'S' : ''} PARSED
+                    </label>
+                    {pastePreview.length > 0 ? (
+                      <div style={{ flex: 1, overflow: 'auto', border: '1px solid #e0e7ff', borderRadius: 8 }}>
+                        <table className="ss-table">
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>Store</th>
+                              <th>Brand</th>
+                              <th>Invoice #</th>
+                              <th>PO #</th>
+                              <th>Qty</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pastePreview.map((r, i) => (
+                              <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8faff' }}>
+                                <td style={{ color: '#94a3b8', width: 32 }}>{i + 1}</td>
+                                <td style={{ fontWeight: 700, color: blueD }}>{r.store}</td>
+                                <td>{r.brand}</td>
+                                <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.invoice_no}</td>
+                                <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.po_no || '—'}</td>
+                                <td style={{ textAlign: 'right' }}>{r.qty ?? '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div style={{ flex: 1, border: '1.5px dashed #d1d5db', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>
+                        Paste data on the left to see preview
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── VIEW ALL TAB ── */}
             {modalTab === 'view' && (
               <div className="modal-body">
                 {/* toolbar */}
@@ -668,7 +814,7 @@ export default function SeasonAWPage() {
                 {awLoading ? (
                   <div style={{ padding: 24, textAlign: 'center', color: '#93c5fd' }}>Loading…</div>
                 ) : (
-                  <div style={{ overflow: 'auto', maxHeight: 420, border: '1px solid #e0e7ff', borderRadius: 8 }}>
+                  <div style={{ overflow: 'auto', maxHeight: 480, border: '1px solid #e0e7ff', borderRadius: 8 }}>
                     <table className="ss-table">
                       <thead>
                         <tr>
@@ -680,6 +826,7 @@ export default function SeasonAWPage() {
                           <th>Qty</th>
                           <th>Status</th>
                           <th>Logged By</th>
+                          <th>Logged At</th>
                           <th>Note</th>
                         </tr>
                       </thead>
@@ -702,6 +849,7 @@ export default function SeasonAWPage() {
                               }
                             </td>
                             <td style={{ color: '#64748b', fontSize: 10 }}>{r.logged_by || '—'}</td>
+                            <td style={{ color: '#64748b', fontSize: 10, whiteSpace: 'nowrap' }}>{r.logged_at ? fmtTs(r.logged_at) : '—'}</td>
                             <td style={{ color: '#64748b', fontSize: 10, maxWidth: 140 }}>{r.note || ''}</td>
                           </tr>
                         ))}
@@ -721,114 +869,6 @@ export default function SeasonAWPage() {
                 </div>
               </div>
             )}
-
-            {/* ── ADD TAB ── */}
-            {modalTab === 'add' && (
-              <div className="modal-body">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxWidth: 500 }}>
-                  <div>
-                    <label style={{ ...labelSt, display: 'block', marginBottom: 3 }}>Store *</label>
-                    <select value={newStore} onChange={e => setNewStore(e.target.value)} style={{ ...inputSt, width: '100%' }}>
-                      <option value="">— Select —</option>
-                      {AW_STORES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ ...labelSt, display: 'block', marginBottom: 3 }}>Brand *</label>
-                    <input value={newBrand} onChange={e => setNewBrand(e.target.value)}
-                      placeholder="Brand name" style={{ ...inputSt, width: '100%' }} />
-                  </div>
-                  <div>
-                    <label style={{ ...labelSt, display: 'block', marginBottom: 3 }}>Invoice # *</label>
-                    <input value={newInv} onChange={e => setNewInv(e.target.value)}
-                      placeholder="Invoice number" style={{ ...inputSt, width: '100%' }} />
-                  </div>
-                  <div>
-                    <label style={{ ...labelSt, display: 'block', marginBottom: 3 }}>PO #</label>
-                    <input value={newPO} onChange={e => setNewPO(e.target.value)}
-                      placeholder="optional" style={{ ...inputSt, width: '100%' }} />
-                  </div>
-                  <div>
-                    <label style={{ ...labelSt, display: 'block', marginBottom: 3 }}>Qty</label>
-                    <input value={newQty} onChange={e => setNewQty(e.target.value)}
-                      type="number" min="0" placeholder="optional" style={{ ...inputSt, width: '100%' }} />
-                  </div>
-                </div>
-                <button onClick={addRow} disabled={adding || !newStore || !newBrand.trim() || !newInv.trim()}
-                  className="aw-btn aw-btn-primary" style={{ marginTop: 14 }}>
-                  {adding ? '…' : '＋ Add Row'}
-                </button>
-              </div>
-            )}
-
-            {/* ── PASTE PROCESSOR TAB ── */}
-            {modalTab === 'paste' && (
-              <div className="modal-body">
-                <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-                  Copy rows from your Excel PO log and paste below. The processor reads:
-                  <strong> Date · Vendor ID · Brand · Store · C.I. · Invoice # · PO # · Season · Source · Qty</strong>
-                </p>
-                <textarea
-                  className="paste-area"
-                  value={pasteText}
-                  onChange={e => handlePasteChange(e.target.value)}
-                  placeholder="Paste tab-separated rows here (copy directly from Excel)…"
-                />
-
-                {pastePreview.length > 0 && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: blueD, marginBottom: 6 }}>
-                      Preview — {pastePreview.length} row{pastePreview.length !== 1 ? 's' : ''} parsed
-                    </div>
-                    <div style={{ overflow: 'auto', maxHeight: 220, border: '1px solid #e0e7ff', borderRadius: 8 }}>
-                      <table className="ss-table">
-                        <thead>
-                          <tr>
-                            <th>#</th>
-                            <th>Store</th>
-                            <th>Brand</th>
-                            <th>Invoice #</th>
-                            <th>PO #</th>
-                            <th>Qty</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pastePreview.map((r, i) => (
-                            <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8faff' }}>
-                              <td style={{ color: '#94a3b8', width: 32 }}>{i + 1}</td>
-                              <td style={{ fontWeight: 700, color: blueD }}>{r.store}</td>
-                              <td>{r.brand}</td>
-                              <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.invoice_no}</td>
-                              <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.po_no || '—'}</td>
-                              <td style={{ textAlign: 'right' }}>{r.qty ?? '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <button onClick={submitPaste} disabled={pasting || pastePreview.length === 0}
-                        className="aw-btn aw-btn-primary">
-                        {pasting ? '…inserting…' : `⚡ Insert ${pastePreview.length} rows`}
-                      </button>
-                      <button onClick={() => { setPasteText(''); setPastePreview([]); setPasteResult(null) }}
-                        className="aw-btn aw-btn-gray">Clear</button>
-                      {pasteResult && (
-                        <span style={{ fontSize: 12, fontWeight: 700, color: pasteResult.skip > 0 ? '#dc2626' : '#15803d' }}>
-                          ✓ {pasteResult.ok} inserted{pasteResult.skip > 0 ? ` · ✕ ${pasteResult.skip} failed` : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {pasteText && pastePreview.length === 0 && (
-                  <div style={{ marginTop: 10, fontSize: 12, color: '#dc2626' }}>
-                    No rows could be parsed. Make sure you copy directly from Excel with all columns present.
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -838,12 +878,18 @@ export default function SeasonAWPage() {
         <div ref={ctxRef} style={{
           position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, background: '#fff',
           border: '1px solid #e0e7ff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-          zIndex: 9000, minWidth: 140, padding: '4px 0', overflow: 'hidden',
+          zIndex: 9000, minWidth: 150, padding: '4px 0', overflow: 'hidden',
         }}>
           <button onClick={() => { const r = awRows.find(x => x.id === ctxMenu.id); if (r) openEdit(r) }}
             style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: blueD, fontWeight: 600, cursor: 'pointer' }}>
             ✏️ Edit
           </button>
+          {(() => { const r = awRows.find(x => x.id === ctxMenu.id); return r?.logged ? (
+            <button onClick={() => unlogRowAdmin(r)}
+              style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: amber, fontWeight: 600, cursor: 'pointer' }}>
+              ↩ Un-log
+            </button>
+          ) : null })()}
           <button onClick={() => deleteRow(ctxMenu.id)}
             style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>
             🗑 Delete
