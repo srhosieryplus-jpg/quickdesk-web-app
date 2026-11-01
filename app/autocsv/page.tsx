@@ -28,24 +28,26 @@ export default function AutoCSVPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [activeTab, setActiveTab] = useState<'processor' | 'logbook'>('processor')
+  // Mobile: which panel is active in the step flow
+  const [mobileStep, setMobileStep] = useState<0|1|2|3>(0)
 
   // Invoice Processor state
   const [vendorCSV, setVendorCSV] = useState('')
   const [posQuery, setPosQuery] = useState('')
   const [posSummary, setPosSummary] = useState('')
   const vendorTaRef = useRef<HTMLTextAreaElement>(null)
-  const posTaRef = useRef<HTMLTextAreaElement>(null)
+  const posTaRef    = useRef<HTMLTextAreaElement>(null)
 
   interface SummaryRow {
     invoice: string; poNum: string; customer: string; qty: number; dupes: number; alreadyLogged: boolean
   }
   const [vendorSummaryRows, setVendorSummaryRows] = useState<SummaryRow[]>([])
-  const [vendorFooter, setVendorFooter] = useState('')
+  const [vendorFooter, setVendorFooter]           = useState('')
 
   // Log Book state
-  const [logEntries, setLogEntries] = useState<LogBookEntry[]>([])
-  const [logFilter, setLogFilter] = useState('')
-  const [logLoading, setLogLoading] = useState(false)
+  const [logEntries, setLogEntries]   = useState<LogBookEntry[]>([])
+  const [logFilter, setLogFilter]     = useState('')
+  const [logLoading, setLogLoading]   = useState(false)
 
   // POS processing state
   interface PosRow {
@@ -55,16 +57,16 @@ export default function AutoCSVPage() {
     storeID: string; newPONumber: string
     isError: boolean
   }
-  const [posRows, setPosRows] = useState<PosRow[]>([])
-  const [posErrors, setPosErrors] = useState<PosRow[]>([])
+  const [posRows, setPosRows]           = useState<PosRow[]>([])
+  const [posErrors, setPosErrors]       = useState<PosRow[]>([])
   const [showErrorModal, setShowErrorModal] = useState(false)
-  const [fixedInput, setFixedInput] = useState('')
+  const [fixedInput, setFixedInput]     = useState('')
   const [showAddFixed, setShowAddFixed] = useState(false)
-  // invoiceGroup → { poNum, customer, storeID, qty } for logged clean rows
-  const [pendingLog, setPendingLog] = useState<Record<string, { poNum: string; customer: string; storeID: string; qty: number }>>({})
+  const [pendingLog, setPendingLog]     = useState<Record<string, { poNum: string; customer: string; storeID: string; qty: number; posQty?: number }>>({})
 
-  const [toast, setToast] = useState('')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [toast, setToast]               = useState('')
+  const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
+  const [loggedInvoices, setLoggedInvoices] = useState<Set<string>>(new Set())
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
@@ -102,68 +104,47 @@ export default function AutoCSVPage() {
     setUser(u)
   }, [router])
 
-  // ── return to selector after screen lock / idle ───────────────────────────
   useEffect(() => {
     let hiddenAt: number | null = null
     const IDLE_MS = 5 * 60 * 1000
-    function onVisibilityChange() {
+    function onVis() {
       if (document.visibilityState === 'hidden') { hiddenAt = Date.now() }
       else if (document.visibilityState === 'visible') {
         if (hiddenAt !== null && Date.now() - hiddenAt >= IDLE_MS) router.push('/selector')
         hiddenAt = null
       }
     }
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
   }, [router])
 
-  useEffect(() => {
-    if (activeTab === 'logbook') fetchLogEntries()
-  }, [activeTab])
+  useEffect(() => { if (activeTab === 'logbook') fetchLogEntries() }, [activeTab])
 
-  // keep a set of already-logged invoice nums for dupe detection
-  const [loggedInvoices, setLoggedInvoices] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    supabase.from('autocsv_log').select('invoice_num').then(({ data }) => {
+      if (data) setLoggedInvoices(new Set(data.map((r: { invoice_num: string }) => r.invoice_num)))
+    })
+  }, [])
 
   async function fetchLogEntries() {
     setLogLoading(true)
-    // Fetch autocsv_log rows
-    const { data: pushData } = await supabase
-      .from('autocsv_log')
-      .select('*')
-      .order('exported_at', { ascending: false })
+    const { data: pushData } = await supabase.from('autocsv_log').select('*').order('exported_at', { ascending: false })
     const pushRows = pushData || []
-
-    // Fetch matching ic_log rows — match order_num against invoice_num OR po_num
     const invoiceNums = pushRows.map((r: { invoice_num: string }) => r.invoice_num)
     const poNums = pushRows.map((r: { po_num: string }) => r.po_num).filter(Boolean)
     const allLookupNums = Array.from(new Set([...invoiceNums, ...poNums]))
-    // icMap keyed by the autocsv_log invoice_num for easy merge
     let icMap: Record<string, { ic_order_num: string; ic_logged_by: string; ic_status: string; ic_note: string }> = {}
     if (allLookupNums.length) {
-      const { data: icData } = await supabase
-        .from('ic_log')
-        .select('order_num, userid, status, note')
-        .in('order_num', allLookupNums)
-      // Build a quick lookup: order_num → ic info
+      const { data: icData } = await supabase.from('ic_log').select('order_num, userid, status, note').in('order_num', allLookupNums)
       type IcRow = { order_num: string; userid: string; status: string; note: string }
       const icByOrderNum: Record<string, IcRow> = {}
-      for (const ic of icData || []) {
-        icByOrderNum[ic.order_num] = ic
-      }
-      // Map back to each autocsv_log row: prefer invoice_num match, fall back to po_num
+      for (const ic of icData || []) icByOrderNum[ic.order_num] = ic
       for (const row of pushRows) {
         const ic = icByOrderNum[row.invoice_num] ?? icByOrderNum[row.po_num] ?? null
         if (!ic) continue
-        icMap[row.invoice_num] = {
-          ic_order_num: ic.order_num,
-          ic_logged_by: ic.userid,
-          ic_status: ic.status,
-          ic_note: ic.note,
-        }
+        icMap[row.invoice_num] = { ic_order_num: ic.order_num, ic_logged_by: ic.userid, ic_status: ic.status, ic_note: ic.note }
       }
     }
-
-    // Merge
     const entries: LogBookEntry[] = pushRows.map((r: {
       id: string; exported_at: string; invoice_num: string; po_num: string
       store: string; qty_total: number; pos_qty: number | null; userid: string
@@ -171,72 +152,49 @@ export default function AutoCSVPage() {
       ...r,
       ic_order_num: icMap[r.invoice_num]?.ic_order_num ?? null,
       ic_logged_by: icMap[r.invoice_num]?.ic_logged_by ?? null,
-      ic_status: icMap[r.invoice_num]?.ic_status ?? null,
-      ic_note: icMap[r.invoice_num]?.ic_note ?? null,
+      ic_status:    icMap[r.invoice_num]?.ic_status ?? null,
+      ic_note:      icMap[r.invoice_num]?.ic_note ?? null,
     }))
-
     setLogEntries(entries)
     setLoggedInvoices(new Set(entries.map(e => e.invoice_num)))
     setLogLoading(false)
   }
-
-  // Load logged invoices on mount so dupe check works without visiting Log Book tab
-  useEffect(() => {
-    supabase.from('autocsv_log').select('invoice_num').then(({ data }) => {
-      if (data) setLoggedInvoices(new Set(data.map((r: { invoice_num: string }) => r.invoice_num)))
-    })
-  }, [])
 
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(''), 2800)
   }
 
+  function blurZoomReset() {
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      ;(document.documentElement.style as any).zoom = '1'
+    }
+  }
+
   function processVendorCSV() {
     if (!vendorCSV.trim()) { showToast('⚠️ Paste vendor CSV data first'); return }
     const allLines = vendorCSV.trim().split('\n')
-    // Skip header row if it starts with "InvoiceNoCompany" (case-insensitive)
     const dataLines = allLines.filter(l => {
       const t = l.trim()
       return t && !/^invoicenocompany/i.test(t)
     })
-
-    // Parse: InvoiceNoCompany PONum Customer Style UPC ShippedQty (tab or space separated)
     const parsed: Record<string, { poNum: string; customer: string; qty: number; dupes: number }> = {}
     const seen = new Set<string>()
     let totalQty = 0
-
     for (const line of dataLines) {
-      // Split on tabs first, fall back to multiple spaces
-      const parts = line.includes('\t')
-        ? line.split('\t').map(s => s.trim())
-        : line.trim().split(/\s{2,}/)
+      const parts = line.includes('\t') ? line.split('\t').map(s => s.trim()) : line.trim().split(/\s{2,}/)
       if (parts.length < 6) continue
       const [invoice, poNum, customer, , upc, qtyStr] = parts
       const qty = parseInt(qtyStr) || 0
       const dupeKey = `${invoice}|${upc}`
-
-      if (!parsed[invoice]) {
-        parsed[invoice] = { poNum, customer, qty: 0, dupes: 0 }
-      }
-      if (seen.has(dupeKey)) {
-        parsed[invoice].dupes++
-      } else {
-        seen.add(dupeKey)
-        parsed[invoice].qty += qty
-        totalQty += qty
-      }
+      if (!parsed[invoice]) parsed[invoice] = { poNum, customer, qty: 0, dupes: 0 }
+      if (seen.has(dupeKey)) { parsed[invoice].dupes++ }
+      else { seen.add(dupeKey); parsed[invoice].qty += qty; totalQty += qty }
     }
-
     const rows = Object.entries(parsed).map(([invoice, v]) => ({
-      invoice,
-      poNum: v.poNum,
-      customer: v.customer,
-      qty: v.qty,
-      dupes: v.dupes,
+      invoice, poNum: v.poNum, customer: v.customer, qty: v.qty, dupes: v.dupes,
       alreadyLogged: loggedInvoices.has(invoice),
     }))
-
     const alreadyLoggedCount = rows.filter(r => r.alreadyLogged).length
     setVendorSummaryRows(rows)
     setVendorFooter(
@@ -244,6 +202,7 @@ export default function AutoCSVPage() {
       (alreadyLoggedCount > 0 ? ` | ⚠ ${alreadyLoggedCount} invoice(s) already in log — possible double import!` : '')
     )
     showToast(`✅ ${dataLines.length} rows · ${rows.length} unique`)
+    setMobileStep(1) // advance to summary on mobile
   }
 
   const POS_COLS = ['','InvoiceNoCompany','PONum','Customer','Style','UPC','ShippedQTY','ID','CreatedPO','ItemNotOnOrder','ValidUPC','POPreviouslyClosed','StoreID','NewPONumber'] as const
@@ -253,9 +212,7 @@ export default function AutoCSVPage() {
       .map(l => l.trim())
       .filter(l => l && !/^invoicenocompany/i.test(l) && !/^\t?InvoiceNoCompany/i.test(l))
       .map(line => {
-        // first column is blank, so split on tab and shift
         const parts = line.split('\t')
-        // handle whether pasted with or without leading blank tab
         const offset = parts[0].trim() === '' ? 1 : 0
         const get = (i: number) => (parts[offset + i] || '').trim()
         const validUPC = get(9)
@@ -274,31 +231,22 @@ export default function AutoCSVPage() {
     if (!posQuery.trim()) { showToast('⚠️ Paste POS query data first'); return }
     const rows = parsePosLines(posQuery)
     if (!rows.length) { showToast('⚠️ No data rows found — check format'); return }
-
     const good = rows.filter(r => !r.isError)
-    const bad = rows.filter(r => r.isError)
-    setPosRows(rows)
-    setPosErrors(bad)
-
-    // Group good rows by invoice for logging
+    const bad  = rows.filter(r => r.isError)
+    setPosRows(rows); setPosErrors(bad)
     const grouped: Record<string, { poNum: string; customer: string; storeID: string; qty: number; posQty: number }> = {}
     for (const r of good) {
       const q = parseInt(r.shippedQty) || 0
       if (!grouped[r.invoice]) grouped[r.invoice] = { poNum: r.poNum, customer: r.customer, storeID: r.storeID, qty: 0, posQty: 0 }
-      grouped[r.invoice].qty += q
-      grouped[r.invoice].posQty += q
+      grouped[r.invoice].qty += q; grouped[r.invoice].posQty += q
     }
     setPendingLog(grouped)
-
-    // Build POS summary string for bottom-right panel
     const invLines: string[] = []
-    for (const [inv, v] of Object.entries(grouped)) {
-      invLines.push(`${inv}\t${v.poNum}\t${v.customer}\t${v.storeID}\t${v.qty}`)
-    }
+    for (const [inv, v] of Object.entries(grouped)) invLines.push(`${inv}\t${v.poNum}\t${v.customer}\t${v.storeID}\t${v.qty}`)
     setPosSummary(['InvoiceNoCompany\tPONum\tCustomer\tStoreID\tShippedQty (sum)', ...invLines].join('\n'))
-
     showToast(`✅ ${good.length} clean · ${bad.length} error${bad.length !== 1 ? 's' : ''}`)
     if (bad.length > 0) setShowAddFixed(false)
+    setMobileStep(3) // advance to POS summary on mobile
   }
 
   async function logToSupabase(
@@ -310,15 +258,11 @@ export default function AutoCSVPage() {
     for (const [invoice, v] of Object.entries(grouped)) {
       if (!allowDupes && loggedInvoices.has(invoice)) { skipped++; continue }
       await supabase.from('autocsv_log').insert({
-        invoice_num: invoice,
-        po_num: v.poNum,
-        store: v.storeID || user.store,
-        qty_total: v.qty,
-        pos_qty: v.posQty ?? null,
-        userid: user.userid,
+        invoice_num: invoice, po_num: v.poNum,
+        store: v.storeID || user.store, qty_total: v.qty,
+        pos_qty: v.posQty ?? null, userid: user.userid,
       })
     }
-    // refresh logged set
     const { data } = await supabase.from('autocsv_log').select('invoice_num')
     if (data) setLoggedInvoices(new Set(data.map((r: { invoice_num: string }) => r.invoice_num)))
     return skipped
@@ -341,25 +285,16 @@ export default function AutoCSVPage() {
       if (!grouped[r.invoice]) grouped[r.invoice] = { poNum: r.poNum, customer: r.customer, storeID: r.storeID, qty: 0 }
       grouped[r.invoice].qty += q
     }
-    // Force-insert even if duplicate (user is intentionally adding to existing log)
     await logToSupabase(grouped, true)
     showToast(`✅ Added ${Object.keys(grouped).length} fixed invoice(s) to log`)
-    setFixedInput('')
-    setShowAddFixed(false)
+    setFixedInput(''); setShowAddFixed(false)
   }
 
   function clearAll() {
-    setVendorCSV('')
-    setVendorSummaryRows([])
-    setVendorFooter('')
-    setPosQuery('')
-    setPosSummary('')
-    setPosRows([])
-    setPosErrors([])
-    setPendingLog({})
-    setShowAddFixed(false)
-    setFixedInput('')
-    setShowErrorModal(false)
+    setVendorCSV(''); setVendorSummaryRows([]); setVendorFooter('')
+    setPosQuery(''); setPosSummary(''); setPosRows([]); setPosErrors([])
+    setPendingLog({}); setShowAddFixed(false); setFixedInput('')
+    setShowErrorModal(false); setMobileStep(0)
   }
 
   if (!user) return null
@@ -376,9 +311,8 @@ export default function AutoCSVPage() {
   const taStyle: React.CSSProperties = {
     width: '100%', height: '100%', resize: 'none',
     background: '#faf9ff', border: 'none', outline: 'none',
-    fontFamily: 'monospace', fontSize: 11, color: '#2d1f6e',
-    lineHeight: 1.5, padding: '10px 12px',
-    boxSizing: 'border-box',
+    fontFamily: 'monospace', fontSize: 16, color: '#2d1f6e',
+    lineHeight: 1.5, padding: '10px 12px', boxSizing: 'border-box',
   }
 
   const panelStyle: React.CSSProperties = {
@@ -391,7 +325,7 @@ export default function AutoCSVPage() {
   const panelHeaderStyle: React.CSSProperties = {
     background: purpleLight, borderBottom: `1px solid ${border}`,
     padding: '7px 12px', display: 'flex', alignItems: 'center',
-    justifyContent: 'space-between', flexShrink: 0,
+    justifyContent: 'space-between', flexShrink: 0, flexWrap: 'wrap', gap: 6,
   }
 
   const panelLabelStyle: React.CSSProperties = {
@@ -401,11 +335,51 @@ export default function AutoCSVPage() {
 
   const smBtn = (bg: string, color: string): React.CSSProperties => ({
     background: bg, color, border: 'none', borderRadius: 5,
-    padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+    padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
   })
 
+  // Mobile step labels
+  const STEPS = ['1 · Vendor CSV', '2 · Summary', '3 · POS Query', '4 · POS Result']
+
   return (
-    <div style={{ minHeight: '100vh', background: '#eeeaf6', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: '#eeeaf6', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, sans-serif' }}>
+      <style>{`
+        * { box-sizing: border-box; }
+        .acsv-grid {
+          flex: 1; display: grid;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 1fr 1fr;
+          gap: 12px; padding: 16px; min-height: 0;
+        }
+        @media (max-width: 700px) {
+          .acsv-grid { grid-template-columns: 1fr; grid-template-rows: none; gap: 8px; padding: 8px; }
+          .acsv-panel { min-height: 320px; }
+          .acsv-panel-hide { display: none !important; }
+          .acsv-panel-show { display: flex !important; }
+          .acsv-ta { font-size: 16px !important; min-height: 220px; }
+          .acsv-step-bar { display: flex !important; }
+          .acsv-hdr-hint { display: none; }
+          .log-toolbar { flex-wrap: wrap; }
+          .log-search { font-size: 16px !important; }
+        }
+        @media (min-width: 701px) {
+          .acsv-panel { display: flex !important; }
+          .acsv-step-bar { display: none !important; }
+        }
+        .acsv-step-bar {
+          display: none;
+          overflow-x: auto; gap: 4px; padding: 8px 12px;
+          background: rgba(255,255,255,0.5); border-bottom: 1px solid ${border};
+          flex-shrink: 0;
+        }
+        .step-btn {
+          padding: 6px 14px; border-radius: 20px; border: 1.5px solid ${border};
+          background: #fff; color: #9b8ec4; font-size: 11px; font-weight: 700;
+          cursor: pointer; white-space: nowrap; flex-shrink: 0;
+        }
+        .step-btn.active { background: ${purple}; color: #fff; border-color: ${purple}; }
+        .step-btn.done { background: #dcfce7; color: #15803d; border-color: #86efac; }
+      `}</style>
 
       {/* Toast */}
       {toast && (
@@ -413,6 +387,7 @@ export default function AutoCSVPage() {
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
           background: '#1e1b4b', color: '#fff', borderRadius: 10, padding: '10px 20px',
           fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          whiteSpace: 'nowrap',
         }}>{toast}</div>
       )}
 
@@ -425,30 +400,26 @@ export default function AutoCSVPage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <button onClick={() => router.push('/selector')}
-            style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer', color: '#5b21b6', fontWeight: 600 }}>
+            style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 12px', fontSize: 13, cursor: 'pointer', color: '#5b21b6', fontWeight: 600 }}>
             ← Back
           </button>
-          <span style={{ fontSize: 12, color: '#9b8ec4', fontWeight: 600 }}>
-            {user.userid} · {user.store}
-          </span>
+          <span style={{ fontSize: 12, color: '#9b8ec4', fontWeight: 600 }}>{user.userid} · {user.store}</span>
         </div>
 
         <div style={{ display: 'flex', flex: 1, justifyContent: 'center', pointerEvents: 'none' }}>
-          <h2 style={{ fontSize: 15, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.04em', margin: 0 }}>
-            ⚡ AUTO CSV
-          </h2>
+          <h2 style={{ fontSize: 15, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.04em', margin: 0 }}>⚡ AUTO CSV</h2>
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           {activeTab === 'processor' && (
             <button onClick={clearAll}
-              style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-              🗑 Clear All
+              style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              🗑 Clear
             </button>
           )}
           {activeTab === 'logbook' && (
             <button onClick={fetchLogEntries}
-              style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: purple }}>
+              style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: purple }}>
               🔄 Refresh
             </button>
           )}
@@ -458,11 +429,11 @@ export default function AutoCSVPage() {
       {/* Tabs */}
       <div style={{
         display: 'flex', borderBottom: `2px solid ${border}`,
-        background: 'rgba(255,255,255,0.5)', padding: '0 24px', flexShrink: 0,
+        background: 'rgba(255,255,255,0.5)', padding: '0 16px', flexShrink: 0,
       }}>
         {(['processor', 'logbook'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
-            padding: '7px 16px', fontSize: 12, fontWeight: 700,
+            padding: '8px 16px', fontSize: 13, fontWeight: 700,
             background: 'none', border: 'none', cursor: 'pointer',
             color: activeTab === tab ? purple : '#9b8ec4',
             borderBottom: activeTab === tab ? `3px solid ${purple}` : '3px solid transparent',
@@ -474,199 +445,229 @@ export default function AutoCSVPage() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* TAB 1: Invoice Processor — 4-panel grid                            */}
+      {/* TAB 1: Invoice Processor                                            */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'processor' && (
-        <div style={{
-          flex: 1, display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gridTemplateRows: '1fr 1fr',
-          gap: 12, padding: 16,
-          minHeight: 0,
-        }}>
-
-          {/* TOP-LEFT: Vendor CSV input */}
-          <div style={panelStyle}>
-            <div style={panelHeaderStyle}>
-              <span style={panelLabelStyle}>Vendor CSV</span>
-              <span style={{ fontSize: 10, color: '#b8aed8' }}>InvoiceNoCompany · PONum · Customer · Style · UPC · ShippedQty</span>
-              <button onClick={processVendorCSV} style={smBtn(purple, '#fff')}>▶ Process</button>
-            </div>
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              <textarea
-                ref={vendorTaRef}
-                value={vendorCSV}
-                onChange={e => { setVendorCSV(e.target.value); requestAnimationFrame(() => { if (vendorTaRef.current) vendorTaRef.current.scrollTop = 0 }) }}
-                placeholder="Paste vendor CSV data here..."
-                style={taStyle}
-              />
-            </div>
-            <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
-              {vendorCSV.trim()
-                ? `✓ ${vendorCSV.trim().split('\n').filter(l => l.trim() && !/^invoicenocompany/i.test(l.trim())).length} rows`
-                : 'No data'}
-            </div>
+        <>
+          {/* Mobile step nav bar */}
+          <div className="acsv-step-bar">
+            {STEPS.map((label, i) => {
+              const isDone = (i === 0 && vendorSummaryRows.length > 0) ||
+                             (i === 1 && vendorSummaryRows.length > 0) ||
+                             (i === 2 && posRows.length > 0) ||
+                             (i === 3 && posSummary)
+              return (
+                <button key={i}
+                  className={`step-btn${mobileStep === i ? ' active' : isDone ? ' done' : ''}`}
+                  onClick={() => setMobileStep(i as 0|1|2|3)}>
+                  {label}
+                </button>
+              )
+            })}
           </div>
 
-          {/* TOP-RIGHT: Vendor Summary + Errors */}
-          <div style={panelStyle}>
-            <div style={panelHeaderStyle}>
-              <span style={panelLabelStyle}>Summary + Errors</span>
+          <div className="acsv-grid">
+
+            {/* PANEL 0 — Vendor CSV input */}
+            <div className={`acsv-panel ${panelStyle ? '' : ''}`}
+              style={{ ...panelStyle, display: mobileStep === 0 ? 'flex' : undefined }}
+              // on desktop always visible; on mobile only when step=0 (handled by CSS class)
+            >
+              <div style={{ ...panelHeaderStyle }}>
+                <span style={panelLabelStyle}>Vendor CSV</span>
+                <span className="acsv-hdr-hint" style={{ fontSize: 10, color: '#b8aed8' }}>InvoiceNoCompany · PONum · Customer · Style · UPC · ShippedQty</span>
+                <button onClick={processVendorCSV} style={smBtn(purple, '#fff')}>▶ Process</button>
+              </div>
+              <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                <textarea
+                  ref={vendorTaRef}
+                  value={vendorCSV}
+                  onChange={e => { setVendorCSV(e.target.value); requestAnimationFrame(() => { if (vendorTaRef.current) vendorTaRef.current.scrollTop = 0 }) }}
+                  onBlur={blurZoomReset}
+                  placeholder="Paste vendor CSV data here…"
+                  className="acsv-ta"
+                  style={taStyle}
+                />
+              </div>
+              <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 11, color: '#9b8ec4' }}>
+                {vendorCSV.trim()
+                  ? `✓ ${vendorCSV.trim().split('\n').filter(l => l.trim() && !/^invoicenocompany/i.test(l.trim())).length} rows`
+                  : 'No data — paste vendor CSV above'}
+              </div>
             </div>
-            <div style={{ flex: 1, overflow: 'auto' }}>
-              {vendorSummaryRows.length > 0 ? (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+
+            {/* PANEL 1 — Vendor Summary */}
+            <div className="acsv-panel"
+              style={{ ...panelStyle, display: mobileStep === 1 ? 'flex' : undefined }}>
+              <div style={panelHeaderStyle}>
+                <span style={panelLabelStyle}>Summary + Errors</span>
+                {vendorSummaryRows.length > 0 && (
+                  <span style={{ fontSize: 10, color: vendorFooter.includes('⚠') ? '#dc2626' : '#15803d', fontWeight: 700 }}>
+                    {vendorSummaryRows.length} invoice{vendorSummaryRows.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                {vendorSummaryRows.length > 0 ? (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
+                        {['Invoice #','PO #','Customer','Qty','Dupes','Already Logged?'].map(h => (
+                          <th key={h} style={{ padding: '7px 10px', fontWeight: 800, color: purple, textAlign: 'left', whiteSpace: 'nowrap', fontSize: 10, letterSpacing: '0.04em' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vendorSummaryRows.map((row, i) => (
+                        <tr key={i} style={{ background: row.alreadyLogged ? '#fff1f2' : i % 2 === 0 ? '#fff' : '#faf8ff', borderBottom: `1px solid ${border}` }}>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: row.alreadyLogged ? '#dc2626' : '#2d1f6e', fontWeight: 600 }}>{row.invoice}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#555' }}>{row.poNum}</td>
+                          <td style={{ padding: '6px 10px', color: '#555', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.customer}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 600 }}>{row.qty}</td>
+                          <td style={{ padding: '6px 10px', color: row.dupes > 0 ? '#f59e0b' : '#aaa' }}>{row.dupes > 0 ? row.dupes : ''}</td>
+                          <td style={{ padding: '6px 10px', color: '#dc2626', fontWeight: 700 }}>{row.alreadyLogged ? '⚠ DUPE' : ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div style={{ padding: 24, color: '#c4b5fd', fontSize: 12, textAlign: 'center' }}>Process vendor CSV to see summary</div>
+                )}
+              </div>
+              <div style={{ padding: '6px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: vendorFooter.includes('⚠') ? '#dc2626' : '#9b8ec4' }}>
+                {vendorFooter || ' '}
+              </div>
+            </div>
+
+            {/* PANEL 2 — POS Query input */}
+            <div className="acsv-panel"
+              style={{ ...panelStyle, display: mobileStep === 2 ? 'flex' : undefined }}>
+              <div style={panelHeaderStyle}>
+                <span style={panelLabelStyle}>POS Query</span>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {posErrors.length > 0 && (
+                    <button onClick={() => setShowErrorModal(true)} style={smBtn('#fff3cd', '#92400e')}>
+                      ⚠ Errors ({posErrors.length})
+                    </button>
+                  )}
+                  <button onClick={processPosQuery} style={smBtn('#e0e7ff', '#3730a3')}>▶ Process</button>
+                  <button onClick={handleProcessAndLog} style={smBtn(purple, '#fff')}>📥 Log</button>
+                </div>
+              </div>
+
+              {/* Fixed header row — hidden on mobile to save space */}
+              <div style={{ overflowX: 'auto', flexShrink: 0, borderBottom: `1px solid ${border}` }} className="acsv-hdr-hint">
+                <table style={{ borderCollapse: 'collapse', fontSize: 10, width: '100%' }}>
                   <thead>
-                    <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
-                      {['InvoiceNoCompany','PONum','Customer','ShippedQty (sum)','Dupes','⚠ Already Logged?'].map(h => (
-                        <th key={h} style={{ padding: '7px 10px', fontWeight: 800, color: purple, textAlign: 'left', whiteSpace: 'nowrap', fontSize: 10, letterSpacing: '0.04em' }}>{h}</th>
+                    <tr style={{ background: '#f0ebff' }}>
+                      {POS_COLS.map((col, i) => (
+                        <th key={i} style={{
+                          padding: '5px 8px', textAlign: 'left', fontWeight: 800,
+                          color: col === 'ValidUPC' ? '#dc2626' : purple,
+                          whiteSpace: 'nowrap', letterSpacing: '0.03em',
+                          minWidth: i === 0 ? 24 : undefined,
+                          borderRight: `1px solid ${border}`,
+                        }}>{col}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody>
-                    {vendorSummaryRows.map((row, i) => (
-                      <tr key={i} style={{
-                        background: row.alreadyLogged ? '#fff1f2' : i % 2 === 0 ? '#fff' : '#faf8ff',
-                        borderBottom: `1px solid ${border}`,
-                      }}>
-                        <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: row.alreadyLogged ? '#dc2626' : '#2d1f6e', fontWeight: 600 }}>{row.invoice}</td>
-                        <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#555' }}>{row.poNum}</td>
-                        <td style={{ padding: '6px 10px', color: '#555' }}>{row.customer}</td>
-                        <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#333', fontWeight: 600 }}>{row.qty}</td>
-                        <td style={{ padding: '6px 10px', color: row.dupes > 0 ? '#f59e0b' : '#aaa' }}>{row.dupes > 0 ? row.dupes : ''}</td>
-                        <td style={{ padding: '6px 10px', color: '#dc2626', fontWeight: 700 }}>{row.alreadyLogged ? '⚠ DUPLICATE' : ''}</td>
-                      </tr>
-                    ))}
-                  </tbody>
                 </table>
-              ) : null}
-            </div>
-            <div style={{ padding: '6px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: vendorFooter.includes('⚠') ? '#dc2626' : '#9b8ec4' }}>
-              {vendorFooter || ' '}
-            </div>
-          </div>
-
-          {/* BOTTOM-LEFT: POS Query input */}
-          <div style={panelStyle}>
-            <div style={panelHeaderStyle}>
-              <span style={panelLabelStyle}>POS Query</span>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {posErrors.length > 0 && (
-                  <button onClick={() => setShowErrorModal(true)} style={smBtn('#fff3cd', '#92400e')}>
-                    ⚠ View Errors ({posErrors.length})
-                  </button>
-                )}
-                <button onClick={processPosQuery} style={smBtn('#e0e7ff', '#3730a3')}>▶ Process</button>
-                <button onClick={handleProcessAndLog} style={smBtn(purple, '#fff')}>📥 Log</button>
               </div>
-            </div>
 
-            {/* Fixed header row */}
-            <div style={{ overflowX: 'auto', flexShrink: 0, borderBottom: `1px solid ${border}` }}>
-              <table style={{ borderCollapse: 'collapse', fontSize: 10, width: '100%' }}>
-                <thead>
-                  <tr style={{ background: '#f0ebff' }}>
-                    {POS_COLS.map((col, i) => (
-                      <th key={i} style={{
-                        padding: '5px 8px', textAlign: 'left', fontWeight: 800,
-                        color: col === 'ValidUPC' ? '#dc2626' : purple,
-                        whiteSpace: 'nowrap', letterSpacing: '0.03em',
-                        minWidth: i === 0 ? 24 : undefined,
-                        borderRight: `1px solid ${border}`,
-                      }}>{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-              </table>
-            </div>
-
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              <textarea
-                ref={posTaRef}
-                value={posQuery}
-                onChange={e => { setPosQuery(e.target.value); requestAnimationFrame(() => { if (posTaRef.current) posTaRef.current.scrollTop = 0 }) }}
-                placeholder="Paste system response here..."
-                style={{ ...taStyle, fontSize: 10 }}
-              />
-            </div>
-            <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
-              {posRows.length > 0
-                ? `${posRows.length} rows · ${posRows.filter(r=>!r.isError).length} clean · ${posErrors.length} error${posErrors.length !== 1 ? 's' : ''}`
-                : posQuery.trim() ? `${posQuery.trim().split('\n').filter(l => l.trim()).length} rows pasted` : 'No data'}
-            </div>
-
-            {/* Add Fixed section — appears after logging when errors exist */}
-            {showAddFixed && (
-              <div style={{ borderTop: `2px solid #fcd34d`, background: '#fffbeb', padding: 10, flexShrink: 0 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#92400e', marginBottom: 6 }}>
-                  ✏️ ADD FIXED ROWS — paste corrected rows below (will append to existing log, no dupe warning)
-                </div>
+              <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
                 <textarea
-                  value={fixedInput}
-                  onChange={e => setFixedInput(e.target.value)}
-                  placeholder="Paste corrected rows here..."
-                  style={{ ...taStyle, height: 80, background: '#fff', border: `1px solid #fcd34d`, borderRadius: 6, fontSize: 10 }}
+                  ref={posTaRef}
+                  value={posQuery}
+                  onChange={e => { setPosQuery(e.target.value); requestAnimationFrame(() => { if (posTaRef.current) posTaRef.current.scrollTop = 0 }) }}
+                  onBlur={blurZoomReset}
+                  placeholder="Paste POS system response here…"
+                  className="acsv-ta"
+                  style={{ ...taStyle, fontSize: 16 }}
                 />
-                <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
-                  <button onClick={() => { setShowAddFixed(false); setFixedInput('') }} style={smBtn('#f3f4f6', '#6b7280')}>Cancel</button>
-                  <button onClick={handleAddFixed} style={smBtn('#16a34a', '#fff')}>✅ Add to Log</button>
-                </div>
               </div>
-            )}
-          </div>
+              <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 11, color: '#9b8ec4' }}>
+                {posRows.length > 0
+                  ? `${posRows.length} rows · ${posRows.filter(r=>!r.isError).length} clean · ${posErrors.length} error${posErrors.length !== 1 ? 's' : ''}`
+                  : posQuery.trim() ? `${posQuery.trim().split('\n').filter(l => l.trim()).length} rows pasted` : 'No data — paste POS query above'}
+              </div>
 
-          {/* BOTTOM-RIGHT: POS Summary */}
-          <div style={panelStyle}>
-            <div style={panelHeaderStyle}>
-              <span style={panelLabelStyle}>POS Summary</span>
-              {posRows.length > 0 && (
-                <span style={{ fontSize: 10, color: posErrors.length > 0 ? '#dc2626' : '#16a34a', fontWeight: 700 }}>
-                  {posErrors.length > 0 ? `⚠ ${posErrors.length} error${posErrors.length !== 1 ? 's' : ''} — log excludes them` : '✅ All rows clean'}
-                </span>
+              {showAddFixed && (
+                <div style={{ borderTop: `2px solid #fcd34d`, background: '#fffbeb', padding: 10, flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#92400e', marginBottom: 6 }}>
+                    ✏️ ADD FIXED ROWS — paste corrected rows below
+                  </div>
+                  <textarea
+                    value={fixedInput}
+                    onChange={e => setFixedInput(e.target.value)}
+                    onBlur={blurZoomReset}
+                    placeholder="Paste corrected rows here…"
+                    style={{ ...taStyle, height: 90, background: '#fff', border: `1px solid #fcd34d`, borderRadius: 6, fontSize: 16 }}
+                  />
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setShowAddFixed(false); setFixedInput('') }} style={smBtn('#f3f4f6', '#6b7280')}>Cancel</button>
+                    <button onClick={handleAddFixed} style={smBtn('#16a34a', '#fff')}>✅ Add to Log</button>
+                  </div>
+                </div>
               )}
             </div>
-            <div style={{ flex: 1, overflow: 'auto' }}>
-              {posSummary ? (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                  <thead>
-                    <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
-                      {['InvoiceNoCompany','PONum','Customer','StoreID','ShippedQty (sum)'].map(h => (
-                        <th key={h} style={{ padding: '7px 10px', fontWeight: 800, color: purple, textAlign: 'left', whiteSpace: 'nowrap', fontSize: 10 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {posSummary.split('\n').slice(1).map((line, i) => {
-                      const [inv, poNum, customer, storeID, qty] = line.split('\t')
-                      return (
-                        <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#faf8ff', borderBottom: `1px solid ${border}` }}>
-                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 700, color: '#2d1f6e' }}>{inv}</td>
-                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#555' }}>{poNum}</td>
-                          <td style={{ padding: '6px 10px', color: '#555' }}>{customer}</td>
-                          <td style={{ padding: '6px 10px', color: '#555' }}>{storeID}</td>
-                          <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 700 }}>{qty}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              ) : null}
-            </div>
-            {posSummary && (
-              <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 10, color: '#9b8ec4' }}>
-                {posSummary.split('\n').length - 1} unique invoice{posSummary.split('\n').length - 1 !== 1 ? 's' : ''}
+
+            {/* PANEL 3 — POS Summary */}
+            <div className="acsv-panel"
+              style={{ ...panelStyle, display: mobileStep === 3 ? 'flex' : undefined }}>
+              <div style={panelHeaderStyle}>
+                <span style={panelLabelStyle}>POS Summary</span>
+                {posRows.length > 0 && (
+                  <span style={{ fontSize: 10, color: posErrors.length > 0 ? '#dc2626' : '#16a34a', fontWeight: 700 }}>
+                    {posErrors.length > 0 ? `⚠ ${posErrors.length} error${posErrors.length !== 1 ? 's' : ''} excluded` : '✅ All rows clean'}
+                  </span>
+                )}
               </div>
-            )}
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                {posSummary ? (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
+                        {['Invoice #','PO #','Customer','StoreID','Qty'].map(h => (
+                          <th key={h} style={{ padding: '7px 10px', fontWeight: 800, color: purple, textAlign: 'left', whiteSpace: 'nowrap', fontSize: 10 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {posSummary.split('\n').slice(1).map((line, i) => {
+                        const [inv, poNum, customer, storeID, qty] = line.split('\t')
+                        return (
+                          <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#faf8ff', borderBottom: `1px solid ${border}` }}>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 700, color: '#2d1f6e' }}>{inv}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#555' }}>{poNum}</td>
+                            <td style={{ padding: '6px 10px', color: '#555', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{customer}</td>
+                            <td style={{ padding: '6px 10px', color: '#555' }}>{storeID}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 700 }}>{qty}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div style={{ padding: 24, color: '#c4b5fd', fontSize: 12, textAlign: 'center' }}>Process POS query to see summary</div>
+                )}
+              </div>
+              {posSummary && (
+                <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 11, color: '#9b8ec4' }}>
+                  {posSummary.split('\n').length - 1} unique invoice{posSummary.split('\n').length - 1 !== 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
+
           </div>
 
           {/* Error Modal */}
           {showErrorModal && (
             <div style={{
               position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12,
             }} onClick={() => setShowErrorModal(false)}>
               <div style={{
-                background: '#fff', borderRadius: 14, width: '80%', maxWidth: 900, maxHeight: '75vh',
+                background: '#fff', borderRadius: 14, width: '100%', maxWidth: 900, maxHeight: '80vh',
                 display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
                 overflow: 'hidden',
               }} onClick={e => e.stopPropagation()}>
@@ -678,7 +679,7 @@ export default function AutoCSVPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>
                       <tr style={{ background: '#fef2f2', borderBottom: '2px solid #fecaca', position: 'sticky', top: 0 }}>
-                        {['InvoiceNoCompany','PONum','Customer','Style','UPC','ShippedQTY','ValidUPC','StoreID'].map(h => (
+                        {['Invoice #','PO #','Customer','Style','UPC','ShippedQTY','ValidUPC','StoreID'].map(h => (
                           <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: h === 'ValidUPC' ? '#dc2626' : '#7f1d1d', fontWeight: 800, fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -699,25 +700,22 @@ export default function AutoCSVPage() {
                     </tbody>
                   </table>
                 </div>
-                <div style={{ padding: '10px 20px', borderTop: '1px solid #fecaca', background: '#fff1f2', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <div style={{ padding: '10px 20px', borderTop: '1px solid #fecaca', background: '#fff1f2', display: 'flex', justifyContent: 'flex-end' }}>
                   <button onClick={() => setShowErrorModal(false)} style={smBtn('#dc2626', '#fff')}>Close</button>
                 </div>
               </div>
             </div>
           )}
-
-        </div>
+        </>
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* TAB 2: Log Book                                                     */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'logbook' && (
-        <div style={{ padding: '12px 20px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div style={{ padding: '12px 16px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
-          {/* Toolbar row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexShrink: 0 }}>
-            {/* Left: title + count */}
+          <div className="log-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexShrink: 0 }}>
             <div style={{ flexShrink: 0 }}>
               <h3 style={{ fontSize: 13, fontWeight: 800, color: '#3b1f8c', margin: 0 }}>Push Log &amp; IC Cross-Reference</h3>
               <p style={{ fontSize: 10, color: '#9b8ec4', margin: 0 }}>
@@ -726,37 +724,32 @@ export default function AutoCSVPage() {
               </p>
             </div>
 
-            {/* Center: search */}
             <input
+              className="log-search"
               value={logFilter}
               onChange={e => setLogFilter(e.target.value)}
-              placeholder="Search invoice, PO, store, user..."
+              onBlur={blurZoomReset}
+              placeholder="Search invoice, PO, store, user…"
               style={{
                 flex: 1, background: '#f5f3ff', border: `1.5px solid ${border}`,
-                borderRadius: 8, padding: '7px 14px', fontSize: 12,
-                color: '#3b1f8c', fontWeight: 600, outline: 'none',
+                borderRadius: 8, padding: '8px 14px', fontSize: 16,
+                color: '#3b1f8c', fontWeight: 600, outline: 'none', minWidth: 0,
               }}
             />
 
-            {/* Right: action buttons */}
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <button
-                onClick={() => copyLog(filteredLog)}
-                style={smBtn('#e0e7ff', '#3730a3')}
-              >📋 Copy</button>
-              <button
-                onClick={deleteSelected}
-                disabled={selectedIds.size === 0}
-                style={{ ...smBtn('#fee2e2', '#dc2626'), opacity: selectedIds.size === 0 ? 0.4 : 1, cursor: selectedIds.size === 0 ? 'default' : 'pointer' }}
-              >🗑 Delete Sel{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}</button>
+              <button onClick={() => copyLog(filteredLog)} style={smBtn('#e0e7ff', '#3730a3')}>📋 Copy</button>
+              <button onClick={deleteSelected} disabled={selectedIds.size === 0}
+                style={{ ...smBtn('#fee2e2', '#dc2626'), opacity: selectedIds.size === 0 ? 0.4 : 1, cursor: selectedIds.size === 0 ? 'default' : 'pointer' }}>
+                🗑{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+              </button>
             </div>
           </div>
 
           <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'auto', flex: 1, boxShadow: '0 2px 16px rgba(124,58,237,0.07)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                 <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
-                  {/* Checkbox select-all */}
                   <th style={{ padding: '10px 10px', width: 32 }}>
                     <input type="checkbox"
                       checked={filteredLog.length > 0 && selectedIds.size === filteredLog.length}
@@ -766,16 +759,16 @@ export default function AutoCSVPage() {
                   </th>
                   {[
                     { label: 'Timestamp', ic: false },
-                    { label: 'Invoice #', ic: false },
-                    { label: 'PO #', ic: false },
-                    { label: 'Store', ic: false },
-                    { label: 'CSV Qty', ic: false },
-                    { label: 'POS Qty', ic: false },
-                    { label: 'Match', ic: false },
+                    { label: 'Invoice #',  ic: false },
+                    { label: 'PO #',       ic: false },
+                    { label: 'Store',      ic: false },
+                    { label: 'CSV Qty',    ic: false },
+                    { label: 'POS Qty',    ic: false },
+                    { label: 'Match',      ic: false },
                     { label: 'IC Order #', ic: true },
-                    { label: 'Logged By', ic: true },
-                    { label: 'IC Status', ic: true },
-                    { label: 'Note', ic: true },
+                    { label: 'Logged By',  ic: true },
+                    { label: 'IC Status',  ic: true },
+                    { label: 'Note',       ic: true },
                   ].map(({ label, ic }) => (
                     <th key={label} style={{
                       padding: '10px 12px', textAlign: 'left', fontSize: 10,
@@ -788,24 +781,21 @@ export default function AutoCSVPage() {
               </thead>
               <tbody>
                 {logLoading ? (
-                  <tr><td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd', fontSize: 13 }}>Loading...</td></tr>
+                  <tr><td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd', fontSize: 13 }}>Loading…</td></tr>
                 ) : filteredLog.length === 0 ? (
-                  <tr>
-                    <td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd' }}>No entries yet</td>
-                  </tr>
+                  <tr><td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd' }}>No entries yet</td></tr>
                 ) : filteredLog.map((e, i) => {
                   const csvQty = e.qty_total
                   const posQty = e.pos_qty ?? null
-                  const match = posQty !== null ? csvQty === posQty : null
-                  const hasIC = !!e.ic_order_num
-                  const isComplete = hasIC
-                  const isSel = selectedIds.has(e.id)
-                  const d = new Date(e.exported_at)
+                  const match  = posQty !== null ? csvQty === posQty : null
+                  const hasIC  = !!e.ic_order_num
+                  const isSel  = selectedIds.has(e.id)
+                  const d  = new Date(e.exported_at)
                   const ts = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${String(d.getHours()%12||12).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
                   return (
                     <tr key={e.id} style={{
-                      borderTop: i === 0 ? 'none' : `1px solid ${isComplete ? '#bbf7d0' : '#f0ebff'}`,
-                      background: isSel ? '#ede9fe' : isComplete ? (i % 2 === 0 ? '#dcfce7' : '#d1fae5') : i % 2 === 0 ? '#fff' : '#faf8ff',
+                      borderTop: i === 0 ? 'none' : `1px solid ${hasIC ? '#bbf7d0' : '#f0ebff'}`,
+                      background: isSel ? '#ede9fe' : hasIC ? (i%2===0 ? '#dcfce7' : '#d1fae5') : i%2===0 ? '#fff' : '#faf8ff',
                     }}>
                       <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                         <input type="checkbox" checked={isSel} onChange={() => toggleSelect(e.id)} style={{ cursor: 'pointer' }} />
@@ -813,8 +803,8 @@ export default function AutoCSVPage() {
                       <td style={{ padding: '8px 12px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>{ts}</td>
                       <td style={{ padding: '8px 12px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace' }}>{e.invoice_num}</td>
                       <td style={{ padding: '8px 12px', fontSize: 12, color: '#333', fontFamily: 'monospace' }}>{e.po_num || '—'}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, color: '#333', fontWeight: 600 }}>{e.store}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, color: '#333', textAlign: 'center', fontFamily: 'monospace' }}>{csvQty}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600 }}>{e.store}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'center', fontFamily: 'monospace' }}>{csvQty}</td>
                       <td style={{ padding: '8px 12px', fontSize: 12, color: posQty !== null ? '#333' : '#d1d5db', textAlign: 'center', fontFamily: 'monospace' }}>{posQty ?? '—'}</td>
                       <td style={{ padding: '8px 12px', fontSize: 13, textAlign: 'center', borderRight: `2px solid ${border}` }}>
                         {match === true ? <span style={{ color: '#16a34a', fontWeight: 800 }}>✓</span>
@@ -822,10 +812,7 @@ export default function AutoCSVPage() {
                           : ''}
                       </td>
                       <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'monospace', color: hasIC ? '#0369a1' : '#d1d5db', fontWeight: hasIC ? 700 : 400 }}>{e.ic_order_num || '—'}</td>
-                      {/* Logged By = ic_log userid (store side), not autocsv userid */}
-                      <td style={{ padding: '8px 12px', fontSize: 12, color: e.ic_logged_by ? '#0369a1' : '#6b7280' }}>
-                        {e.ic_logged_by || <span style={{ color: '#d1d5db' }}>—</span>}
-                      </td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, color: e.ic_logged_by ? '#0369a1' : '#6b7280' }}>{e.ic_logged_by || <span style={{ color: '#d1d5db' }}>—</span>}</td>
                       <td style={{ padding: '8px 12px', fontSize: 11 }}>
                         {e.ic_status ? (
                           <span style={{
