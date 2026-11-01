@@ -151,13 +151,14 @@ export default function LoginPage() {
               type="password"
               value={userid}
               onChange={e => setUserid(e.target.value)}
+              onBlur={() => { if (window.visualViewport) { (document.documentElement.style as any).zoom = '1' } }}
               style={{
                 textTransform: 'uppercase',
                 background: '#f5f3ff',
                 border: '1.5px solid #c4b5fd',
                 borderRadius: 7,
                 padding: '8px 12px',
-                fontSize: 13,
+                fontSize: 16,
                 color: '#3b1f8c',
                 fontWeight: 700,
                 width: '100%',
