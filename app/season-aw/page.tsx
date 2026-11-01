@@ -306,16 +306,32 @@ export default function SeasonAWPage() {
     fetchStoreRows()
   }
 
-  async function submitCreateRequest(e: React.FormEvent) {
-    e.preventDefault()
+  async function submitCreateRequest(e?: React.FormEvent, overrideBrand?: string, overrideInv?: string) {
+    e?.preventDefault()
     if (!user) return
-    const inv = state.phase === 'create' ? state.invoice : invoiceQ.trim()
+    const inv   = overrideInv   || (state.phase === 'create' ? state.invoice : invoiceQ.trim())
+    const brand = overrideBrand || crBrand.trim() || brandQ.trim() || '—'
     setSubmitting(true)
     const { error } = await supabase.from('season_aw').insert({
-      store: user.store, brand: crBrand.trim() || '—', invoice_no: inv,
+      store: user.store, brand, invoice_no: inv,
       po_no: crPO.trim() || null, qty: crQty ? parseInt(crQty) : null,
       logged: true, logged_by: user.userid, logged_at: new Date().toISOString(),
       note: crNote.trim(), flagged: true,
+    })
+    setSubmitting(false)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    showToast('✅ Log request submitted — admin notified')
+    reset()
+  }
+
+  async function quickCreateRequest(invoice: string, brand: string) {
+    if (!user) return
+    setSubmitting(true)
+    const { error } = await supabase.from('season_aw').insert({
+      store: user.store, brand: brand || '—', invoice_no: invoice,
+      po_no: null, qty: null,
+      logged: true, logged_by: user.userid, logged_at: new Date().toISOString(),
+      note: 'PRIORITY — items on floor, not in system', flagged: true,
     })
     setSubmitting(false)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
@@ -379,14 +395,16 @@ export default function SeasonAWPage() {
   // ── filtered views ────────────────────────────────────────────────────────
   const filteredStore = useMemo(() => {
     const q = tableFilter.toLowerCase()
-    if (!q) return storeRows
-    return storeRows.filter(r =>
-      r.invoice_no.toLowerCase().includes(q) ||
-      r.brand.toLowerCase().includes(q) ||
-      (r.po_no || '').toLowerCase().includes(q) ||
-      r.store.toLowerCase().includes(q) ||
-      (r.logged_by || '').toLowerCase().includes(q)
-    )
+    const rows = q
+      ? storeRows.filter(r =>
+          r.invoice_no.toLowerCase().includes(q) ||
+          r.brand.toLowerCase().includes(q) ||
+          (r.po_no || '').toLowerCase().includes(q) ||
+          r.store.toLowerCase().includes(q) ||
+          (r.logged_by || '').toLowerCase().includes(q)
+        )
+      : storeRows
+    return [...rows].sort((a, b) => a.brand.localeCompare(b.brand))
   }, [storeRows, tableFilter])
 
   const filteredAW = useMemo(() => {
@@ -465,7 +483,11 @@ export default function SeasonAWPage() {
         .sugg-item { padding: 7px 12px; font-size: 12px; cursor: pointer; color: #1e293b; }
         .sugg-item:hover { background: ${blueL}; color: ${blueD}; font-weight: 600; }
         .aw-col-hide { }
-        @media (max-width: 600px) { .aw-col-hide { display: none; } }
+        @media (max-width: 600px) {
+          .aw-col-hide { display: none; }
+          .aw-table td { height: 42px; padding: 4px 8px; font-size: 12px; }
+          .aw-table th { font-size: 11px; padding: 6px 8px; }
+        }
       `}</style>
 
       {/* ── HEADER ── */}
@@ -520,7 +542,8 @@ export default function SeasonAWPage() {
               ref={invoiceRef} autoFocus value={invoiceQ}
               onChange={e => { setInvoiceQ(e.target.value); if (e.target.value) setBrandQ('') }}
               placeholder="Invoice number…"
-              style={{ border: 'none', outline: 'none', fontSize: 12, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
+              style={{ border: 'none', outline: 'none', fontSize: 16, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
+              onBlur={() => { if (window.visualViewport) { (document.documentElement.style as any).zoom = '1' } }}
             />
           </div>
 
@@ -535,8 +558,9 @@ export default function SeasonAWPage() {
               onChange={e => { onBrandInput(e.target.value); if (e.target.value) setInvoiceQ('') }}
               onFocus={() => { if (brandQ.length >= 1) setShowSugg(true) }}
               placeholder="Brand name…"
-              style={{ border: 'none', outline: 'none', fontSize: 12, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
+              style={{ border: 'none', outline: 'none', fontSize: 16, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
               autoComplete="off"
+              onBlur={() => { if (window.visualViewport) { (document.documentElement.style as any).zoom = '1' } }}
             />
             {showSugg && brandSuggestions.length > 0 && (
               <div ref={suggRef} className="sugg-box">
@@ -638,12 +662,16 @@ export default function SeasonAWPage() {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button onClick={reset} className="aw-btn aw-btn-outline">🔄 Try again</button>
                   {!state.byBrand && (
-                    <button onClick={() => setState({ phase: 'create', invoice: state.term })}
-                      className="aw-btn aw-btn-amber">⚑ Create log request</button>
+                    <button onClick={() => quickCreateRequest(state.term, brandQ.trim())}
+                      disabled={submitting} className="aw-btn aw-btn-amber">
+                      {submitting ? '…' : '⚑ Create log request'}
+                    </button>
                   )}
                   {state.byBrand && (
-                    <button onClick={() => setState({ phase: 'create', invoice: invoiceQ })}
-                      className="aw-btn aw-btn-amber">⚑ Create log request</button>
+                    <button onClick={() => quickCreateRequest(invoiceQ.trim(), state.term)}
+                      disabled={submitting} className="aw-btn aw-btn-amber">
+                      {submitting ? '…' : '⚑ Create log request'}
+                    </button>
                   )}
                 </div>
               </div>
@@ -676,43 +704,13 @@ export default function SeasonAWPage() {
               </div>
             )}
 
-            {/* CREATE REQUEST */}
+            {/* CREATE REQUEST — auto-submits, this state is transitional; shown briefly */}
             {state.phase === 'create' && (
               <div className="result-card" style={{ borderColor: amber, background: amberL }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: amber, marginBottom: 4 }}>⚑ Create Log Request</div>
-                <div style={{ fontSize: 12, color: '#92400e', marginBottom: 12 }}>
-                  Invoice <strong>{state.invoice}</strong> wasn't found — flagged for admin review.
+                <div style={{ fontSize: 13, fontWeight: 800, color: amber, marginBottom: 4 }}>⚑ Submitting Log Request…</div>
+                <div style={{ fontSize: 12, color: '#92400e' }}>
+                  Invoice <strong>{state.invoice}</strong> · Brand: <strong>{brandQ.trim() || '—'}</strong>
                 </div>
-                <form onSubmit={submitCreateRequest} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <div>
-                      <label style={{ ...labelSt, display: 'block', marginBottom: 2 }}>Brand:</label>
-                      <input value={crBrand} onChange={e => setCrBrand(e.target.value)}
-                        placeholder="Brand name if known…" style={{ ...inputSt, width: '100%' }} autoFocus />
-                    </div>
-                    <div>
-                      <label style={{ ...labelSt, display: 'block', marginBottom: 2 }}>PO #:</label>
-                      <input value={crPO} onChange={e => setCrPO(e.target.value)}
-                        placeholder="optional…" style={{ ...inputSt, width: '100%' }} />
-                    </div>
-                    <div>
-                      <label style={{ ...labelSt, display: 'block', marginBottom: 2 }}>Qty:</label>
-                      <input value={crQty} onChange={e => setCrQty(e.target.value)}
-                        type="number" min="0" placeholder="optional…" style={{ ...inputSt, width: '100%' }} />
-                    </div>
-                    <div>
-                      <label style={{ ...labelSt, display: 'block', marginBottom: 2 }}>Note:</label>
-                      <input value={crNote} onChange={e => setCrNote(e.target.value)}
-                        style={{ ...inputSt, width: '100%', fontWeight: 700, color: '#92400e' }} />
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-                    <button type="button" onClick={reset} className="aw-btn aw-btn-gray">Cancel</button>
-                    <button type="submit" disabled={submitting} className="aw-btn aw-btn-amber">
-                      {submitting ? '…' : '⚑ Submit Request'}
-                    </button>
-                  </div>
-                </form>
               </div>
             )}
           </div>
