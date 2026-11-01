@@ -357,11 +357,13 @@ export default function AutoCSVPage() {
           /* Log book: tighter table on mobile */
           .log-title-block { display: none; }
           .log-col-hide { display: none; }
+          .log-note-col { display: none; }
           .log-table td, .log-table th { padding: 5px 6px !important; font-size: 10px !important; }
           .log-table th { font-size: 9px !important; letter-spacing: 0 !important; }
         }
         @media (min-width: 701px) {
-          .log-col-hide { display: table-cell; }
+          .log-col-hide { display: inline; }
+          .log-note-col { display: table-cell; }
         }
       `}</style>
 
@@ -377,30 +379,41 @@ export default function AutoCSVPage() {
 
       {/* Header */}
       <div style={{
-        padding: '10px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+        padding: '14px 20px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8,
         justifyContent: 'space-between', borderBottom: `1px solid ${border}`,
         background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
         position: 'sticky', top: 0, zIndex: 10, flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <button onClick={() => router.push('/selector')}
-            style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 12px', fontSize: 13, cursor: 'pointer', color: '#5b21b6', fontWeight: 600 }}>
-            ← Back
-          </button>
-          <span style={{ fontSize: 12, color: '#9b8ec4', fontWeight: 600 }}>{user.userid} · {user.store}</span>
+        {/* Left: user info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9b8ec4', flexShrink: 0 }}>
+          <span style={{ fontSize: 14 }}>👤</span>
+          <span style={{ fontWeight: 700, color: '#5b21b6' }}>{user.userid}</span>
+          <span>·</span>
+          <span>{user.store === 'ALL' ? 'All Stores' : user.store}</span>
         </div>
 
-        <div style={{ display: 'flex', flex: 1, justifyContent: 'center', pointerEvents: 'none' }}>
-          <h2 style={{ fontSize: 15, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.04em', margin: 0 }}>⚡ AUTO CSV</h2>
+        {/* Center: logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'center' }}>
+          <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
+            <polygon points="11,1 21,7 21,19 11,25 1,19 1,7" fill="none" stroke="#7c3aed" strokeWidth="2" />
+          </svg>
+          <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>QUICKDESK</span>
+          <span style={{ color: '#c4b5fd', fontSize: 16, fontWeight: 300, margin: '0 4px' }}>—</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#7c3aed' }}>Auto CSV</span>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        {/* Right: actions */}
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
           {activeTab === 'processor' && (
             <button onClick={clearAll}
               style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               🗑 Clear
             </button>
           )}
+          <button onClick={() => router.push('/selector')}
+            style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
+            Home
+          </button>
         </div>
       </div>
 
@@ -712,8 +725,7 @@ export default function AutoCSVPage() {
                       style={{ cursor: 'pointer' }}
                     />
                   </th>
-                  {/* Timestamp — hidden on mobile */}
-                  <th className="log-col-hide" style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Timestamp</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Date</th>
                   <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Invoice #</th>
                   <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>PO #</th>
                   <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Store</th>
@@ -724,7 +736,7 @@ export default function AutoCSVPage() {
                   <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>By</th>
                   <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
                   {/* Note — hidden on mobile */}
-                  <th className="log-col-hide" style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Note</th>
+                  <th className="log-note-col" style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Note</th>
                 </tr>
               </thead>
               <tbody>
@@ -739,7 +751,9 @@ export default function AutoCSVPage() {
                   const hasIC  = !!e.ic_order_num
                   const isSel  = selectedIds.has(e.id)
                   const d  = new Date(e.exported_at)
-                  const ts = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${String(d.getHours()%12||12).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+                  const dateStr = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`
+                  const timeStr = ` ${String(d.getHours()%12||12).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+                  const ts = dateStr + timeStr
                   return (
                     <tr key={e.id} style={{
                       borderTop: i === 0 ? 'none' : `1px solid ${hasIC ? '#bbf7d0' : '#f0ebff'}`,
@@ -748,7 +762,9 @@ export default function AutoCSVPage() {
                       <td style={{ padding: '7px 6px', textAlign: 'center' }}>
                         <input type="checkbox" checked={isSel} onChange={() => toggleSelect(e.id)} style={{ cursor: 'pointer' }} />
                       </td>
-                      <td className="log-col-hide" style={{ padding: '7px 8px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>{ts}</td>
+                      <td style={{ padding: '7px 8px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>
+                        {dateStr}<span className="log-col-hide">{timeStr}</span>
+                      </td>
                       <td style={{ padding: '7px 8px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{e.invoice_num}</td>
                       <td style={{ padding: '7px 8px', fontSize: 12, color: '#333', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{e.po_num || '—'}</td>
                       <td style={{ padding: '7px 8px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{e.store}</td>
@@ -770,7 +786,7 @@ export default function AutoCSVPage() {
                           }}>{e.ic_status}</span>
                         ) : ''}
                       </td>
-                      <td className="log-col-hide" style={{ padding: '7px 8px', fontSize: 11, color: '#6b7280' }}>{e.ic_note || ''}</td>
+                      <td className="log-note-col" style={{ padding: '7px 8px', fontSize: 11, color: '#6b7280' }}>{e.ic_note || ''}</td>
                     </tr>
                   )
                 })}
