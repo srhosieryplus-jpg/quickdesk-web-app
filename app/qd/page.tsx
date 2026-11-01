@@ -88,7 +88,7 @@ export default function QDPage() {
     const user = u || currentUser
     if (!user) return
     let query = supabase.from('upc_sessions').select('*').order('saved_at', { ascending: false })
-    if (!isAdmin(user)) query = query.eq('userid', user.userid)
+    if (!isAdmin(user)) query = query.eq('store', user.store)
     const { data } = await query
     const all = (data || []) as (UPCSession & { id: string })[]
     setAllSessions(all)
