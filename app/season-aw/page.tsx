@@ -1,9 +1,10 @@
 'use client'
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
+import { BRAND_LIST } from '@/lib/brands'
 
 interface AWRow {
   id: string
@@ -40,8 +41,8 @@ const inputSt: React.CSSProperties = {
 type SearchState =
   | { phase: 'idle' }
   | { phase: 'found';    row: AWRow }
-  | { phase: 'notfound'; invoice: string }
-  | { phase: 'brand';    results: AWRow[] }
+  | { phase: 'notfound'; term: string; byBrand: boolean }
+  | { phase: 'brand';    results: AWRow[]; term: string }
   | { phase: 'create';   invoice: string }
 
 // columns: Date(0) VendorID(1) Brand(2) Store(3) CI(4) Invoice#(5) PO#(6) Season(7) Source(8) Qty(9)
@@ -53,14 +54,12 @@ function parsePasteData(raw: string): { brand: string; store: string; invoice_no
     if (cols.length < 6) continue
     const invoice_no = cols[5]?.trim()
     const brand      = cols[2]?.trim()
-    const storeRaw   = cols[3]?.trim()
-    const store      = storeRaw ? storeRaw.toUpperCase() : ''
+    const store      = cols[3]?.trim().toUpperCase()
     if (!invoice_no || !brand || !store) continue
-    // skip header row
     if (invoice_no.toLowerCase() === 'invoice #' || brand.toLowerCase() === 'brand') continue
-    const po_no = cols[6]?.trim() || null
+    const po_no  = cols[6]?.trim() || null
     const qtyRaw = cols[9]?.trim().replace(/[^0-9]/g, '')
-    const qty = qtyRaw ? parseInt(qtyRaw) : null
+    const qty    = qtyRaw ? parseInt(qtyRaw) : null
     results.push({ brand, store, invoice_no, po_no: po_no || null, qty })
   }
   return results
@@ -70,37 +69,58 @@ function fmtTs(ts: string | null): string {
   if (!ts) return '—'
   try {
     const d = new Date(ts)
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   } catch { return ts }
+}
+
+function fmtDate(iso: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`
 }
 
 export default function SeasonAWPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
 
-  // ── staff search state ────────────────────────────────────────────────────
-  const [query, setQuery]           = useState('')
+  // ── search bar ────────────────────────────────────────────────────────────
+  const [invoiceQ, setInvoiceQ]     = useState('')
+  const [brandQ, setBrandQ]         = useState('')
   const [searching, setSearching]   = useState(false)
   const [state, setState]           = useState<SearchState>({ phase: 'idle' })
-  const [brandQuery, setBrandQuery] = useState('')
+  const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
+  const [showSugg, setShowSugg]     = useState(false)
+  const invoiceRef = useRef<HTMLInputElement>(null)
+  const brandRef   = useRef<HTMLInputElement>(null)
+  const suggRef    = useRef<HTMLDivElement>(null)
+
+  // log form (appears on found card)
+  const [logNote, setLogNote]       = useState('')
+  const [logging, setLogging]       = useState(false)
+  const [loggedRow, setLoggedRow]   = useState<AWRow | null>(null)
+
+  // create request form
   const [crNote, setCrNote]         = useState('PRIORITY — items on floor, not in system')
   const [crBrand, setCrBrand]       = useState('')
   const [crPO, setCrPO]             = useState('')
   const [crQty, setCrQty]           = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [logNote, setLogNote]       = useState('')
-  const [logging, setLogging]       = useState(false)
-  const [loggedRow, setLoggedRow]   = useState<AWRow | null>(null)  // stays visible after log
+
+  // toast
   const [toast, setToast]           = useState('')
   const [toastType, setToastType]   = useState<'ok'|'err'>('ok')
-  const inputRef = useRef<HTMLInputElement>(null)
+
+  // ── store log table (ic-log style) ────────────────────────────────────────
+  const [storeRows, setStoreRows]   = useState<AWRow[]>([])
+  const [tableLoading, setTableLoading] = useState(false)
+  const [tableFilter, setTableFilter]   = useState('')
 
   // ── admin POs modal state ─────────────────────────────────────────────────
   const [showModal, setShowModal]   = useState(false)
   const [modalTab, setModalTab]     = useState<'view'|'paste'>('paste')
 
-  // view tab
+  // admin view tab
   const [awRows, setAwRows]         = useState<AWRow[]>([])
   const [awLoading, setAwLoading]   = useState(false)
   const [awFilter, setAwFilter]     = useState('')
@@ -126,7 +146,6 @@ export default function SeasonAWPage() {
   const [ctxMenu, setCtxMenu]       = useState<{ id: string; x: number; y: number } | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
 
-  // clear season
   const [clearing, setClearing]     = useState(false)
 
   const AW_STORES = ['HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
@@ -141,27 +160,52 @@ export default function SeasonAWPage() {
   useEffect(() => {
     let hiddenAt: number | null = null
     const IDLE_MS = 5 * 60 * 1000
-    function onVisibilityChange() {
+    function onVis() {
       if (document.visibilityState === 'hidden') { hiddenAt = Date.now() }
       else if (document.visibilityState === 'visible') {
         if (hiddenAt !== null && Date.now() - hiddenAt >= IDLE_MS) router.push('/selector')
         hiddenAt = null
       }
     }
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
   }, [router])
 
-  // dismiss ctx menu on outside click
+  // dismiss ctx menu and suggestions on outside click
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
+    function onClick(e: MouseEvent) {
       if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) setCtxMenu(null)
+      if (suggRef.current && !suggRef.current.contains(e.target as Node) &&
+          brandRef.current && !brandRef.current.contains(e.target as Node)) setShowSugg(false)
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
-  // fetch rows when modal opens on view tab
+  // ── fetch store log table ─────────────────────────────────────────────────
+  const fetchStoreRows = useCallback(async (u?: User) => {
+    const usr = u || user
+    if (!usr) return
+    setTableLoading(true)
+    let q = supabase.from('season_aw').select('*').order('created_at', { ascending: false })
+    if (usr.store !== 'ALL') q = q.eq('store', usr.store)
+    const { data } = await q
+    setTableLoading(false)
+    setStoreRows((data || []) as AWRow[])
+  }, [user])
+
+  useEffect(() => {
+    if (user) fetchStoreRows(user)
+  }, [user])
+
+  // fetch admin view rows
+  async function fetchAW() {
+    setAwLoading(true)
+    const { data } = await supabase.from('season_aw').select('*').order('created_at', { ascending: false })
+    setAwLoading(false)
+    setAwRows((data || []) as AWRow[])
+  }
+
   useEffect(() => {
     if (showModal && modalTab === 'view') fetchAW()
   }, [showModal, modalTab])
@@ -172,53 +216,64 @@ export default function SeasonAWPage() {
     setTimeout(() => setToast(''), 3200)
   }
 
-  async function fetchAW() {
-    setAwLoading(true)
-    const { data } = await supabase.from('season_aw').select('*').order('created_at', { ascending: false })
-    setAwLoading(false)
-    setAwRows((data || []) as AWRow[])
+  // brand autocomplete
+  function onBrandInput(val: string) {
+    setBrandQ(val)
+    if (val.trim().length >= 1) {
+      const q = val.toLowerCase()
+      const matches = BRAND_LIST.filter(b => b.toLowerCase().startsWith(q)).slice(0, 8)
+      const extra   = BRAND_LIST.filter(b => !b.toLowerCase().startsWith(q) && b.toLowerCase().includes(q)).slice(0, 4)
+      setBrandSuggestions([...matches, ...extra])
+      setShowSugg(true)
+    } else {
+      setBrandSuggestions([])
+      setShowSugg(false)
+    }
   }
 
-  const filteredAW = useMemo(() => {
-    const q = awFilter.toLowerCase()
-    return awRows.filter(r => {
-      const storeOk = awStoreFilter === 'ALL' || r.store === awStoreFilter
-      if (!q) return storeOk
-      return storeOk && (
-        r.invoice_no.toLowerCase().includes(q) ||
-        r.brand.toLowerCase().includes(q) ||
-        (r.po_no || '').toLowerCase().includes(q) ||
-        r.store.toLowerCase().includes(q)
-      )
-    })
-  }, [awRows, awFilter, awStoreFilter])
-
-  // ── staff search ──────────────────────────────────────────────────────────
+  // ── search (single button) ────────────────────────────────────────────────
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
-    const inv = query.trim()
-    if (!inv || !user) return
-    setSearching(true)
+    if (!user) return
+    setShowSugg(false)
     setLoggedRow(null)
-    const { data } = await supabase
-      .from('season_aw').select('*')
-      .eq('store', user.store).ilike('invoice_no', inv).maybeSingle()
-    setSearching(false)
-    if (data) setState({ phase: 'found', row: data as AWRow })
-    else setState({ phase: 'notfound', invoice: inv })
+
+    const inv = invoiceQ.trim()
+    const br  = brandQ.trim()
+
+    if (!inv && !br) return
+
+    setSearching(true)
+
+    if (inv) {
+      // Invoice # search — exact match for this store
+      const { data } = await supabase
+        .from('season_aw').select('*')
+        .eq('store', user.store).ilike('invoice_no', inv).maybeSingle()
+      setSearching(false)
+      if (data) setState({ phase: 'found', row: data as AWRow })
+      else setState({ phase: 'notfound', term: inv, byBrand: false })
+    } else {
+      // Brand search
+      const { data } = await supabase
+        .from('season_aw').select('*')
+        .eq('store', user.store).ilike('brand', `%${br}%`)
+        .order('created_at', { ascending: false })
+      setSearching(false)
+      const results = (data || []) as AWRow[]
+      if (results.length === 0) setState({ phase: 'notfound', term: br, byBrand: true })
+      else setState({ phase: 'brand', results, term: br })
+    }
   }
 
-  async function handleBrandSearch(e: React.FormEvent) {
-    e.preventDefault()
-    const b = brandQuery.trim()
-    if (!b || !user) return
-    setSearching(true)
-    const { data } = await supabase
-      .from('season_aw').select('*')
-      .eq('store', user.store).ilike('brand', `%${b}%`)
-      .order('created_at', { ascending: false })
-    setSearching(false)
-    setState({ phase: 'brand', results: (data || []) as AWRow[] })
+  function reset() {
+    setState({ phase: 'idle' })
+    setLoggedRow(null)
+    setInvoiceQ(''); setBrandQ('')
+    setCrNote('PRIORITY — items on floor, not in system')
+    setCrBrand(''); setCrPO(''); setCrQty(''); setLogNote('')
+    setTimeout(() => invoiceRef.current?.focus(), 50)
+    fetchStoreRows()
   }
 
   async function logRow(row: AWRow) {
@@ -230,12 +285,12 @@ export default function SeasonAWPage() {
       .eq('id', row.id)
     setLogging(false)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
-    // Keep card visible, show the updated row with green PO# box
-    const updatedRow: AWRow = { ...row, logged: true, logged_by: user.userid, logged_at: loggedAt, note: logNote.trim() || row.note }
-    setLoggedRow(updatedRow)
-    setState({ phase: 'found', row: updatedRow })
+    const updated: AWRow = { ...row, logged: true, logged_by: user.userid, logged_at: loggedAt, note: logNote.trim() || row.note }
+    setLoggedRow(updated)
+    setState({ phase: 'found', row: updated })
     setLogNote('')
     showToast('✅ Invoice logged!')
+    fetchStoreRows()
   }
 
   async function unlogRow(row: AWRow) {
@@ -248,13 +303,13 @@ export default function SeasonAWPage() {
     setLoggedRow(null)
     setState({ phase: 'found', row: updated })
     showToast('↩ Invoice un-logged')
-    fetchAW()
+    fetchStoreRows()
   }
 
   async function submitCreateRequest(e: React.FormEvent) {
     e.preventDefault()
     if (!user) return
-    const inv = state.phase === 'create' ? state.invoice : query.trim()
+    const inv = state.phase === 'create' ? state.invoice : invoiceQ.trim()
     setSubmitting(true)
     const { error } = await supabase.from('season_aw').insert({
       store: user.store, brand: crBrand.trim() || '—', invoice_no: inv,
@@ -268,44 +323,7 @@ export default function SeasonAWPage() {
     reset()
   }
 
-  function reset() {
-    setState({ phase: 'idle' })
-    setLoggedRow(null)
-    setQuery(''); setBrandQuery('')
-    setCrNote('PRIORITY — items on floor, not in system')
-    setCrBrand(''); setCrPO(''); setCrQty(''); setLogNote('')
-    setTimeout(() => inputRef.current?.focus(), 50)
-  }
-
-  // ── admin: paste processor ────────────────────────────────────────────────
-  function handlePasteChange(val: string) {
-    setPasteText(val)
-    setPasteResult(null)
-    if (val.trim()) setPastePreview(parsePasteData(val))
-    else setPastePreview([])
-  }
-
-  async function submitPaste() {
-    if (!pastePreview.length) return
-    setPasting(true)
-    const rows = pastePreview.map(r => ({
-      store: r.store, brand: r.brand, invoice_no: r.invoice_no,
-      po_no: r.po_no, qty: r.qty, logged: false, flagged: false,
-    }))
-    let ok = 0; let skip = 0
-    for (let i = 0; i < rows.length; i += 50) {
-      const batch = rows.slice(i, i + 50)
-      const { error, data } = await supabase.from('season_aw').insert(batch).select('id')
-      if (error) skip += batch.length
-      else ok += (data?.length || batch.length)
-    }
-    setPasting(false)
-    setPasteResult({ ok, skip })
-    if (ok > 0) { fetchAW(); showToast(`✅ Inserted ${ok} rows`) }
-    if (skip > 0) showToast(`⚠️ ${skip} rows failed`, 'err')
-  }
-
-  // ── admin: edit / delete / unlog (from view table) ────────────────────────
+  // ── admin helpers ─────────────────────────────────────────────────────────
   function openEdit(row: AWRow) {
     setEditRow(row)
     setEditStore(row.store); setEditBrand(row.brand); setEditInv(row.invoice_no)
@@ -324,7 +342,7 @@ export default function SeasonAWPage() {
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     showToast('✅ Saved')
     setEditRow(null)
-    fetchAW()
+    fetchAW(); fetchStoreRows()
   }
 
   async function deleteRow(id: string) {
@@ -333,7 +351,7 @@ export default function SeasonAWPage() {
     const { error } = await supabase.from('season_aw').delete().eq('id', id)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     showToast('🗑 Deleted')
-    fetchAW()
+    fetchAW(); fetchStoreRows()
   }
 
   async function unlogRowAdmin(row: AWRow) {
@@ -343,7 +361,7 @@ export default function SeasonAWPage() {
       .eq('id', row.id)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     showToast('↩ Un-logged')
-    fetchAW()
+    fetchAW(); fetchStoreRows()
   }
 
   async function clearSeason() {
@@ -355,13 +373,39 @@ export default function SeasonAWPage() {
     setClearing(false)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     showToast('🗑 Season cleared')
-    setAwRows([])
+    setAwRows([]); setStoreRows([])
   }
 
-  // ── row color ─────────────────────────────────────────────────────────────
+  // ── filtered views ────────────────────────────────────────────────────────
+  const filteredStore = useMemo(() => {
+    const q = tableFilter.toLowerCase()
+    if (!q) return storeRows
+    return storeRows.filter(r =>
+      r.invoice_no.toLowerCase().includes(q) ||
+      r.brand.toLowerCase().includes(q) ||
+      (r.po_no || '').toLowerCase().includes(q) ||
+      r.store.toLowerCase().includes(q) ||
+      (r.logged_by || '').toLowerCase().includes(q)
+    )
+  }, [storeRows, tableFilter])
+
+  const filteredAW = useMemo(() => {
+    const q = awFilter.toLowerCase()
+    return awRows.filter(r => {
+      const storeOk = awStoreFilter === 'ALL' || r.store === awStoreFilter
+      if (!q) return storeOk
+      return storeOk && (
+        r.invoice_no.toLowerCase().includes(q) ||
+        r.brand.toLowerCase().includes(q) ||
+        (r.po_no || '').toLowerCase().includes(q) ||
+        r.store.toLowerCase().includes(q)
+      )
+    })
+  }, [awRows, awFilter, awStoreFilter])
+
   function rowBg(r: AWRow, i: number) {
     if (r.flagged) return '#fffbeb'
-    if (r.logged) return '#f0fdf4'
+    if (r.logged)  return i % 2 === 0 ? '#14532d' : '#166534'
     return i % 2 === 0 ? '#fff' : '#f8faff'
   }
 
@@ -374,9 +418,11 @@ export default function SeasonAWPage() {
     )
   }
 
-  const loggedCount  = awRows.filter(r => r.logged && !r.flagged).length
-  const flaggedCount = awRows.filter(r => r.flagged).length
   const isAdmin      = user?.store === 'ALL'
+  const loggedCount  = storeRows.filter(r => r.logged && !r.flagged).length
+  const flaggedCount = storeRows.filter(r => r.flagged).length
+  const adminLoggedCount  = awRows.filter(r => r.logged && !r.flagged).length
+  const adminFlaggedCount = awRows.filter(r => r.flagged).length
 
   // ── render ────────────────────────────────────────────────────────────────
   return (
@@ -390,10 +436,13 @@ export default function SeasonAWPage() {
         .aw-btn-amber   { background: ${amber}; color: #fff; }
         .aw-btn-gray    { background: #f3f4f6; color: #374151; }
         .aw-btn-red     { background: #dc2626; color: #fff; }
-        .aw-btn-green   { background: #16a34a; color: #fff; }
         .result-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; padding: 16px; margin: 0; box-shadow: 0 2px 12px rgba(30,64,175,0.07); }
         .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
         .brand-row:hover { background: ${blueL}; border-color: ${border}; }
+        .aw-table { border-collapse: collapse; width: 100%; font-size: 11px; }
+        .aw-table th { background: #dbeafe; color: ${blueD}; font-size: 10px; font-weight: 800; padding: 5px 8px; text-align: left; border-bottom: 2px solid ${border}; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+        .aw-table td { padding: 3px 8px; border-bottom: 1px solid #e0e7ff; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; vertical-align: middle; }
+        .aw-table tr:hover td { filter: brightness(0.96); }
         .ss-table { border-collapse: collapse; width: 100%; font-size: 11px; }
         .ss-table th { background: #e0e7ff; color: #1e3a8a; font-size: 10px; font-weight: 800; padding: 5px 8px; text-align: left; border: 1px solid #c7d2fe; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
         .ss-table td { padding: 3px 8px; border: 1px solid #e0e7ff; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
@@ -407,19 +456,20 @@ export default function SeasonAWPage() {
         .modal-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
         .qs-header { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid ${blueD}; background: ${blue}; }
         .qs-logo { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; }
-        @media (max-width: 600px) {
-          .qs-logo { order: 3; width: 100%; justify-content: center; }
-        }
-        .paste-layout { display: grid; grid-template-columns: 300px 1fr; gap: 14px; height: 100%; min-height: 0; }
+        @media (max-width: 600px) { .qs-logo { order: 3; width: 100%; justify-content: center; } }
+        .paste-layout { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
         @media (max-width: 700px) { .paste-layout { grid-template-columns: 1fr; } }
-        .paste-area { width: 100%; height: 100%; min-height: 200px; border: 1.5px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 11px; font-family: monospace; resize: none; outline: none; }
+        .paste-area { width: 100%; min-height: 260px; border: 1.5px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 11px; font-family: monospace; resize: none; outline: none; }
         .paste-area:focus { border-color: ${border}; }
-        .po-badge { display: inline-block; background: #dcfce7; color: #15803d; border: 1.5px solid #86efac; border-radius: 8px; padding: '4px 14px'; font-size: 13px; font-weight: 800; letter-spacing: 0.03em; }
+        .sugg-box { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1.5px solid ${border}; border-radius: 0 0 8px 8px; box-shadow: 0 4px 16px rgba(30,64,175,0.12); z-index: 200; max-height: 220px; overflow-y: auto; }
+        .sugg-item { padding: 7px 12px; font-size: 12px; cursor: pointer; color: #1e293b; }
+        .sugg-item:hover { background: ${blueL}; color: ${blueD}; font-weight: 600; }
+        .aw-col-hide { }
+        @media (max-width: 600px) { .aw-col-hide { display: none; } }
       `}</style>
 
       {/* ── HEADER ── */}
       <div className="qs-header">
-        {/* Left: user info + home */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <button onClick={() => router.push('/selector')}
             style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#bfdbfe', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
@@ -433,29 +483,23 @@ export default function SeasonAWPage() {
           </span>
         </div>
 
-        {/* Center: title with snowflake */}
+        {/* Snowflake + title */}
         <div className="qs-logo">
-          {/* Snowflake SVG */}
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#bfdbfe" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="2" x2="12" y2="22"/>
             <line x1="2" y1="12" x2="22" y2="12"/>
             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
             <line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/>
-            <line x1="12" y1="2" x2="10" y2="5"/>
-            <line x1="12" y1="2" x2="14" y2="5"/>
-            <line x1="12" y1="22" x2="10" y2="19"/>
-            <line x1="12" y1="22" x2="14" y2="19"/>
-            <line x1="2" y1="12" x2="5" y2="10"/>
-            <line x1="2" y1="12" x2="5" y2="14"/>
-            <line x1="22" y1="12" x2="19" y2="10"/>
-            <line x1="22" y1="12" x2="19" y2="14"/>
+            <line x1="12" y1="2" x2="10" y2="5"/><line x1="12" y1="2" x2="14" y2="5"/>
+            <line x1="12" y1="22" x2="10" y2="19"/><line x1="12" y1="22" x2="14" y2="19"/>
+            <line x1="2" y1="12" x2="5" y2="10"/><line x1="2" y1="12" x2="5" y2="14"/>
+            <line x1="22" y1="12" x2="19" y2="10"/><line x1="22" y1="12" x2="19" y2="14"/>
           </svg>
           <span style={{ fontSize: 16, fontWeight: 900, color: '#fff', letterSpacing: '0.08em' }}>AW SEASON</span>
           <span style={{ color: '#60a5fa', fontSize: 16, fontWeight: 300, margin: '0 4px' }}>—</span>
           <span style={{ fontSize: 14, fontWeight: 600, color: '#bfdbfe' }}>Invoice Log</span>
         </div>
 
-        {/* Right: POs AW button (admin only) */}
         <div style={{ flexShrink: 0, minWidth: 80, display: 'flex', justifyContent: 'flex-end' }}>
           {isAdmin && (
             <button onClick={() => { setShowModal(true); setModalTab('paste') }}
@@ -468,204 +512,285 @@ export default function SeasonAWPage() {
 
       {/* ── SEARCH BAR ── */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '8px 16px' }}>
-        <div style={{ width: '100%', maxWidth: 680, margin: '0 auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-          {/* Invoice # search */}
-          <form onSubmit={handleSearch} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
-            <label style={labelSt}>Invoice #:</label>
+        <form onSubmit={handleSearch} style={{ width: '100%', maxWidth: 700, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 0, border: `1.5px solid ${border}`, borderRadius: 8, overflow: 'visible', background: '#fff' }}>
+          {/* Invoice # */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', flex: 1, borderRight: `1px solid #e0e7ff` }}>
+            <label style={{ ...labelSt, fontSize: 10, color: '#94a3b8' }}>INV#</label>
             <input
-              ref={inputRef} autoFocus value={query}
-              onChange={e => { setQuery(e.target.value); if (state.phase !== 'idle' && state.phase !== 'found') setState({ phase: 'idle' }) }}
-              placeholder="Enter invoice number…"
-              style={{ ...inputSt, flex: 1 }}
+              ref={invoiceRef} autoFocus value={invoiceQ}
+              onChange={e => { setInvoiceQ(e.target.value); if (e.target.value) setBrandQ('') }}
+              placeholder="Invoice number…"
+              style={{ border: 'none', outline: 'none', fontSize: 12, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
             />
-            <button type="submit" disabled={!query.trim() || searching} className="aw-btn aw-btn-primary">
-              {searching ? '…' : '🔍'}
-            </button>
-          </form>
+          </div>
 
-          {/* Brand search */}
-          <form onSubmit={handleBrandSearch} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 180 }}>
-            <label style={labelSt}>Brand:</label>
-            <input value={brandQuery} onChange={e => setBrandQuery(e.target.value)}
-              placeholder="Search brand…"
-              style={{ ...inputSt, flex: 1 }} />
-            <button type="submit" disabled={!brandQuery.trim() || searching} className="aw-btn aw-btn-outline">
-              {searching ? '…' : '🔍'}
-            </button>
-          </form>
+          {/* OR divider */}
+          <div style={{ padding: '0 10px', color: '#94a3b8', fontSize: 11, fontWeight: 700, flexShrink: 0, userSelect: 'none' }}>or</div>
 
-          {(state.phase !== 'idle') && (
-            <button type="button" onClick={reset} className="aw-btn aw-btn-gray">✕ Clear</button>
-          )}
-        </div>
+          {/* Brand with autocomplete */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', flex: 1.4, borderLeft: `1px solid #e0e7ff`, position: 'relative' }}>
+            <label style={{ ...labelSt, fontSize: 10, color: '#94a3b8' }}>BRAND</label>
+            <input
+              ref={brandRef} value={brandQ}
+              onChange={e => { onBrandInput(e.target.value); if (e.target.value) setInvoiceQ('') }}
+              onFocus={() => { if (brandQ.length >= 1) setShowSugg(true) }}
+              placeholder="Brand name…"
+              style={{ border: 'none', outline: 'none', fontSize: 12, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
+              autoComplete="off"
+            />
+            {showSugg && brandSuggestions.length > 0 && (
+              <div ref={suggRef} className="sugg-box">
+                {brandSuggestions.map(s => (
+                  <div key={s} className="sugg-item"
+                    onMouseDown={() => { setBrandQ(s); setShowSugg(false); setInvoiceQ('') }}>
+                    {s}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Search button */}
+          <button type="submit" disabled={(!invoiceQ.trim() && !brandQ.trim()) || searching}
+            style={{ background: blue, color: '#fff', border: 'none', borderRadius: '0 6px 6px 0', padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0, opacity: (!invoiceQ.trim() && !brandQ.trim()) || searching ? 0.5 : 1 }}>
+            {searching ? '…' : '🔍 Search'}
+          </button>
+        </form>
       </div>
 
-      {/* ── MAIN CONTENT ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px', gap: 16 }}>
+      {/* ── RESULT PANEL (above the table) ── */}
+      {state.phase !== 'idle' && (
+        <div style={{ background: blueL, borderBottom: `1px solid ${border}`, padding: '12px 16px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ width: '100%', maxWidth: 560 }}>
 
-        {state.phase === 'idle' && (
-          <div style={{ color: '#93c5fd', fontSize: 13, marginTop: 40, textAlign: 'center' }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>❄</div>
-            Search by invoice # or brand to log a delivery
-          </div>
-        )}
+            {/* FOUND */}
+            {state.phase === 'found' && (
+              <div className="result-card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: blueD }}>Invoice Found</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {state.row.logged && (
+                      <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>
+                        ✓ Logged by {state.row.logged_by}
+                      </span>
+                    )}
+                    <button onClick={reset} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                  </div>
+                </div>
 
-        {/* ── FOUND ── */}
-        {state.phase === 'found' && (
-          <div className="result-card" style={{ width: '100%', maxWidth: 520 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: blueD }}>Invoice Found</span>
-              {state.row.logged && (
-                <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>
-                  ✓ Logged by {state.row.logged_by}
-                </span>
-              )}
-            </div>
-
-            {/* Green PO# badge — appears after logging */}
-            {loggedRow && loggedRow.id === state.row.id && (
-              <div style={{ background: '#dcfce7', border: '1.5px solid #86efac', borderRadius: 8, padding: '8px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 18 }}>✅</span>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', marginBottom: 2 }}>Logged successfully</div>
-                  {loggedRow.po_no && (
-                    <div style={{ fontSize: 14, fontWeight: 900, color: '#166534', fontFamily: 'monospace', letterSpacing: '0.04em' }}>
-                      PO# {loggedRow.po_no}
+                {/* Green PO badge after logging */}
+                {loggedRow && loggedRow.id === state.row.id && (
+                  <div style={{ background: '#dcfce7', border: '1.5px solid #86efac', borderRadius: 8, padding: '8px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18 }}>✅</span>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d' }}>Logged successfully</div>
+                      {loggedRow.po_no && (
+                        <div style={{ fontSize: 14, fontWeight: 900, color: '#166534', fontFamily: 'monospace', letterSpacing: '0.04em' }}>
+                          PO# {loggedRow.po_no}
+                        </div>
+                      )}
                     </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                  <InfoRow label="Invoice #" value={state.row.invoice_no} />
+                  <InfoRow label="PO #"      value={state.row.po_no} />
+                  <InfoRow label="Brand"     value={state.row.brand} />
+                  <InfoRow label="Qty"       value={state.row.qty} />
+                  {state.row.logged_at && <InfoRow label="Logged at" value={fmtTs(state.row.logged_at)} />}
+                  {state.row.note && <InfoRow label="Note" value={state.row.note} />}
+                </div>
+
+                {!state.row.logged && (
+                  <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input value={logNote} onChange={e => setLogNote(e.target.value)}
+                      placeholder="Note (optional)…" style={{ ...inputSt, flex: 1, minWidth: 140 }} />
+                    <button onClick={() => logRow(state.row)} disabled={logging} className="aw-btn aw-btn-primary">
+                      {logging ? '…' : '✓ Log Invoice'}
+                    </button>
+                    <button onClick={reset} className="aw-btn aw-btn-gray">Cancel</button>
+                  </div>
+                )}
+                {state.row.logged && (
+                  <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    {isAdmin && (
+                      <button onClick={() => unlogRow(state.row)} className="aw-btn aw-btn-amber" style={{ fontSize: 11 }}>↩ Un-log</button>
+                    )}
+                    <button onClick={reset} className="aw-btn aw-btn-gray">← Back</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* NOT FOUND */}
+            {state.phase === 'notfound' && (
+              <div className="result-card">
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#dc2626', marginBottom: 6 }}>
+                  {state.byBrand
+                    ? <>No invoices found for brand: <span style={{ fontFamily: 'monospace' }}>{state.term}</span></>
+                    : <>Invoice not found: <span style={{ fontFamily: 'monospace' }}>{state.term}</span></>
+                  }
+                </div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 14 }}>
+                  Not in the system for store <strong>{user?.store}</strong>.
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button onClick={reset} className="aw-btn aw-btn-outline">🔄 Try again</button>
+                  {!state.byBrand && (
+                    <button onClick={() => setState({ phase: 'create', invoice: state.term })}
+                      className="aw-btn aw-btn-amber">⚑ Create log request</button>
+                  )}
+                  {state.byBrand && (
+                    <button onClick={() => setState({ phase: 'create', invoice: invoiceQ })}
+                      className="aw-btn aw-btn-amber">⚑ Create log request</button>
                   )}
                 </div>
               </div>
             )}
 
-            <InfoRow label="Invoice #" value={state.row.invoice_no} />
-            <InfoRow label="Brand"     value={state.row.brand} />
-            <InfoRow label="PO #"      value={state.row.po_no} />
-            <InfoRow label="Qty"       value={state.row.qty} />
-            {state.row.note && <InfoRow label="Note" value={state.row.note} />}
-            {state.row.logged && state.row.logged_at && (
-              <InfoRow label="Logged at" value={fmtTs(state.row.logged_at)} />
-            )}
-
-            {!state.row.logged && (
-              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <label style={labelSt}>Note:</label>
-                  <input value={logNote} onChange={e => setLogNote(e.target.value)}
-                    placeholder="optional…" style={{ ...inputSt, flex: 1 }} />
-                </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                  <button onClick={reset} className="aw-btn aw-btn-gray">Cancel</button>
-                  <button onClick={() => logRow(state.row)} disabled={logging} className="aw-btn aw-btn-primary">
-                    {logging ? '…' : '✓ Log Invoice'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {state.row.logged && (
-              <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                {isAdmin && (
-                  <button onClick={() => unlogRow(state.row)} className="aw-btn aw-btn-amber" style={{ fontSize: 11 }}>
-                    ↩ Un-log
-                  </button>
-                )}
-                <button onClick={reset} className="aw-btn aw-btn-gray">← Back</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {state.phase === 'notfound' && (
-          <div className="result-card" style={{ width: '100%', maxWidth: 520 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#dc2626', marginBottom: 6 }}>
-              Invoice not found: <span style={{ fontFamily: 'monospace' }}>{state.invoice}</span>
-            </div>
-            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-              This invoice isn't in the system for store <strong>{user?.store}</strong>. What would you like to do?
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={() => { setState({ phase: 'idle' }); setQuery(''); setTimeout(() => inputRef.current?.focus(), 50) }}
-                className="aw-btn aw-btn-outline" style={{ textAlign: 'left', padding: '10px 14px' }}>
-                🔄 Try another invoice #
-              </button>
-              <button onClick={() => { setBrandQuery(''); setState({ phase: 'brand', results: [] }) }}
-                className="aw-btn aw-btn-outline" style={{ textAlign: 'left', padding: '10px 14px' }}>
-                🏷 Search by brand instead
-              </button>
-              <button onClick={() => setState({ phase: 'create', invoice: state.invoice })}
-                className="aw-btn aw-btn-amber" style={{ textAlign: 'left', padding: '10px 14px' }}>
-                ⚑ Create log request — items on floor, not in system
-              </button>
-            </div>
-          </div>
-        )}
-
-        {state.phase === 'brand' && (
-          <div style={{ width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {state.results.length === 0 && brandQuery && !searching && (
-              <div style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 8, padding: 16, color: '#6b7280', fontSize: 13 }}>
-                No invoices found for "{brandQuery}" at store {user?.store}.
-                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                  <button onClick={() => setState({ phase: 'create', invoice: query })} className="aw-btn aw-btn-amber">⚑ Create log request</button>
-                  <button onClick={reset} className="aw-btn aw-btn-gray">← Back</button>
-                </div>
-              </div>
-            )}
-            {state.results.length > 0 && (
+            {/* BRAND RESULTS */}
+            {state.phase === 'brand' && (
               <div className="result-card">
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', marginBottom: 10 }}>
-                  {state.results.length} invoice{state.results.length !== 1 ? 's' : ''} found for "{brandQuery}"
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', marginBottom: 8 }}>
+                  {state.results.length} invoice{state.results.length !== 1 ? 's' : ''} found for "{state.term}"
+                  <button onClick={reset} style={{ float: 'right', background: 'none', border: 'none', color: '#94a3b8', fontSize: 14, cursor: 'pointer' }}>✕</button>
                 </div>
                 {state.results.map(row => (
-                  <div key={row.id} className="brand-row" onClick={() => { setState({ phase: 'found', row }); setQuery(row.invoice_no) }}>
+                  <div key={row.id} className="brand-row"
+                    onClick={() => { setState({ phase: 'found', row }); setInvoiceQ(row.invoice_no) }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: blueD }}>{row.brand}</div>
-                      <div style={{ fontSize: 11, color: '#6b7280' }}>Invoice: {row.invoice_no}{row.po_no ? ` · PO: ${row.po_no}` : ''}{row.qty ? ` · Qty: ${row.qty}` : ''}</div>
-                      {row.logged && <div style={{ fontSize: 10, color: '#15803d', fontWeight: 700 }}>✓ Already logged by {row.logged_by} · {fmtTs(row.logged_at)}</div>}
+                      <div style={{ fontSize: 11, color: '#6b7280' }}>
+                        Invoice: {row.invoice_no}{row.po_no ? ` · PO: ${row.po_no}` : ''}{row.qty ? ` · Qty: ${row.qty}` : ''}
+                      </div>
+                      {row.logged && (
+                        <div style={{ fontSize: 10, color: '#15803d', fontWeight: 700 }}>✓ Logged by {row.logged_by} · {fmtTs(row.logged_at)}</div>
+                      )}
                     </div>
-                    <span style={{ fontSize: 11, color: '#60a5fa', fontWeight: 700 }}>Select →</span>
+                    <span style={{ fontSize: 11, color: row.logged ? '#15803d' : '#60a5fa', fontWeight: 700 }}>
+                      {row.logged ? '✓ Done' : 'Select →'}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
-            <button onClick={reset} className="aw-btn aw-btn-gray" style={{ alignSelf: 'flex-start' }}>← Back</button>
-          </div>
-        )}
 
-        {state.phase === 'create' && (
-          <div className="result-card" style={{ width: '100%', maxWidth: 520, borderColor: amber, background: amberL }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: amber, marginBottom: 4 }}>⚑ Create Log Request</div>
-            <div style={{ fontSize: 12, color: '#92400e', marginBottom: 14 }}>
-              Invoice <strong>{state.invoice}</strong> wasn't found. This will be flagged for admin review.
-            </div>
-            <form onSubmit={submitCreateRequest} style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ ...labelSt, minWidth: 64 }}>Brand:</label>
-                <input value={crBrand} onChange={e => setCrBrand(e.target.value)}
-                  placeholder="Brand name if known…" style={{ ...inputSt, flex: 1 }} autoFocus />
+            {/* CREATE REQUEST */}
+            {state.phase === 'create' && (
+              <div className="result-card" style={{ borderColor: amber, background: amberL }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: amber, marginBottom: 4 }}>⚑ Create Log Request</div>
+                <div style={{ fontSize: 12, color: '#92400e', marginBottom: 12 }}>
+                  Invoice <strong>{state.invoice}</strong> wasn't found — flagged for admin review.
+                </div>
+                <form onSubmit={submitCreateRequest} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>
+                      <label style={{ ...labelSt, display: 'block', marginBottom: 2 }}>Brand:</label>
+                      <input value={crBrand} onChange={e => setCrBrand(e.target.value)}
+                        placeholder="Brand name if known…" style={{ ...inputSt, width: '100%' }} autoFocus />
+                    </div>
+                    <div>
+                      <label style={{ ...labelSt, display: 'block', marginBottom: 2 }}>PO #:</label>
+                      <input value={crPO} onChange={e => setCrPO(e.target.value)}
+                        placeholder="optional…" style={{ ...inputSt, width: '100%' }} />
+                    </div>
+                    <div>
+                      <label style={{ ...labelSt, display: 'block', marginBottom: 2 }}>Qty:</label>
+                      <input value={crQty} onChange={e => setCrQty(e.target.value)}
+                        type="number" min="0" placeholder="optional…" style={{ ...inputSt, width: '100%' }} />
+                    </div>
+                    <div>
+                      <label style={{ ...labelSt, display: 'block', marginBottom: 2 }}>Note:</label>
+                      <input value={crNote} onChange={e => setCrNote(e.target.value)}
+                        style={{ ...inputSt, width: '100%', fontWeight: 700, color: '#92400e' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                    <button type="button" onClick={reset} className="aw-btn aw-btn-gray">Cancel</button>
+                    <button type="submit" disabled={submitting} className="aw-btn aw-btn-amber">
+                      {submitting ? '…' : '⚑ Submit Request'}
+                    </button>
+                  </div>
+                </form>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ ...labelSt, minWidth: 64 }}>PO #:</label>
-                <input value={crPO} onChange={e => setCrPO(e.target.value)}
-                  placeholder="optional…" style={{ ...inputSt, flex: 1 }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ ...labelSt, minWidth: 64 }}>Qty:</label>
-                <input value={crQty} onChange={e => setCrQty(e.target.value)}
-                  placeholder="optional…" type="number" min="0" style={{ ...inputSt, width: 80 }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ ...labelSt, minWidth: 64 }}>Note:</label>
-                <input value={crNote} onChange={e => setCrNote(e.target.value)}
-                  style={{ ...inputSt, flex: 1, fontWeight: 700, color: '#92400e' }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-                <button type="button" onClick={reset} className="aw-btn aw-btn-gray">Cancel</button>
-                <button type="submit" disabled={submitting} className="aw-btn aw-btn-amber">
-                  {submitting ? '…' : '⚑ Submit Request'}
-                </button>
-              </div>
-            </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── STORE LOG TABLE (IC-log style) ── */}
+      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 900, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: blueD }}>Filter:</span>
+          <input value={tableFilter} onChange={e => setTableFilter(e.target.value)}
+            placeholder="invoice, brand, PO, user…"
+            style={{ ...inputSt, flex: 1 }} />
+          <button onClick={() => fetchStoreRows()} style={{ background: '#dbeafe', border: 'none', color: blueD, borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ↺ Refresh
+          </button>
+          <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
+            {filteredStore.length} rows · <span style={{ color: '#15803d', fontWeight: 700 }}>✓ {loggedCount}</span>
+            {flaggedCount > 0 && <> · <span style={{ color: '#92400e', fontWeight: 700 }}>⚑ {flaggedCount}</span></>}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} onClick={() => setCtxMenu(null)}>
+        {tableLoading ? (
+          <p style={{ padding: 24, color: '#93c5fd', fontSize: 13 }}>Loading…</p>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 8px 40px' }}>
+            <table className="aw-table" style={{ maxWidth: 900 }}>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  {isAdmin && <th>Store</th>}
+                  <th>Brand</th>
+                  <th>Invoice #</th>
+                  <th className="aw-col-hide">PO #</th>
+                  <th className="aw-col-hide">Qty</th>
+                  <th>Status</th>
+                  <th className="aw-col-hide">Logged By</th>
+                  <th className="aw-col-hide">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStore.length === 0 && (
+                  <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#93c5fd', fontSize: 13 }}>
+                    {storeRows.length === 0 ? 'No invoices in system yet.' : 'No matches.'}
+                  </td></tr>
+                )}
+                {filteredStore.map((r, i) => {
+                  const logged = r.logged && !r.flagged
+                  const bg = r.flagged ? '#fffbeb' : logged ? (i % 2 === 0 ? '#14532d' : '#166534') : (i % 2 === 0 ? '#fff' : '#f8faff')
+                  const txt = logged ? '#86efac' : r.flagged ? '#92400e' : '#1f2937'
+                  const dim = logged ? '#4ade80' : r.flagged ? '#b45309' : '#6b7280'
+                  return (
+                    <tr key={r.id} style={{ background: bg, cursor: 'pointer' }}
+                      onClick={() => { setState({ phase: 'found', row: r }); setInvoiceQ(r.invoice_no); setLoggedRow(r.logged ? r : null) }}
+                      onContextMenu={e => { e.preventDefault(); setCtxMenu({ id: r.id, x: e.clientX, y: e.clientY }) }}>
+                      <td style={{ color: dim, whiteSpace: 'nowrap', fontSize: 10 }}>{fmtDate(r.created_at)}</td>
+                      {isAdmin && <td style={{ fontWeight: 700, color: logged ? '#93c5fd' : blueD, fontSize: 10 }}>{r.store}</td>}
+                      <td style={{ fontWeight: 600, color: txt }}>{r.brand}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: logged ? '#fff' : blueD, fontWeight: 700 }}>{r.invoice_no}</td>
+                      <td className="aw-col-hide" style={{ fontFamily: 'monospace', fontSize: 11, color: txt }}>{r.po_no || '—'}</td>
+                      <td className="aw-col-hide" style={{ textAlign: 'right', color: txt }}>{r.qty ?? '—'}</td>
+                      <td>
+                        {r.flagged
+                          ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>⚑ Flagged</span>
+                          : r.logged
+                            ? <span style={{ background: '#166534', color: '#86efac', border: '1px solid #4ade80', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>✓ Logged</span>
+                            : <span style={{ background: '#e0e7ff', color: blueD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px' }}>Pending</span>
+                        }
+                      </td>
+                      <td className="aw-col-hide" style={{ fontSize: 10, color: dim }}>{r.logged_by || '—'}</td>
+                      <td className="aw-col-hide" style={{ fontSize: 10, color: dim, maxWidth: 140 }}>{r.note || ''}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -677,13 +802,10 @@ export default function SeasonAWPage() {
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          POs AW MODAL
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ════ POs AW MODAL ════ */}
       {showModal && (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowModal(false) }}>
           <div className="modal-box">
-            {/* Modal header */}
             <div className="modal-head">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 16, color: amber }}>🗂</span>
@@ -695,7 +817,6 @@ export default function SeasonAWPage() {
               </button>
             </div>
 
-            {/* Tabs: Paste Processor | View All */}
             <div className="modal-tabs">
               {(['paste','view'] as const).map(t => (
                 <button key={t} className={`modal-tab${modalTab === t ? ' active' : ''}`}
@@ -705,31 +826,36 @@ export default function SeasonAWPage() {
               ))}
             </div>
 
-            {/* ── PASTE PROCESSOR TAB ── */}
+            {/* PASTE TAB */}
             {modalTab === 'paste' && (
               <div className="modal-body" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10, flexShrink: 0 }}>
-                  Copy rows from your Excel PO log and paste on the left. Preview appears on the right.
-                  Columns: <strong>Date · Vendor ID · Brand · Store · C.I. · Invoice # · PO # · Season · Source · Qty</strong>
+                  Copy rows from Excel and paste left. <strong>Date · Vendor ID · Brand · Store · C.I. · Invoice # · PO # · Season · Source · Qty</strong>
                 </p>
-                <div className="paste-layout" style={{ flex: 1, minHeight: 0 }}>
-                  {/* Left: narrow paste panel */}
+                <div className="paste-layout" style={{ flex: 1 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <label style={{ ...labelSt, fontSize: 10 }}>PASTE EXCEL DATA HERE</label>
-                    <textarea
-                      className="paste-area"
-                      value={pasteText}
-                      onChange={e => handlePasteChange(e.target.value)}
-                      placeholder="Paste tab-separated rows here (copy directly from Excel)…"
-                      style={{ flex: 1, minHeight: 300 }}
-                    />
+                    <textarea className="paste-area" value={pasteText}
+                      onChange={e => { setPasteText(e.target.value); setPasteResult(null); if (e.target.value.trim()) setPastePreview(parsePasteData(e.target.value)); else setPastePreview([]) }}
+                      placeholder="Paste tab-separated rows here…" style={{ flex: 1 }} />
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <button onClick={submitPaste} disabled={pasting || pastePreview.length === 0}
-                        className="aw-btn aw-btn-primary">
+                      <button onClick={async () => {
+                        if (!pastePreview.length) return
+                        setPasting(true)
+                        const rows = pastePreview.map(r => ({ store: r.store, brand: r.brand, invoice_no: r.invoice_no, po_no: r.po_no, qty: r.qty, logged: false, flagged: false }))
+                        let ok = 0; let skip = 0
+                        for (let i = 0; i < rows.length; i += 50) {
+                          const batch = rows.slice(i, i + 50)
+                          const { error, data } = await supabase.from('season_aw').insert(batch).select('id')
+                          if (error) skip += batch.length; else ok += (data?.length || batch.length)
+                        }
+                        setPasting(false); setPasteResult({ ok, skip })
+                        if (ok > 0) { fetchAW(); fetchStoreRows(); showToast(`✅ Inserted ${ok} rows`) }
+                        if (skip > 0) showToast(`⚠️ ${skip} rows failed`, 'err')
+                      }} disabled={pasting || pastePreview.length === 0} className="aw-btn aw-btn-primary">
                         {pasting ? '…inserting…' : `⚡ Insert ${pastePreview.length} rows`}
                       </button>
-                      <button onClick={() => { setPasteText(''); setPastePreview([]); setPasteResult(null) }}
-                        className="aw-btn aw-btn-gray">Clear</button>
+                      <button onClick={() => { setPasteText(''); setPastePreview([]); setPasteResult(null) }} className="aw-btn aw-btn-gray">Clear</button>
                       {pasteResult && (
                         <span style={{ fontSize: 12, fontWeight: 700, color: pasteResult.skip > 0 ? '#dc2626' : '#15803d' }}>
                           ✓ {pasteResult.ok} inserted{pasteResult.skip > 0 ? ` · ✕ ${pasteResult.skip} failed` : ''}
@@ -737,30 +863,15 @@ export default function SeasonAWPage() {
                       )}
                     </div>
                     {pasteText && pastePreview.length === 0 && (
-                      <div style={{ fontSize: 12, color: '#dc2626' }}>
-                        No rows parsed. Make sure you copy directly from Excel with all columns present.
-                      </div>
+                      <div style={{ fontSize: 12, color: '#dc2626' }}>No rows parsed. Copy directly from Excel.</div>
                     )}
                   </div>
-
-                  {/* Right: wide preview */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-                    <label style={{ ...labelSt, fontSize: 10 }}>
-                      PREVIEW — {pastePreview.length} ROW{pastePreview.length !== 1 ? 'S' : ''} PARSED
-                    </label>
+                    <label style={{ ...labelSt, fontSize: 10 }}>PREVIEW — {pastePreview.length} ROW{pastePreview.length !== 1 ? 'S' : ''}</label>
                     {pastePreview.length > 0 ? (
                       <div style={{ flex: 1, overflow: 'auto', border: '1px solid #e0e7ff', borderRadius: 8 }}>
                         <table className="ss-table">
-                          <thead>
-                            <tr>
-                              <th>#</th>
-                              <th>Store</th>
-                              <th>Brand</th>
-                              <th>Invoice #</th>
-                              <th>PO #</th>
-                              <th>Qty</th>
-                            </tr>
-                          </thead>
+                          <thead><tr><th>#</th><th>Store</th><th>Brand</th><th>Invoice #</th><th>PO #</th><th>Qty</th></tr></thead>
                           <tbody>
                             {pastePreview.map((r, i) => (
                               <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8faff' }}>
@@ -785,87 +896,67 @@ export default function SeasonAWPage() {
               </div>
             )}
 
-            {/* ── VIEW ALL TAB ── */}
+            {/* VIEW ALL TAB */}
             {modalTab === 'view' && (
               <div className="modal-body">
-                {/* toolbar */}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                   <input value={awFilter} onChange={e => setAwFilter(e.target.value)}
-                    placeholder="Search invoice, brand, PO…"
-                    style={{ ...inputSt, flex: 1, minWidth: 160 }} />
-                  <select value={awStoreFilter} onChange={e => setAwStoreFilter(e.target.value)}
-                    style={{ ...inputSt, minWidth: 80 }}>
+                    placeholder="Search invoice, brand, PO…" style={{ ...inputSt, flex: 1, minWidth: 160 }} />
+                  <select value={awStoreFilter} onChange={e => setAwStoreFilter(e.target.value)} style={{ ...inputSt, minWidth: 80 }}>
                     <option value="ALL">All Stores</option>
                     {AW_STORES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
-                  <button onClick={fetchAW} className="aw-btn aw-btn-outline" style={{ flexShrink: 0 }}>↺ Refresh</button>
-                  <button onClick={clearSeason} disabled={clearing} className="aw-btn aw-btn-red" style={{ flexShrink: 0 }}>
-                    {clearing ? '…' : '🗑 Clear Season'}
-                  </button>
+                  <button onClick={fetchAW} className="aw-btn aw-btn-outline">↺ Refresh</button>
+                  <button onClick={clearSeason} disabled={clearing} className="aw-btn aw-btn-red">{clearing ? '…' : '🗑 Clear Season'}</button>
                 </div>
-
-                {/* legend */}
                 <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 10, fontWeight: 700 }}>
                   <span style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 4, padding: '1px 7px', color: '#92400e' }}>⚑ Flagged</span>
                   <span style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 4, padding: '1px 7px', color: '#15803d' }}>✓ Logged</span>
                   <span style={{ background: '#f8faff', border: '1px solid #c7d2fe', borderRadius: 4, padding: '1px 7px', color: blueD }}>Pending</span>
                 </div>
-
                 {awLoading ? (
                   <div style={{ padding: 24, textAlign: 'center', color: '#93c5fd' }}>Loading…</div>
                 ) : (
-                  <div style={{ overflow: 'auto', maxHeight: 480, border: '1px solid #e0e7ff', borderRadius: 8 }}>
+                  <div style={{ overflow: 'auto', maxHeight: 500, border: '1px solid #e0e7ff', borderRadius: 8 }}>
                     <table className="ss-table">
                       <thead>
-                        <tr>
-                          <th>#</th>
-                          <th>Store</th>
-                          <th>Brand</th>
-                          <th>Invoice #</th>
-                          <th>PO #</th>
-                          <th>Qty</th>
-                          <th>Status</th>
-                          <th>Logged By</th>
-                          <th>Logged At</th>
-                          <th>Note</th>
-                        </tr>
+                        <tr><th>#</th><th>Store</th><th>Brand</th><th>Invoice #</th><th>PO #</th><th>Qty</th><th>Status</th><th>Logged By</th><th>Logged At</th><th>Note</th></tr>
                       </thead>
                       <tbody>
-                        {filteredAW.map((r, i) => (
-                          <tr key={r.id} style={{ background: rowBg(r, i) }}
-                            onContextMenu={e => { e.preventDefault(); setCtxMenu({ id: r.id, x: e.clientX, y: e.clientY }) }}>
-                            <td style={{ color: '#94a3b8', width: 32 }}>{i + 1}</td>
-                            <td style={{ fontWeight: 700, color: blueD, width: 52 }}>{r.store}</td>
-                            <td style={{ fontWeight: 600 }}>{r.brand}</td>
-                            <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.invoice_no}</td>
-                            <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.po_no || '—'}</td>
-                            <td style={{ textAlign: 'right', width: 48 }}>{r.qty ?? '—'}</td>
-                            <td style={{ width: 72 }}>
-                              {r.flagged
-                                ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>⚑ Flag</span>
-                                : r.logged
-                                  ? <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>✓ Done</span>
-                                  : <span style={{ background: '#e0e7ff', color: blueD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>Pending</span>
-                              }
-                            </td>
-                            <td style={{ color: '#64748b', fontSize: 10 }}>{r.logged_by || '—'}</td>
-                            <td style={{ color: '#64748b', fontSize: 10, whiteSpace: 'nowrap' }}>{r.logged_at ? fmtTs(r.logged_at) : '—'}</td>
-                            <td style={{ color: '#64748b', fontSize: 10, maxWidth: 140 }}>{r.note || ''}</td>
-                          </tr>
-                        ))}
+                        {filteredAW.map((r, i) => {
+                          const bg = r.flagged ? '#fffbeb' : r.logged ? '#f0fdf4' : i % 2 === 0 ? '#fff' : '#f8faff'
+                          return (
+                            <tr key={r.id} style={{ background: bg }}
+                              onContextMenu={e => { e.preventDefault(); setCtxMenu({ id: r.id, x: e.clientX, y: e.clientY }) }}>
+                              <td style={{ color: '#94a3b8', width: 32 }}>{i + 1}</td>
+                              <td style={{ fontWeight: 700, color: blueD, width: 52 }}>{r.store}</td>
+                              <td style={{ fontWeight: 600 }}>{r.brand}</td>
+                              <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.invoice_no}</td>
+                              <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.po_no || '—'}</td>
+                              <td style={{ textAlign: 'right', width: 48 }}>{r.qty ?? '—'}</td>
+                              <td style={{ width: 72 }}>
+                                {r.flagged
+                                  ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>⚑ Flag</span>
+                                  : r.logged
+                                    ? <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>✓ Done</span>
+                                    : <span style={{ background: '#e0e7ff', color: blueD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>Pending</span>
+                                }
+                              </td>
+                              <td style={{ color: '#64748b', fontSize: 10 }}>{r.logged_by || '—'}</td>
+                              <td style={{ color: '#64748b', fontSize: 10, whiteSpace: 'nowrap' }}>{fmtTs(r.logged_at)}</td>
+                              <td style={{ color: '#64748b', fontSize: 10, maxWidth: 140 }}>{r.note || ''}</td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
-                    {filteredAW.length === 0 && (
-                      <div style={{ padding: 20, textAlign: 'center', color: '#93c5fd', fontSize: 12 }}>No rows found</div>
-                    )}
+                    {filteredAW.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#93c5fd', fontSize: 12 }}>No rows found</div>}
                   </div>
                 )}
-
-                {/* footer stats */}
                 <div style={{ marginTop: 8, display: 'flex', gap: 16, fontSize: 11, color: '#64748b' }}>
                   <span>{filteredAW.length} of {awRows.length} rows</span>
-                  <span style={{ color: '#15803d', fontWeight: 700 }}>✓ {loggedCount} logged</span>
-                  <span style={{ color: '#92400e', fontWeight: 700 }}>⚑ {flaggedCount} flagged</span>
+                  <span style={{ color: '#15803d', fontWeight: 700 }}>✓ {adminLoggedCount} logged</span>
+                  <span style={{ color: '#92400e', fontWeight: 700 }}>⚑ {adminFlaggedCount} flagged</span>
                 </div>
               </div>
             )}
@@ -880,27 +971,32 @@ export default function SeasonAWPage() {
           border: '1px solid #e0e7ff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
           zIndex: 9000, minWidth: 150, padding: '4px 0', overflow: 'hidden',
         }}>
-          <button onClick={() => { const r = awRows.find(x => x.id === ctxMenu.id); if (r) openEdit(r) }}
-            style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: blueD, fontWeight: 600, cursor: 'pointer' }}>
-            ✏️ Edit
-          </button>
-          {(() => { const r = awRows.find(x => x.id === ctxMenu.id); return r?.logged ? (
-            <button onClick={() => unlogRowAdmin(r)}
-              style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: amber, fontWeight: 600, cursor: 'pointer' }}>
-              ↩ Un-log
-            </button>
-          ) : null })()}
-          <button onClick={() => deleteRow(ctxMenu.id)}
-            style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>
-            🗑 Delete
-          </button>
+          {(() => {
+            const r = [...storeRows, ...awRows].find(x => x.id === ctxMenu.id)
+            return <>
+              <button onClick={() => { if (r) openEdit(r) }}
+                style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: blueD, fontWeight: 600, cursor: 'pointer' }}>
+                ✏️ Edit
+              </button>
+              {r?.logged && (
+                <button onClick={() => { if (r) unlogRowAdmin(r) }}
+                  style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: amber, fontWeight: 600, cursor: 'pointer' }}>
+                  ↩ Un-log
+                </button>
+              )}
+              <button onClick={() => deleteRow(ctxMenu.id)}
+                style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>
+                🗑 Delete
+              </button>
+            </>
+          })()}
         </div>
       )}
 
       {/* ── EDIT MODAL ── */}
       {editRow && (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setEditRow(null) }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 20, width: '100%', maxWidth: 400, boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}
+          <div style={{ background: '#fff', borderRadius: 12, padding: 20, width: '100%', maxWidth: 400, boxShadow: '0 8px 40px rgba(0,0,0,0.2)', marginTop: 40 }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 14, fontWeight: 800, color: blueD, marginBottom: 14 }}>Edit Row</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -928,9 +1024,7 @@ export default function SeasonAWPage() {
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button onClick={() => setEditRow(null)} className="aw-btn aw-btn-gray">Cancel</button>
-              <button onClick={saveEdit} disabled={saving} className="aw-btn aw-btn-primary">
-                {saving ? '…' : '✓ Save'}
-              </button>
+              <button onClick={saveEdit} disabled={saving} className="aw-btn aw-btn-primary">{saving ? '…' : '✓ Save'}</button>
             </div>
           </div>
         </div>
