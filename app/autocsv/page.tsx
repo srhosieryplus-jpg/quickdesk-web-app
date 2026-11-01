@@ -28,8 +28,6 @@ export default function AutoCSVPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [activeTab, setActiveTab] = useState<'processor' | 'logbook'>('processor')
-  // Mobile: which panel is active in the step flow
-  const [mobileStep, setMobileStep] = useState<0|1|2|3>(0)
 
   // Invoice Processor state
   const [vendorCSV, setVendorCSV] = useState('')
@@ -202,7 +200,6 @@ export default function AutoCSVPage() {
       (alreadyLoggedCount > 0 ? ` | ⚠ ${alreadyLoggedCount} invoice(s) already in log — possible double import!` : '')
     )
     showToast(`✅ ${dataLines.length} rows · ${rows.length} unique`)
-    setMobileStep(1) // advance to summary on mobile
   }
 
   const POS_COLS = ['','InvoiceNoCompany','PONum','Customer','Style','UPC','ShippedQTY','ID','CreatedPO','ItemNotOnOrder','ValidUPC','POPreviouslyClosed','StoreID','NewPONumber'] as const
@@ -246,7 +243,6 @@ export default function AutoCSVPage() {
     setPosSummary(['InvoiceNoCompany\tPONum\tCustomer\tStoreID\tShippedQty (sum)', ...invLines].join('\n'))
     showToast(`✅ ${good.length} clean · ${bad.length} error${bad.length !== 1 ? 's' : ''}`)
     if (bad.length > 0) setShowAddFixed(false)
-    setMobileStep(3) // advance to POS summary on mobile
   }
 
   async function logToSupabase(
@@ -294,7 +290,7 @@ export default function AutoCSVPage() {
     setVendorCSV(''); setVendorSummaryRows([]); setVendorFooter('')
     setPosQuery(''); setPosSummary(''); setPosRows([]); setPosErrors([])
     setPendingLog({}); setShowAddFixed(false); setFixedInput('')
-    setShowErrorModal(false); setMobileStep(0)
+    setShowErrorModal(false)
   }
 
   if (!user) return null
@@ -338,9 +334,6 @@ export default function AutoCSVPage() {
     padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
   })
 
-  // Mobile step labels
-  const STEPS = ['1 · Vendor CSV', '2 · Summary', '3 · POS Query', '4 · POS Result']
-
   return (
     <div style={{ minHeight: '100vh', background: '#eeeaf6', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, sans-serif' }}>
       <style>{`
@@ -353,32 +346,22 @@ export default function AutoCSVPage() {
         }
         @media (max-width: 700px) {
           .acsv-grid { grid-template-columns: 1fr; grid-template-rows: none; gap: 8px; padding: 8px; }
-          .acsv-panel { min-height: 320px; }
-          .acsv-panel-hide { display: none !important; }
-          .acsv-panel-show { display: flex !important; }
-          .acsv-ta { font-size: 16px !important; min-height: 220px; }
-          .acsv-step-bar { display: flex !important; }
           .acsv-hdr-hint { display: none; }
           .log-toolbar { flex-wrap: wrap; }
           .log-search { font-size: 16px !important; }
+          /* Input panels: short textarea, just enough to paste */
+          .acsv-panel-input { min-height: 160px; }
+          .acsv-panel-input .acsv-ta { min-height: 100px; height: 100px !important; font-size: 16px !important; }
+          /* Summary panels: tall so data is readable */
+          .acsv-panel-summary { min-height: 300px; }
+          /* Log book: tighter table on mobile */
+          .log-col-hide { display: none; }
+          .log-table td, .log-table th { padding: 5px 6px !important; font-size: 10px !important; }
+          .log-table th { font-size: 9px !important; letter-spacing: 0 !important; }
         }
         @media (min-width: 701px) {
-          .acsv-panel { display: flex !important; }
-          .acsv-step-bar { display: none !important; }
+          .log-col-hide { display: table-cell; }
         }
-        .acsv-step-bar {
-          display: none;
-          overflow-x: auto; gap: 4px; padding: 8px 12px;
-          background: rgba(255,255,255,0.5); border-bottom: 1px solid ${border};
-          flex-shrink: 0;
-        }
-        .step-btn {
-          padding: 6px 14px; border-radius: 20px; border: 1.5px solid ${border};
-          background: #fff; color: #9b8ec4; font-size: 11px; font-weight: 700;
-          cursor: pointer; white-space: nowrap; flex-shrink: 0;
-        }
-        .step-btn.active { background: ${purple}; color: #fff; border-color: ${purple}; }
-        .step-btn.done { background: #dcfce7; color: #15803d; border-color: #86efac; }
       `}</style>
 
       {/* Toast */}
@@ -417,12 +400,6 @@ export default function AutoCSVPage() {
               🗑 Clear
             </button>
           )}
-          {activeTab === 'logbook' && (
-            <button onClick={fetchLogEntries}
-              style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: purple }}>
-              🔄 Refresh
-            </button>
-          )}
         </div>
       </div>
 
@@ -449,30 +426,10 @@ export default function AutoCSVPage() {
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'processor' && (
         <>
-          {/* Mobile step nav bar */}
-          <div className="acsv-step-bar">
-            {STEPS.map((label, i) => {
-              const isDone = (i === 0 && vendorSummaryRows.length > 0) ||
-                             (i === 1 && vendorSummaryRows.length > 0) ||
-                             (i === 2 && posRows.length > 0) ||
-                             (i === 3 && posSummary)
-              return (
-                <button key={i}
-                  className={`step-btn${mobileStep === i ? ' active' : isDone ? ' done' : ''}`}
-                  onClick={() => setMobileStep(i as 0|1|2|3)}>
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-
           <div className="acsv-grid">
 
             {/* PANEL 0 — Vendor CSV input */}
-            <div className={`acsv-panel ${panelStyle ? '' : ''}`}
-              style={{ ...panelStyle, display: mobileStep === 0 ? 'flex' : undefined }}
-              // on desktop always visible; on mobile only when step=0 (handled by CSS class)
-            >
+            <div className="acsv-panel acsv-panel-input" style={panelStyle}>
               <div style={{ ...panelHeaderStyle }}>
                 <span style={panelLabelStyle}>Vendor CSV</span>
                 <span className="acsv-hdr-hint" style={{ fontSize: 10, color: '#b8aed8' }}>InvoiceNoCompany · PONum · Customer · Style · UPC · ShippedQty</span>
@@ -497,8 +454,7 @@ export default function AutoCSVPage() {
             </div>
 
             {/* PANEL 1 — Vendor Summary */}
-            <div className="acsv-panel"
-              style={{ ...panelStyle, display: mobileStep === 1 ? 'flex' : undefined }}>
+            <div className="acsv-panel acsv-panel-summary" style={panelStyle}>
               <div style={panelHeaderStyle}>
                 <span style={panelLabelStyle}>Summary + Errors</span>
                 {vendorSummaryRows.length > 0 && (
@@ -540,8 +496,7 @@ export default function AutoCSVPage() {
             </div>
 
             {/* PANEL 2 — POS Query input */}
-            <div className="acsv-panel"
-              style={{ ...panelStyle, display: mobileStep === 2 ? 'flex' : undefined }}>
+            <div className="acsv-panel acsv-panel-input" style={panelStyle}>
               <div style={panelHeaderStyle}>
                 <span style={panelLabelStyle}>POS Query</span>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -612,8 +567,7 @@ export default function AutoCSVPage() {
             </div>
 
             {/* PANEL 3 — POS Summary */}
-            <div className="acsv-panel"
-              style={{ ...panelStyle, display: mobileStep === 3 ? 'flex' : undefined }}>
+            <div className="acsv-panel acsv-panel-summary" style={panelStyle}>
               <div style={panelHeaderStyle}>
                 <span style={panelLabelStyle}>POS Summary</span>
                 {posRows.length > 0 && (
@@ -747,36 +701,29 @@ export default function AutoCSVPage() {
           </div>
 
           <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'auto', flex: 1, boxShadow: '0 2px 16px rgba(124,58,237,0.07)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+            <table className="log-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                 <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
-                  <th style={{ padding: '10px 10px', width: 32 }}>
+                  <th style={{ padding: '10px 6px', width: 28 }}>
                     <input type="checkbox"
                       checked={filteredLog.length > 0 && selectedIds.size === filteredLog.length}
                       onChange={() => toggleSelectAll(filteredLog.map(e => e.id))}
                       style={{ cursor: 'pointer' }}
                     />
                   </th>
-                  {[
-                    { label: 'Timestamp', ic: false },
-                    { label: 'Invoice #',  ic: false },
-                    { label: 'PO #',       ic: false },
-                    { label: 'Store',      ic: false },
-                    { label: 'CSV Qty',    ic: false },
-                    { label: 'POS Qty',    ic: false },
-                    { label: 'Match',      ic: false },
-                    { label: 'IC Order #', ic: true },
-                    { label: 'Logged By',  ic: true },
-                    { label: 'IC Status',  ic: true },
-                    { label: 'Note',       ic: true },
-                  ].map(({ label, ic }) => (
-                    <th key={label} style={{
-                      padding: '10px 12px', textAlign: 'left', fontSize: 10,
-                      fontWeight: 800, color: ic ? '#0369a1' : purple,
-                      letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap',
-                      borderRight: label === 'Match' ? `2px solid ${border}` : undefined,
-                    }}>{label}</th>
-                  ))}
+                  {/* Timestamp — hidden on mobile */}
+                  <th className="log-col-hide" style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Timestamp</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Invoice #</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>PO #</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Store</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>CSV</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>POS</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap', borderRight: `2px solid ${border}` }}>✓</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>IC #</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>By</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
+                  {/* Note — hidden on mobile */}
+                  <th className="log-col-hide" style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Note</th>
                 </tr>
               </thead>
               <tbody>
@@ -797,32 +744,32 @@ export default function AutoCSVPage() {
                       borderTop: i === 0 ? 'none' : `1px solid ${hasIC ? '#bbf7d0' : '#f0ebff'}`,
                       background: isSel ? '#ede9fe' : hasIC ? (i%2===0 ? '#dcfce7' : '#d1fae5') : i%2===0 ? '#fff' : '#faf8ff',
                     }}>
-                      <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                      <td style={{ padding: '7px 6px', textAlign: 'center' }}>
                         <input type="checkbox" checked={isSel} onChange={() => toggleSelect(e.id)} style={{ cursor: 'pointer' }} />
                       </td>
-                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>{ts}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace' }}>{e.invoice_num}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, color: '#333', fontFamily: 'monospace' }}>{e.po_num || '—'}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600 }}>{e.store}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'center', fontFamily: 'monospace' }}>{csvQty}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, color: posQty !== null ? '#333' : '#d1d5db', textAlign: 'center', fontFamily: 'monospace' }}>{posQty ?? '—'}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 13, textAlign: 'center', borderRight: `2px solid ${border}` }}>
+                      <td className="log-col-hide" style={{ padding: '7px 8px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>{ts}</td>
+                      <td style={{ padding: '7px 8px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{e.invoice_num}</td>
+                      <td style={{ padding: '7px 8px', fontSize: 12, color: '#333', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{e.po_num || '—'}</td>
+                      <td style={{ padding: '7px 8px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{e.store}</td>
+                      <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center', fontFamily: 'monospace' }}>{csvQty}</td>
+                      <td style={{ padding: '7px 8px', fontSize: 12, color: posQty !== null ? '#333' : '#d1d5db', textAlign: 'center', fontFamily: 'monospace' }}>{posQty ?? '—'}</td>
+                      <td style={{ padding: '7px 8px', fontSize: 13, textAlign: 'center', borderRight: `2px solid ${border}` }}>
                         {match === true ? <span style={{ color: '#16a34a', fontWeight: 800 }}>✓</span>
                           : match === false ? <span style={{ color: '#dc2626', fontWeight: 800 }}>✗</span>
                           : ''}
                       </td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'monospace', color: hasIC ? '#0369a1' : '#d1d5db', fontWeight: hasIC ? 700 : 400 }}>{e.ic_order_num || '—'}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, color: e.ic_logged_by ? '#0369a1' : '#6b7280' }}>{e.ic_logged_by || <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 11 }}>
+                      <td style={{ padding: '7px 8px', fontSize: 12, fontFamily: 'monospace', color: hasIC ? '#0369a1' : '#d1d5db', fontWeight: hasIC ? 700 : 400, whiteSpace: 'nowrap' }}>{e.ic_order_num || '—'}</td>
+                      <td style={{ padding: '7px 8px', fontSize: 12, color: e.ic_logged_by ? '#0369a1' : '#6b7280', whiteSpace: 'nowrap' }}>{e.ic_logged_by || <span style={{ color: '#d1d5db' }}>—</span>}</td>
+                      <td style={{ padding: '7px 8px', fontSize: 11, whiteSpace: 'nowrap' }}>
                         {e.ic_status ? (
                           <span style={{
                             background: e.ic_status.toLowerCase().includes('push') ? '#dcfce7' : '#eff6ff',
                             color: e.ic_status.toLowerCase().includes('push') ? '#15803d' : '#1d4ed8',
-                            borderRadius: 4, padding: '2px 7px', fontWeight: 700, fontSize: 10,
+                            borderRadius: 4, padding: '2px 6px', fontWeight: 700, fontSize: 10,
                           }}>{e.ic_status}</span>
                         ) : ''}
                       </td>
-                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#6b7280' }}>{e.ic_note || ''}</td>
+                      <td className="log-col-hide" style={{ padding: '7px 8px', fontSize: 11, color: '#6b7280' }}>{e.ic_note || ''}</td>
                     </tr>
                   )
                 })}
