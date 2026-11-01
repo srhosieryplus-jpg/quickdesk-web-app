@@ -200,18 +200,20 @@ export default function QDPage() {
     const parsed = parsePasteText(text)
     setPastePreview(parsed)
     if (parsed) {
-      // Auto-detect UPC column
+      // Auto-detect UPC column — only set if we find a clear match, otherwise leave blank
       const upcIdx = parsed.headers.findIndex(h => /upc|barcode|ean|scan/i.test(h))
       setPasteUpcCol(upcIdx >= 0 ? parsed.headers[upcIdx] : '')
+    } else {
+      setPasteUpcCol('')
     }
   }
 
   function applySmartPaste() {
     if (!pastePreview) return
     const { headers, rows } = pastePreview
-    const upcColName = pasteUpcCol || headers[0]
-    const upcIdx = headers.indexOf(upcColName)
-    if (upcIdx < 0) { showToast('⚠ Select a UPC column'); return }
+    if (!pasteUpcCol) { showToast('⚠ Select which column has the UPC/barcode'); return }
+    const upcIdx = headers.indexOf(pasteUpcCol)
+    if (upcIdx < 0) { showToast('⚠ UPC column not found'); return }
 
     // All non-UPC columns become extra cols
     const extraHeaders = headers.filter((_, i) => i !== upcIdx)
@@ -653,10 +655,15 @@ export default function QDPage() {
             {pastePreview && (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <label style={labelSt}>Which column has the UPC / Barcode?</label>
-                  <select value={pasteUpcCol} onChange={e => setPasteUpcCol(e.target.value)} style={inputSt}>
+                  <label style={labelSt}>Which column has the UPC / Barcode? <span style={{ color: '#dc2626' }}>*</span></label>
+                  <select value={pasteUpcCol} onChange={e => setPasteUpcCol(e.target.value)}
+                    style={{ ...inputSt, borderColor: !pasteUpcCol ? '#f87171' : border }}>
+                    <option value="">— select a column —</option>
                     {pastePreview.headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
+                  {!pasteUpcCol && (
+                    <span style={{ fontSize: 10, color: '#dc2626' }}>Pick which column contains the UPC / barcode number</span>
+                  )}
                 </div>
 
                 <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', maxHeight: 200 }}>
