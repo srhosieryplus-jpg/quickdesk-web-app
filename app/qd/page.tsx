@@ -51,6 +51,11 @@ export default function QDPage() {
   const [colName, setColName] = useState('')
   const pendingScanRef = useRef<string>('')
 
+  const [showSmartPaste, setShowSmartPaste] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [pastePreview, setPastePreview] = useState<{ headers: string[]; rows: string[][] } | null>(null)
+  const [pasteUpcCol, setPasteUpcCol] = useState('')
+
   useEffect(() => {
     const u = getSession()
     if (!u) { router.push('/'); return }
@@ -165,6 +170,100 @@ export default function QDPage() {
       prev.order_list.forEach(upc => { const r = { ...d[upc] }; delete r[col]; d[upc] = r })
       return { ...prev, extra_cols: prev.extra_cols.filter(c => c !== col), data: d }
     })
+  }
+
+  function parsePasteText(text: string): { headers: string[]; rows: string[][] } | null {
+    const lines = text.trim().split(/\r?\n/).filter(l => l.trim())
+    if (lines.length < 2) return null
+    const splitLine = (line: string) => {
+      // Try tab-separated first, then comma
+      if (line.includes('\t')) return line.split('\t').map(c => c.trim())
+      // Simple CSV split (handles quoted fields)
+      const result: string[] = []
+      let cur = '', inQ = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (ch === '"') { inQ = !inQ }
+        else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = '' }
+        else { cur += ch }
+      }
+      result.push(cur.trim())
+      return result
+    }
+    const headers = splitLine(lines[0])
+    const rows = lines.slice(1).map(splitLine)
+    return { headers, rows }
+  }
+
+  function handlePasteChange(text: string) {
+    setPasteText(text)
+    const parsed = parsePasteText(text)
+    setPastePreview(parsed)
+    if (parsed) {
+      // Auto-detect UPC column
+      const upcIdx = parsed.headers.findIndex(h => /upc|barcode|ean|scan/i.test(h))
+      setPasteUpcCol(upcIdx >= 0 ? parsed.headers[upcIdx] : '')
+    }
+  }
+
+  function applySmartPaste() {
+    if (!pastePreview) return
+    const { headers, rows } = pastePreview
+    const upcColName = pasteUpcCol || headers[0]
+    const upcIdx = headers.indexOf(upcColName)
+    if (upcIdx < 0) { showToast('⚠ Select a UPC column'); return }
+
+    // All non-UPC columns become extra cols
+    const extraHeaders = headers.filter((_, i) => i !== upcIdx)
+
+    // If no session, require one first
+    if (!session) {
+      showToast('Start a session first, then use Smart Paste')
+      setShowSmartPaste(false)
+      setShowModal(true)
+      return
+    }
+
+    setSession(prev => {
+      if (!prev) return prev
+      const newExtra = [...prev.extra_cols]
+      extraHeaders.forEach(h => { if (!newExtra.includes(h)) newExtra.push(h) })
+
+      const d = { ...prev.data }
+      const order = [...prev.order_list]
+
+      rows.forEach(row => {
+        const upc = row[upcIdx]?.trim()
+        if (!upc) return
+        const existing = d[upc]
+        if (!existing) {
+          // Pre-populate: qty 0 means "expected but not scanned"
+          const entry: ScanData = { qty: 0 }
+          newExtra.forEach(col => { entry[col] = '' })
+          extraHeaders.forEach(col => {
+            const ci = headers.indexOf(col)
+            entry[col] = ci >= 0 ? (row[ci] || '') : ''
+          })
+          d[upc] = entry
+          order.push(upc)
+        } else {
+          // Merge extra col data into existing row
+          extraHeaders.forEach(col => {
+            const ci = headers.indexOf(col)
+            if (ci >= 0 && row[ci]) d[upc] = { ...d[upc], [col]: row[ci] }
+          })
+        }
+      })
+
+      return { ...prev, extra_cols: newExtra, order_list: order, data: d }
+    })
+
+    const count = rows.filter(r => r[upcIdx]?.trim()).length
+    showToast(`✓ Loaded ${count} UPCs from paste`)
+    setShowSmartPaste(false)
+    setPasteText('')
+    setPastePreview(null)
+    setPasteUpcCol('')
   }
 
   async function saveSession() {
@@ -374,6 +473,12 @@ export default function QDPage() {
               )}
             </div>
 
+            {/* Smart Paste button */}
+            <button onClick={() => setShowSmartPaste(true)}
+              style={{ width: '100%', ...btnSt('ghost'), justifyContent: 'center', fontSize: 11, padding: '5px 8px', background: '#ede9fe', color: '#6d28d9', border: `1px solid ${border}` }}>
+              📋 Smart Paste
+            </button>
+
             <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
 
             {/* Recent sessions (last 5) */}
@@ -513,6 +618,92 @@ export default function QDPage() {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => setShowModal(false)} style={btnSt('ghost')}>Cancel</button>
               <button onClick={startSession} style={btnSt('primary')}>Start</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Smart Paste modal */}
+      {showSmartPaste && (
+        <div onClick={e => e.target === e.currentTarget && setShowSmartPaste(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+          <div style={{ background: '#fff', borderRadius: 10, padding: 20, width: 'min(520px, 96vw)', boxShadow: '0 16px 50px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>📋</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: purpleD, flex: 1 }}>Smart Paste</span>
+              <button onClick={() => { setShowSmartPaste(false); setPasteText(''); setPastePreview(null) }}
+                style={{ background: 'none', border: 'none', fontSize: 16, color: '#6b7280', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <p style={{ fontSize: 11, color: '#6b7280', margin: 0, lineHeight: 1.5 }}>
+              Paste a table (from Excel, Google Sheets, or CSV). The <strong>first row</strong> should be headers (e.g. Style, Color, UPC). Rows with a UPC will be pre-loaded — staff just scans to confirm qty.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <label style={labelSt}>Paste data here</label>
+              <textarea
+                value={pasteText}
+                onChange={e => handlePasteChange(e.target.value)}
+                placeholder={'Style\tColor\tUPC\nABC123\tBlack\t012345678901\nABC123\tWhite\t012345678902'}
+                rows={6}
+                style={{ width: '100%', padding: '7px 10px', border: `1.5px solid ${border}`, borderRadius: 5, fontFamily: 'Courier New, monospace', fontSize: 11, background: purpleLight, color: '#1f2937', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            {pastePreview && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <label style={labelSt}>Which column has the UPC / Barcode?</label>
+                  <select value={pasteUpcCol} onChange={e => setPasteUpcCol(e.target.value)} style={inputSt}>
+                    {pastePreview.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', maxHeight: 200 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: '#CFC5ED' }}>
+                        {pastePreview.headers.map(h => (
+                          <th key={h} style={{ ...thSt, fontSize: 10, background: h === pasteUpcCol ? '#a78bfa' : undefined, color: h === pasteUpcCol ? '#fff' : undefined }}>
+                            {h === pasteUpcCol ? `🔑 ${h}` : h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pastePreview.rows.slice(0, 8).map((row, ri) => (
+                        <tr key={ri} style={{ background: ri % 2 === 0 ? purpleLight : '#fafafa' }}>
+                          {row.map((cell, ci) => (
+                            <td key={ci} style={{ ...tdSt, fontSize: 10, fontFamily: pastePreview.headers[ci] === pasteUpcCol ? 'Courier New, monospace' : undefined }}>
+                              {cell || <span style={{ color: '#d1d5db' }}>—</span>}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {pastePreview.rows.length > 8 && (
+                    <div style={{ padding: '4px 10px', fontSize: 10, color: '#6b7280', textAlign: 'center', borderTop: `1px solid ${border}` }}>
+                      +{pastePreview.rows.length - 8} more rows
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, padding: '7px 10px', fontSize: 11, color: '#166534' }}>
+                  ✓ <strong>{pastePreview.rows.filter(r => r[pastePreview.headers.indexOf(pasteUpcCol)]?.trim()).length} UPCs</strong> will be pre-loaded
+                  {pastePreview.headers.filter(h => h !== pasteUpcCol).length > 0 && (
+                    <> with columns: <strong>{pastePreview.headers.filter(h => h !== pasteUpcCol).join(', ')}</strong></>
+                  )}
+                </div>
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setShowSmartPaste(false); setPasteText(''); setPastePreview(null) }} style={btnSt('ghost')}>Cancel</button>
+              <button onClick={applySmartPaste} disabled={!pastePreview}
+                style={{ ...btnSt('primary'), opacity: pastePreview ? 1 : 0.4 }}>
+                📋 Apply Paste
+              </button>
             </div>
           </div>
         </div>
