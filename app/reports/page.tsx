@@ -102,7 +102,8 @@ export default function ReportsPage() {
 
   async function cycleUpcStatus(id: string, current: 'waiting' | 'ready' | 'complete') {
     const next = current === 'waiting' ? 'ready' : current === 'ready' ? 'complete' : 'waiting'
-    await supabase.from('upc_sessions').update({ status: next }).eq('id', id)
+    const { error } = await supabase.from('upc_sessions').update({ status: next }).eq('id', id)
+    if (error) { showToast('❌ ' + error.message); return }
     setUpc(prev => prev.map(r => r.id === id ? { ...r, status: next } : r))
     const label = next === 'complete' ? '✅ Marked complete' : next === 'ready' ? '👀 Marked ready' : '⏳ Reset to waiting'
     showToast(label)
