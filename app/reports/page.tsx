@@ -31,6 +31,12 @@ interface UPCSession {
 
 type TabId = 'overview' | 'tasks' | 'season' | 'ic' | 'upc'
 
+const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
+function displayUser(id: string | null | undefined) {
+  if (!id) return '—'
+  return USER_DISPLAY[id.toUpperCase()] ?? id
+}
+
 function formatDate(iso: string) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -118,7 +124,7 @@ export default function ReportsPage() {
   const allFeed: FeedItem[] = [
     ...tasks.map(r => ({
       time: r.saved_at, module: 'Task', store: r.store, label: r.task,
-      userid: r.logged_by || '—',
+      userid: displayUser(r.logged_by),
       isPending: !r.done,
       status: r.done ? '✓ Done' : 'Open',
       statusColor: r.done ? '#166534' : '#92400e',
@@ -127,13 +133,13 @@ export default function ReportsPage() {
     })),
     ...season.map(r => ({
       time: r.saved_at, module: r.season_type || 'Season', store: r.store,
-      label: `${r.vendor} — ${r.invoice}`, userid: r.logged_by || '—',
+      label: `${r.vendor} — ${r.invoice}`, userid: displayUser(r.logged_by),
       isPending: false,
       status: 'Logged', statusColor: '#1e40af', statusBg: '#dbeafe', statusBorder: '#93c5fd',
     })),
     ...ic.map(r => ({
       time: r.saved_at, module: 'IC', store: r.store, label: r.order_num,
-      userid: r.userid || '—',
+      userid: displayUser(r.userid),
       isPending: r.status === 'Pending',
       status: r.status === 'Pushed In' ? '✓ Pushed' : 'Pending',
       statusColor: r.status === 'Pushed In' ? '#166534' : '#92400e',
@@ -145,7 +151,7 @@ export default function ReportsPage() {
       const hasPlaceholders = rows.some(x => !x.upc || (x as any)._isPlaceholder === 1)
       return {
         time: r.saved_at, module: 'UPC', store: r.store, label: r.name,
-        userid: r.userid || '—',
+        userid: displayUser(r.userid),
         isPending: hasPlaceholders,
         status: hasPlaceholders ? '⏳ Awaiting' : '✓ Complete',
         statusColor: hasPlaceholders ? '#1e40af' : '#166534',
@@ -191,7 +197,7 @@ export default function ReportsPage() {
           </button>
           <div style={{ width: 1, height: 16, background: border }} />
           <span style={{ fontSize: 12, color: '#9b8ec4' }}>
-            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{user.userid}</span>
+            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{displayUser(user.userid)}</span>
             {user.store ? <> · {user.store === 'ALL' ? 'All Stores' : user.store}</> : ''}
           </span>
         </div>
@@ -328,7 +334,7 @@ export default function ReportsPage() {
                     return (
                       <tr key={r.id} style={{ background: rowBg }}>
                         <td style={{ color: dim, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
-                        <td style={{ color: done ? '#86efac' : purple, fontWeight: 700 }}>{r.logged_by}</td>
+                        <td style={{ color: done ? '#86efac' : purple, fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
                         <td style={{ color: txt, fontWeight: 600 }}>{r.store}</td>
                         <td style={{ color: done ? '#fff' : '#111', maxWidth: 300 }}>{r.task}</td>
                         <td className="ic-col-hide" style={{ color: dim, maxWidth: 200 }}>{r.note || ''}</td>
@@ -368,7 +374,7 @@ export default function ReportsPage() {
                   {filteredSeason.map((r, i) => (
                     <tr key={r.id} style={{ background: i%2===0 ? '#fff' : '#faf8ff' }}>
                       <td style={{ color: gray, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
-                      <td style={{ color: purple, fontWeight: 700 }}>{r.logged_by}</td>
+                      <td style={{ color: purple, fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
                       <td style={{ fontWeight: 600 }}>{r.store}</td>
                       <td>
                         <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700, background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}>
@@ -410,7 +416,7 @@ export default function ReportsPage() {
                     return (
                       <tr key={r.id} style={{ background: rowBg }}>
                         <td style={{ color: dim, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
-                        <td style={{ color: pushed ? '#86efac' : purple, fontWeight: 700 }}>{r.userid}</td>
+                        <td style={{ color: pushed ? '#86efac' : purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
                         <td style={{ color: txt, fontWeight: 600 }}>{r.store}</td>
                         <td style={{ color: pushed ? '#fff' : purpleD, fontWeight: 700, fontFamily: 'monospace' }}>{r.order_num}</td>
                         <td>
@@ -456,7 +462,7 @@ export default function ReportsPage() {
                     return (
                       <tr key={r.id} style={{ background: i%2===0 ? '#fff' : '#faf8ff' }}>
                         <td style={{ color: gray, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
-                        <td style={{ color: purple, fontWeight: 700 }}>{r.userid}</td>
+                        <td style={{ color: purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
                         <td style={{ fontWeight: 600 }}>{r.store}</td>
                         <td style={{ color: purpleD, fontWeight: 700 }}>{r.name}</td>
                         <td className="ic-col-hide" style={{ textAlign: 'center', color: gray }}>{rows.length}</td>
