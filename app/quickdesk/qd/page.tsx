@@ -690,42 +690,29 @@ export default function QDPage() {
                       const isNextTarget = upc === nextPlaceholderKey
                       const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
                       const cellSt: React.CSSProperties = {
-                        display: 'block', width: '100%', height: '100%',
-                        padding: '4px 7px', border: 'none', outline: 'none',
-                        fontSize: 12, background: 'transparent', fontFamily: 'Inter, sans-serif',
+                        display: 'block', width: '100%', padding: '5px 7px',
+                        border: 'none', outline: 'none', fontSize: 12,
+                        background: 'transparent', fontFamily: 'Inter, sans-serif',
                         boxSizing: 'border-box',
                       }
                       return (
                         <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}>
-                          <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '4px 4px' }}>{ri + 1}</td>
-                          <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg }}>
-                            <input
-                              type="text"
-                              defaultValue={isPlaceholder ? '' : upc}
-                              style={{ ...cellSt, fontWeight: 600, fontFamily: 'Courier New, monospace', letterSpacing: '0.4px', cursor: isPlaceholder ? 'pointer' : 'text' }}
-                              onFocus={isPlaceholder ? e => {
-                                setTargetedPlaceholder(upc)
-                                e.currentTarget.blur()
-                              } : undefined}
-                              onBlur={e => {
-                                const newUpc = e.target.value.trim()
-                                if (!isPlaceholder && newUpc && newUpc !== upc) {
-                                  setSession(prev => {
-                                    if (!prev) return prev
-                                    const d = { ...prev.data }
-                                    const order = [...prev.order_list]
-                                    d[newUpc] = { ...d[upc], _isPlaceholder: 0 }
-                                    delete d[upc]
-                                    order[order.indexOf(upc)] = newUpc
-                                    return { ...prev, order_list: order, data: d }
-                                  })
-                                }
-                              }}
-                            />
+                          <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '5px 4px' }}>{ri + 1}</td>
+                          <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg }}
+                            onClick={isPlaceholder ? () => setTargetedPlaceholder(upc) : undefined}>
+                            <span style={{
+                              display: 'block', padding: '5px 7px', fontSize: 12,
+                              fontWeight: 600, fontFamily: 'Courier New, monospace',
+                              letterSpacing: '0.4px', color: isPlaceholder ? '#9ca3af' : '#111',
+                              cursor: isPlaceholder ? 'pointer' : 'text', minHeight: 26,
+                              ...(isNextTarget ? { color: '#15803d', fontStyle: 'italic', fontSize: 11 } : {}),
+                            }}>
+                              {isPlaceholder ? (isNextTarget ? '← next scan' : '') : upc}
+                            </span>
                           </td>
                           <td style={tdSt}>
                             <input type="number" min="0" value={row.qty}
-                              style={{ ...cellSt, fontWeight: 700, color: purple, textAlign: 'center' }}
+                              style={{ ...cellSt, fontWeight: 700, color: isPlaceholder ? '#d1d5db' : purple, textAlign: 'center' }}
                               onChange={e => updateQty(upc, e.target.value)}
                               onBlur={e => { const v = e.target.value; setTimeout(() => { if (!v || +v <= 0) removeUpc(upc) }, 150) }} />
                           </td>
@@ -738,7 +725,7 @@ export default function QDPage() {
                           ))}
                           <td style={{ ...tdSt, borderRight: 'none', textAlign: 'center', padding: '2px' }}>
                             <button onClick={() => removeUpc(upc)}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 12, cursor: 'pointer', padding: '2px 4px', borderRadius: 3, lineHeight: 1 }}>✕</button>
+                              style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 14, cursor: 'pointer', padding: '2px 6px', borderRadius: 3, lineHeight: 1 }}>✕</button>
                           </td>
                         </tr>
                       )
