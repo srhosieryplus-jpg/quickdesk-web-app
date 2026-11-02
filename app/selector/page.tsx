@@ -70,7 +70,7 @@ export default function SelectorPage() {
           cursor: pointer;
           border: none;
           background: none;
-          clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+          clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
           transition: transform 0.12s, filter 0.12s;
           position: absolute;
         }
@@ -120,28 +120,32 @@ export default function SelectorPage() {
         <p style={{ fontSize: 12, color: '#9b8ec4' }}>— choose a module to begin</p>
       </div>
 
-      {/* Module grid — honeycomb */}
+      {/* Module grid — honeycomb flat-top */}
       {(() => {
-        const HEX = mobile ? 150 : 150
+        // Flat-top hex: clip-path polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)
+        // W = hex width, H = hex height = W * 0.866
+        // Columns advance by W * 0.75 horizontally; odd cols offset down by H/2
+        const W   = mobile ? 160 : 170
+        const H   = Math.round(W * 0.866)
+        const GAP = 8
         const COLS = mobile ? 2 : 4
-        const H   = HEX * 0.866
-        const GAP = mobile ? 4 : 6
-        const W = HEX + GAP
-        const ROW_H = H * 0.75 + GAP * 0.5
-        const totalRows = Math.ceil(modules.length / COLS)
-        const gridW = COLS * W + HEX * 0.5
-        const gridH = totalRows * ROW_H + H * 0.25 + 20
+        const colStep = W * 0.75 + GAP * 0.5
+        const rowStep = H + GAP
+        // lay out in column-major order so odd cols drop by H/2
+        const totalCols = COLS
+        const totalRows = Math.ceil(modules.length / totalCols)
+        const gridW = totalCols * colStep + W * 0.25 + 20
+        const gridH = totalRows * rowStep + H * 0.5 + 20
         return (
           <div className="module-grid" style={{ width: gridW, height: gridH, maxWidth: '100vw' }}>
             {modules.map((m, idx) => {
-              const row = Math.floor(idx / COLS)
               const col = idx % COLS
-              const offsetX = row % 2 === 1 ? W * 0.5 : 0
-              const cx = col * W + HEX / 2 + offsetX
-              const cy = row * ROW_H + H / 2 + 10
+              const row = Math.floor(idx / COLS)
+              const cx = col * colStep + W / 2 + 10
+              const cy = row * rowStep + H / 2 + 10 + (col % 2 === 1 ? H / 2 : 0)
               return (
                 <button key={m.id} className="mod-btn" onClick={() => router.push(m.path)}
-                  style={{ background: m.bg, width: HEX, height: H, left: cx, top: cy, transform: 'translate(-50%, -50%)' }}>
+                  style={{ background: m.bg, width: W, height: H, left: cx, top: cy, transform: 'translate(-50%, -50%)' }}>
             {m.icon === 'sun' ? (
               <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
                 {[0,45,90,135,180,225,270,315].map((deg, i) => {
