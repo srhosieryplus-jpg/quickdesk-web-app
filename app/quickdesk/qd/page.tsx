@@ -133,14 +133,33 @@ export default function QDPage() {
     setSession(prev => {
       if (!prev) return prev
       const d = { ...prev.data }
-      if (d[upc]) {
+      const order = [...prev.order_list]
+
+      // 1. If UPC already exists in a real row → increment qty
+      if (d[upc] && !d[upc]._isPlaceholder) {
         d[upc] = { ...d[upc], qty: (d[upc].qty as number) + 1 }
-      } else {
-        const empty: ScanData = { qty: 1 }
-        prev.extra_cols.forEach(c => { empty[c] = '' })
-        d[upc] = empty
+        return { ...prev, order_list: order, data: d }
       }
-      const order = d[upc].qty === 1 ? [...prev.order_list, upc] : prev.order_list
+
+      // 2. Find next placeholder (unscanned) row and assign this UPC to it
+      const placeholderKey = order.find(k => d[k]?._isPlaceholder)
+      if (placeholderKey) {
+        const existing = { ...d[placeholderKey] }
+        delete existing._isPlaceholder
+        existing.qty = 1
+        // Move the row: replace placeholder key with real UPC
+        d[upc] = existing
+        delete d[placeholderKey]
+        const idx = order.indexOf(placeholderKey)
+        order[idx] = upc
+        return { ...prev, order_list: order, data: d }
+      }
+
+      // 3. No placeholder rows left — add new row at bottom
+      const empty: ScanData = { qty: 1 }
+      prev.extra_cols.forEach(c => { empty[c] = '' })
+      d[upc] = empty
+      order.push(upc)
       return { ...prev, order_list: order, data: d }
     })
   }
