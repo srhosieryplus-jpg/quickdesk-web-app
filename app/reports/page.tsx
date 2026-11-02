@@ -100,10 +100,12 @@ export default function ReportsPage() {
     showToast('🔄 Refreshed')
   }
 
-  async function markComplete(id: string) {
-    await supabase.from('upc_sessions').update({ status: 'complete' }).eq('id', id)
-    setUpc(prev => prev.map(r => r.id === id ? { ...r, status: 'complete' } : r))
-    showToast('✅ Marked complete')
+  async function cycleUpcStatus(id: string, current: 'waiting' | 'ready' | 'complete') {
+    const next = current === 'waiting' ? 'ready' : current === 'ready' ? 'complete' : 'waiting'
+    await supabase.from('upc_sessions').update({ status: next }).eq('id', id)
+    setUpc(prev => prev.map(r => r.id === id ? { ...r, status: next } : r))
+    const label = next === 'complete' ? '✅ Marked complete' : next === 'ready' ? '👀 Marked ready' : '⏳ Reset to waiting'
+    showToast(label)
   }
 
   const isAdmin = user?.store === 'ALL'
@@ -488,24 +490,19 @@ export default function ReportsPage() {
                         <td className="ic-col-hide" style={{ textAlign: 'center', color: isGreen ? '#4ade80' : gray }}>{rows.length}</td>
                         <td className="ic-col-hide" style={{ textAlign: 'center', fontWeight: 700, color: isGreen ? '#86efac' : purple }}>{totalQty || '—'}</td>
                         <td>
-                          <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
-                            background: st === 'complete' ? '#166534' : st === 'ready' ? '#fef3c7' : '#dbeafe',
-                            color:      st === 'complete' ? '#86efac' : st === 'ready' ? '#92400e' : '#1e40af',
-                            border:     st === 'complete' ? '1px solid #4ade80' : st === 'ready' ? '1px solid #fcd34d' : '1px solid #93c5fd',
-                          }}>
+                          <span
+                            onClick={isAdmin ? () => cycleUpcStatus(r.id, st) : undefined}
+                            title={isAdmin ? 'Click to change status' : undefined}
+                            style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
+                              background: st === 'complete' ? '#166534' : st === 'ready' ? '#fef3c7' : '#dbeafe',
+                              color:      st === 'complete' ? '#86efac' : st === 'ready' ? '#92400e' : '#1e40af',
+                              border:     st === 'complete' ? '1px solid #4ade80' : st === 'ready' ? '1px solid #fcd34d' : '1px solid #93c5fd',
+                              cursor: isAdmin ? 'pointer' : 'default',
+                            }}>
                             {st === 'complete' ? '✓ Complete' : st === 'ready' ? '👀 Ready' : '⏳ Waiting'}
                           </span>
                         </td>
-                        {isAdmin && (
-                          <td style={{ paddingRight: 10 }}>
-                            {st !== 'complete' && (
-                              <button onClick={() => markComplete(r.id)}
-                                style={{ background: '#166534', border: 'none', color: '#86efac', borderRadius: 5, padding: '2px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                                ✓ Complete
-                              </button>
-                            )}
-                          </td>
-                        )}
+                        {isAdmin && <td />}
                       </tr>
                     )
                   })}
