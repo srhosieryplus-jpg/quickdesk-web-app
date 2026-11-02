@@ -135,7 +135,7 @@ export default function QDPage() {
     const targetedKey = pendingScanRef.current?.startsWith('__target__')
       ? pendingScanRef.current.slice('__target__'.length)
       : null
-    if (targetedKey) pendingScanRef.current = null
+    if (targetedKey) pendingScanRef.current = ''
 
     setSession(prev => {
       if (!prev) return prev
