@@ -176,8 +176,15 @@ export default function QDPage() {
 
   function updateQty(upc: string, val: string) {
     const q = parseInt(val, 10)
-    if (isNaN(q) || q <= 0) { removeUpc(upc); return }
-    setSession(prev => prev ? { ...prev, data: { ...prev.data, [upc]: { ...prev.data[upc], qty: q } } } : prev)
+    if (isNaN(q)) return // don't delete while typing
+    setSession(prev => {
+      if (!prev || !prev.data[upc]) return prev // key already gone, ignore
+      if (q <= 0) {
+        const d = { ...prev.data }; delete d[upc]
+        return { ...prev, order_list: prev.order_list.filter(u => u !== upc), data: d }
+      }
+      return { ...prev, data: { ...prev.data, [upc]: { ...prev.data[upc], qty: q } } }
+    })
   }
 
   function updateExtra(upc: string, col: string, val: string) {
@@ -186,7 +193,7 @@ export default function QDPage() {
 
   function removeUpc(upc: string) {
     setSession(prev => {
-      if (!prev) return prev
+      if (!prev || !prev.data[upc]) return prev // already gone, no-op
       const d = { ...prev.data }; delete d[upc]
       return { ...prev, order_list: prev.order_list.filter(u => u !== upc), data: d }
     })
@@ -735,8 +742,7 @@ export default function QDPage() {
                           <td style={tdSt}>
                             <input type="number" min="0" value={row.qty}
                               style={{ ...cellSt, fontWeight: 700, color: isPlaceholder ? '#d1d5db' : purple, textAlign: 'center' }}
-                              onChange={e => updateQty(upc, e.target.value)}
-                              onBlur={e => { const v = e.target.value; if (!isPlaceholder) setTimeout(() => { if (!v || +v <= 0) removeUpc(upc) }, 150) }} />
+                              onChange={e => updateQty(upc, e.target.value)} />
                           </td>
                           {session.extra_cols.map(col => (
                             <td key={col} style={tdSt}>
