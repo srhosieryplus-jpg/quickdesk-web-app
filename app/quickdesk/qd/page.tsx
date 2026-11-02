@@ -50,6 +50,7 @@ export default function QDPage() {
   const [colPrompt, setColPrompt] = useState(false)
   const [colName, setColName] = useState('')
   const pendingScanRef = useRef<string>('')
+  const [targetedPlaceholder, setTargetedPlaceholder] = useState<string>('')
 
   const [showSmartPaste, setShowSmartPaste] = useState(false)
   const [pasteText, setPasteText] = useState('')
@@ -135,11 +136,9 @@ export default function QDPage() {
     if (!session) { pendingScanRef.current = upc; setShowModal(true); return }
     if (!upc) return
 
-    // Check if user tapped a specific placeholder row to target it
-    const targetedKey = pendingScanRef.current?.startsWith('__target__')
-      ? pendingScanRef.current.slice('__target__'.length)
-      : null
-    if (targetedKey) pendingScanRef.current = ''
+    // Grab and clear targeted row
+    const targetedKey = targetedPlaceholder || ''
+    if (targetedKey) setTargetedPlaceholder('')
 
     setSession(prev => {
       if (!prev) return prev
@@ -289,12 +288,22 @@ export default function QDPage() {
   async function saveSession() {
     if (!session || !session.order_list.length) { showToast('Nothing to save yet'); return }
     setSaving(true)
+    // Save as rows[] (new schema) so load migration stays consistent
+    const rows = session.order_list.map(key => {
+      const d = session.data[key]
+      const row: Record<string, string | number> = {
+        row_id: key,
+        upc: d._isPlaceholder === 1 ? '' : key,
+        qty: d.qty as number,
+      }
+      session.extra_cols.forEach(c => { row[c] = d[c] as string || '' })
+      return row
+    })
     const payload = {
       name: session.name,
       store: session.store,
       userid: currentUser?.userid || '',
-      order_list: session.order_list,
-      data: session.data,
+      rows,
       extra_cols: session.extra_cols,
       saved_at: new Date().toISOString(),
     }
@@ -352,9 +361,8 @@ export default function QDPage() {
   const totalQty = session ? Object.values(session.data).reduce((s, r) => s + (r.qty as number), 0) : 0
   const uniqueCount = session?.order_list.length ?? 0
   const rows = session ? (sortAsc ? session.order_list : [...session.order_list].reverse()) : []
-  const _targeted = pendingScanRef.current?.startsWith('__target__') ? pendingScanRef.current.slice('__target__'.length) : ''
-  const nextPlaceholderKey = (_targeted && session?.data[_targeted]?._isPlaceholder === 1)
-    ? _targeted
+  const nextPlaceholderKey = (targetedPlaceholder && session?.data[targetedPlaceholder]?._isPlaceholder === 1)
+    ? targetedPlaceholder
     : session?.order_list.find(k => session.data[k]?._isPlaceholder === 1) ?? ''
 
   const filteredHistory = allSessions.filter(s => {
@@ -696,8 +704,7 @@ export default function QDPage() {
                               defaultValue={isPlaceholder ? '' : upc}
                               style={{ ...cellSt, fontWeight: 600, fontFamily: 'Courier New, monospace', letterSpacing: '0.4px', cursor: isPlaceholder ? 'pointer' : 'text' }}
                               onFocus={isPlaceholder ? e => {
-                                // When user clicks a specific placeholder, mark it as the target for next scan
-                                pendingScanRef.current = '__target__' + upc
+                                setTargetedPlaceholder(upc)
                                 e.currentTarget.blur()
                               } : undefined}
                               onBlur={e => {
@@ -720,7 +727,7 @@ export default function QDPage() {
                             <input type="number" min="0" value={row.qty}
                               style={{ ...cellSt, fontWeight: 700, color: purple, textAlign: 'center' }}
                               onChange={e => updateQty(upc, e.target.value)}
-                              onBlur={e => { if (!e.target.value || +e.target.value <= 0) removeUpc(upc) }} />
+                              onBlur={e => { const v = e.target.value; setTimeout(() => { if (!v || +v <= 0) removeUpc(upc) }, 150) }} />
                           </td>
                           {session.extra_cols.map(col => (
                             <td key={col} style={tdSt}>
