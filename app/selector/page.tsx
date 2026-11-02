@@ -52,59 +52,34 @@ export default function SelectorPage() {
           justify-content: center;
         }
         .module-grid {
-          display: flex;
-          flex-wrap: wrap;
-          padding: 20px 20px 40px;
-          max-width: 680px;
-          margin: 0 auto;
-          justify-content: center;
-          gap: 0;
-        }
-        .hex-wrap {
-          width: 22%;
-          max-width: 130px;
-          padding: 4px 3px;
-          box-sizing: border-box;
-        }
-        .hex-wrap:nth-child(4n+3),
-        .hex-wrap:nth-child(4n+4) {
-          margin-top: -10px;
-        }
-        .hex-row-offset {
-          display: contents;
-        }
-        @media (max-width: 600px) {
-          .qs-logo { order: 3; width: 100%; justify-content: center; }
-          .hex-wrap { width: 30%; max-width: none; }
-          .hex-wrap:nth-child(3n+2),
-          .hex-wrap:nth-child(3n+3) { margin-top: -8px; }
-          .hex-wrap:nth-child(4n+3),
-          .hex-wrap:nth-child(4n+4) { margin-top: 0; }
-        }
-        @media (max-width: 380px) {
-          .hex-wrap { width: 45%; }
+          position: relative;
+          margin: 10px auto 40px;
+          padding: 0 20px;
         }
         .mod-btn {
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 10px;
-          padding: 18px 8px;
+          gap: 8px;
           cursor: pointer;
           border: none;
-          border-radius: 0;
-          box-shadow: none;
+          background: none;
           clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
           transition: transform 0.12s, filter 0.12s;
-          aspect-ratio: 0.866;
-          width: 100%;
+          position: absolute;
         }
         .mod-btn:hover {
-          transform: translateY(-3px) scale(1.05);
+          transform: translate(-50%, -50%) scale(1.08);
           filter: brightness(1.08);
+          z-index: 2;
         }
-        .mod-btn:active { transform: scale(0.97); }
+        .mod-btn:active {
+          transform: translate(-50%, -50%) scale(0.96);
+        }
+        @media (max-width: 600px) {
+          .qs-logo { order: 3; width: 100%; justify-content: center; }
+        }
       `}</style>
 
       {/* Header */}
@@ -140,11 +115,34 @@ export default function SelectorPage() {
         <p style={{ fontSize: 12, color: '#9b8ec4' }}>— choose a module to begin</p>
       </div>
 
-      {/* Module grid */}
-      <div className="module-grid">
-        {modules.map(m => (
-          <div key={m.id} className="hex-wrap">
-          <button className="mod-btn" onClick={() => router.push(m.path)} style={{ background: m.bg }}>
+      {/* Module grid — honeycomb */}
+      {(() => {
+        const HEX = 110   // hex width px
+        const H   = HEX * 0.866  // hex height
+        const GAP = 6     // gap between hexes
+        const COLS = 4
+        const W = HEX + GAP
+        const ROW_H = H * 0.75 + GAP * 0.5
+        const rows: number[][] = []
+        modules.forEach((_, i) => {
+          const r = Math.floor(i / COLS)
+          if (!rows[r]) rows[r] = []
+          rows[r].push(i)
+        })
+        const totalRows = rows.length
+        const gridW = COLS * W + HEX * 0.5
+        const gridH = totalRows * ROW_H + H * 0.25 + 20
+        return (
+          <div className="module-grid" style={{ width: gridW, height: gridH, maxWidth: '100vw' }}>
+            {modules.map((m, idx) => {
+              const row = Math.floor(idx / COLS)
+              const col = idx % COLS
+              const offsetX = row % 2 === 1 ? W * 0.5 : 0
+              const cx = col * W + HEX / 2 + offsetX
+              const cy = row * ROW_H + H / 2 + 10
+              return (
+                <button key={m.id} className="mod-btn" onClick={() => router.push(m.path)}
+                  style={{ background: m.bg, width: HEX, height: H, left: cx, top: cy, transform: 'translate(-50%, -50%)' }}>
             {m.icon === 'sun' ? (
               <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
                 {[0,45,90,135,180,225,270,315].map((deg, i) => {
@@ -180,10 +178,12 @@ export default function SelectorPage() {
             <span style={{ fontSize: 11, fontWeight: 800, color: m.iconColor, letterSpacing: '0.02em', textAlign: 'center' }}>
               {m.label}
             </span>
-          </button>
+                </button>
+              )
+            })}
           </div>
-        ))}
-      </div>
+        )
+      })()}
     </div>
   )
 }
