@@ -90,6 +90,8 @@ export default function ReportsPage() {
     if (!u) { router.push('/'); return }
     setUser(u)
     fetchAll(u)
+    const interval = setInterval(() => fetchAll(u), 30000)
+    return () => clearInterval(interval)
   }, [router, fetchAll])
 
   async function refresh() {
