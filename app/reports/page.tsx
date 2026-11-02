@@ -137,9 +137,10 @@ export default function ReportsPage() {
 
   // merged feed for overview
   type FeedItem = {
-    time: string; module: string; store: string; label: string; userid: string
+    id?: string; time: string; module: string; store: string; label: string; userid: string
     isPending: boolean
     status: string; statusColor: string; statusBg: string; statusBorder: string
+    upcState?: 'waiting' | 'ready' | 'complete'
   }
   const allFeed: FeedItem[] = [
     ...tasks.map(r => ({
@@ -169,13 +170,14 @@ export default function ReportsPage() {
     ...upc.map(r => {
       const st = upcStatus(r)
       return {
-        time: r.saved_at, module: 'UPC', store: r.store, label: r.name,
+        id: r.id, time: r.saved_at, module: 'UPC', store: r.store, label: r.name,
         userid: displayUser(r.userid),
         isPending: st === 'waiting' || st === 'ready',
         status: st === 'waiting' ? '⏳ Waiting' : st === 'ready' ? '👀 Ready' : '✓ Complete',
         statusColor: st === 'waiting' ? '#1e40af' : st === 'ready' ? '#92400e' : '#166534',
         statusBg:    st === 'waiting' ? '#dbeafe' : st === 'ready' ? '#fef3c7' : '#dcfce7',
         statusBorder:st === 'waiting' ? '#93c5fd' : st === 'ready' ? '#fcd34d' : '#86efac',
+        upcState: st,
       }
     }),
   ].sort((a, b) => b.time.localeCompare(a.time))
@@ -319,7 +321,10 @@ export default function ReportsPage() {
                         <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purple }}>{item.userid}</td>
                         <td style={{ color: isGreen ? '#fff' : '#111', maxWidth: 260 }}>{item.label}</td>
                         <td>
-                          <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700, background: item.statusBg, color: item.statusColor, border: `1px solid ${item.statusBorder}`, whiteSpace: 'nowrap' }}>
+                          <span
+                            onClick={isAdmin && item.module === 'UPC' && item.id && item.upcState ? () => cycleUpcStatus(item.id!, item.upcState!) : undefined}
+                            title={isAdmin && item.module === 'UPC' ? 'Click to change status' : undefined}
+                            style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700, background: item.statusBg, color: item.statusColor, border: `1px solid ${item.statusBorder}`, whiteSpace: 'nowrap', cursor: isAdmin && item.module === 'UPC' ? 'pointer' : 'default' }}>
                             {item.status}
                           </span>
                         </td>
