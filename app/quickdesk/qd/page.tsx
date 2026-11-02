@@ -562,11 +562,12 @@ export default function QDPage() {
                   }
                 }}
                 onPaste={e => {
-                  // Allow paste then auto-submit after a tick
-                  setTimeout(() => {
-                    const v = inputRef.current?.value.trim()
-                    if (v) { handleScan(v); setScanVal('') }
-                  }, 50)
+                  const pasted = e.clipboardData.getData('text').trim()
+                  if (pasted) {
+                    e.preventDefault()
+                    handleScan(pasted)
+                    setScanVal('')
+                  }
                 }} />
             </div>
 
