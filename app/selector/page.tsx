@@ -117,7 +117,7 @@ export default function SelectorPage() {
 
       {/* Module grid — honeycomb */}
       {(() => {
-        const HEX = 110   // hex width px
+        const HEX = 150   // hex width px
         const H   = HEX * 0.866  // hex height
         const GAP = 6     // gap between hexes
         const COLS = 4
