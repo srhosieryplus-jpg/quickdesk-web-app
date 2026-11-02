@@ -587,7 +587,8 @@ export default function QDPage() {
                               type="text"
                               defaultValue={row._isPlaceholder ? '' : upc}
                               placeholder="scan or type…"
-                              style={{ width: 130, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 600, fontFamily: 'Courier New, monospace', background: '#fff', letterSpacing: '0.4px' }}
+                              size={Math.max(8, (row._isPlaceholder ? 0 : upc.length) + 2)}
+                              style={{ minWidth: 80, maxWidth: 180, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 600, fontFamily: 'Courier New, monospace', background: '#fff', letterSpacing: '0.4px' }}
                               onBlur={e => {
                                 const newUpc = e.target.value.trim()
                                 if (newUpc && newUpc !== upc) {
@@ -606,14 +607,15 @@ export default function QDPage() {
                           </td>
                           <td style={tdSt}>
                             <input type="number" min="0" value={row.qty}
-                              style={{ width: 52, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 700, color: purple, textAlign: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}
+                              style={{ width: Math.max(44, String(row.qty).length * 10 + 24), padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 700, color: purple, textAlign: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}
                               onChange={e => updateQty(upc, e.target.value)}
                               onBlur={e => { if (!e.target.value || +e.target.value <= 0) removeUpc(upc) }} />
                           </td>
                           {session.extra_cols.map(col => (
                             <td key={col} style={tdSt}>
                               <input type="text" value={row[col] as string || ''}
-                                style={{ width: 72, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif' }}
+                                size={Math.max(5, ((row[col] as string) || '').length + 2)}
+                                style={{ minWidth: 48, maxWidth: 140, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif' }}
                                 onChange={e => updateExtra(upc, col, e.target.value)} />
                             </td>
                           ))}
