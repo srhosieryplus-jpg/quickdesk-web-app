@@ -109,11 +109,14 @@ export default function QDPage() {
       const order_list: string[] = []
       const data: Record<string, ScanData> = {}
       for (const r of raw.rows) {
-        if (!r.upc) continue
-        if (!order_list.includes(r.upc)) order_list.push(r.upc)
+        // Use upc if scanned, otherwise use row_id as placeholder key
+        const key = (r.upc as string) || (r.row_id as string) || String(Math.random())
+        if (!order_list.includes(key)) order_list.push(key)
         const entry: ScanData = { qty: r.qty || 0 }
+        // Store upc separately if it differs from key
+        if (r.upc && r.upc !== key) entry['_upc'] = r.upc as string
         extra_cols.forEach(c => { entry[c] = r[c] ?? '' })
-        data[r.upc] = entry
+        data[key] = entry
       }
       setSession({ ...s, order_list, data, extra_cols })
     } else {
