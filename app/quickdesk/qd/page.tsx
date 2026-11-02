@@ -52,6 +52,8 @@ export default function QDPage() {
   const [colName, setColName] = useState('')
   const pendingScanRef = useRef<string>('')
   const [targetedPlaceholder, setTargetedPlaceholder] = useState<string>('')
+  const [ctxMenu, setCtxMenu] = useState<{ upc: string; x: number; y: number } | null>(null)
+  const [editingUpc, setEditingUpc] = useState<{ key: string; val: string } | null>(null)
 
   const [showSmartPaste, setShowSmartPaste] = useState(false)
   const [pasteText, setPasteText] = useState('')
@@ -694,6 +696,17 @@ export default function QDPage() {
             <div style={{ background: '#e8e4f8', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: `1px solid ${border}` }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>Session Table</span>
               <div style={{ flex: 1 }} />
+              {isAdmin(currentUser) && session && session.order_list.length > 0 && (
+                <button onClick={() => {
+                  const headers = ['#', 'UPC', 'Qty', ...session.extra_cols]
+                  const dataRows = session.order_list.map((k, i) => {
+                    const d = session.data[k]
+                    return [i + 1, d._isPlaceholder === 1 ? '' : k, d.qty, ...session.extra_cols.map(c => d[c] || '')]
+                  })
+                  const text = [headers, ...dataRows].map(r => r.join('\t')).join('\n')
+                  navigator.clipboard.writeText(text).then(() => showToast('✓ Table copied!'))
+                }} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>⎘ Copy</button>
+              )}
               <button onClick={() => setSortAsc(a => !a)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>⇅ Sort</button>
             </div>
 
@@ -703,21 +716,13 @@ export default function QDPage() {
                   {session ? 'Start scanning barcodes.' : 'Start a session and scan barcodes to begin.'}
                 </div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-                  <colgroup>
-                    <col style={{ width: 32 }} />
-                    <col style={{ width: 130 }} />
-                    <col style={{ width: 56 }} />
-                    {session.extra_cols.map(c => <col key={c} style={{ width: 80 }} />)}
-                    <col style={{ width: 28 }} />
-                  </colgroup>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'auto' }}>
                   <thead>
                     <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={{ ...thSt, textAlign: 'center' }}>#</th>
-                      <th style={thSt}>UPC</th>
-                      <th style={{ ...thSt, textAlign: 'center' }}>Qty</th>
-                      {session.extra_cols.map(c => <th key={c} style={thSt}>{c}</th>)}
-                      <th style={{ ...thSt, borderRight: 'none' }}></th>
+                      <th style={{ ...thSt, textAlign: 'center', width: 28 }}>#</th>
+                      <th style={{ ...thSt, whiteSpace: 'nowrap' }}>UPC</th>
+                      <th style={{ ...thSt, textAlign: 'center', width: 48 }}>Qty</th>
+                      {session.extra_cols.map(c => <th key={c} style={{ ...thSt, whiteSpace: 'nowrap' }}>{c}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -734,8 +739,9 @@ export default function QDPage() {
                         boxSizing: 'border-box',
                       }
                       return (
-                        <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}>
-                          <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '5px 4px' }}>{ri + 1}</td>
+                        <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}
+                          onContextMenu={e => { e.preventDefault(); setCtxMenu({ upc, x: e.clientX, y: e.clientY }) }}>
+                          <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '5px 4px', whiteSpace: 'nowrap' }}>{ri + 1}</td>
                           <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg }}
                             onClick={isPlaceholder ? () => setTargetedPlaceholder(upc) : undefined}>
                             {isPlaceholder ? (
@@ -782,16 +788,98 @@ export default function QDPage() {
                                 onChange={e => updateExtra(upc, col, e.target.value)} />
                             </td>
                           ))}
-                          <td style={{ ...tdSt, borderRight: 'none', textAlign: 'center', padding: '2px' }}>
-                            <button onClick={() => removeUpc(upc)}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 14, cursor: 'pointer', padding: '2px 6px', borderRadius: 3, lineHeight: 1 }}>✕</button>
-                          </td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Right-click context menu */}
+      {ctxMenu && (
+        <div
+          onClick={() => setCtxMenu(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 999 }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 1000,
+              background: '#fff', border: `1px solid ${border}`, borderRadius: 8,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', minWidth: 160, overflow: 'hidden',
+            }}>
+            <div style={{ padding: '6px 8px', fontSize: 10, color: '#9ca3af', borderBottom: `1px solid ${border}`, fontFamily: 'Courier New, monospace', letterSpacing: '0.4px' }}>
+              {session?.data[ctxMenu.upc]?._isPlaceholder === 1 ? '(placeholder)' : ctxMenu.upc}
+            </div>
+            {session?.data[ctxMenu.upc]?._isPlaceholder !== 1 && (
+              <button
+                onClick={() => {
+                  setEditingUpc({ key: ctxMenu.upc, val: ctxMenu.upc })
+                  setCtxMenu(null)
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: 12, cursor: 'pointer', color: purpleD }}>
+                ✏️ Edit UPC
+              </button>
+            )}
+            <button
+              onClick={() => { removeUpc(ctxMenu.upc); setCtxMenu(null) }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: 12, cursor: 'pointer', color: '#dc2626' }}>
+              🗑 Delete row
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit UPC modal */}
+      {editingUpc && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, minWidth: 300, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: purpleD, marginBottom: 12 }}>Edit UPC</div>
+            <input
+              autoFocus
+              type="text"
+              value={editingUpc.val}
+              onChange={e => setEditingUpc({ ...editingUpc, val: e.target.value })}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const newUpc = editingUpc.val.trim()
+                  if (newUpc && newUpc !== editingUpc.key) {
+                    setSession(prev => {
+                      if (!prev || !prev.data[editingUpc.key]) return prev
+                      const d = { ...prev.data }
+                      const order = [...prev.order_list]
+                      d[newUpc] = { ...d[editingUpc.key], _isPlaceholder: 0 }
+                      delete d[editingUpc.key]
+                      order[order.indexOf(editingUpc.key)] = newUpc
+                      return { ...prev, order_list: order, data: d }
+                    })
+                  }
+                  setEditingUpc(null)
+                }
+                if (e.key === 'Escape') setEditingUpc(null)
+              }}
+              style={{ ...inputSt, width: '100%', fontFamily: 'Courier New, monospace', letterSpacing: '0.6px', fontWeight: 600, marginBottom: 12 }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditingUpc(null)} style={{ ...btnSt('ghost'), fontSize: 12 }}>Cancel</button>
+              <button onClick={() => {
+                const newUpc = editingUpc.val.trim()
+                if (newUpc && newUpc !== editingUpc.key) {
+                  setSession(prev => {
+                    if (!prev || !prev.data[editingUpc.key]) return prev
+                    const d = { ...prev.data }
+                    const order = [...prev.order_list]
+                    d[newUpc] = { ...d[editingUpc.key], _isPlaceholder: 0 }
+                    delete d[editingUpc.key]
+                    order[order.indexOf(editingUpc.key)] = newUpc
+                    return { ...prev, order_list: order, data: d }
+                  })
+                }
+                setEditingUpc(null)
+              }} style={{ ...btnSt('primary'), fontSize: 12 }}>Save</button>
             </div>
           </div>
         </div>
