@@ -19,6 +19,14 @@ interface UPCSession {
   order_list: string[]
   data: Record<string, ScanData>
   extra_cols: string[]
+  status?: 'waiting' | 'ready' | 'complete'
+  rows?: { upc: string; qty: number }[]
+}
+
+const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
+function displayUser(id: string | null | undefined) {
+  if (!id) return '—'
+  return USER_DISPLAY[id.toUpperCase()] ?? id
 }
 
 const purple = '#7c3aed'
@@ -414,16 +422,22 @@ export default function QDPage() {
       upcCount = (s.order_list || []).length
     }
     const date = s.saved_at ? new Date(s.saved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+    const st = s.status === 'complete' ? 'complete' : s.status === 'ready' ? 'ready' : total > 0 ? 'ready' : 'waiting'
+    const stLabel = st === 'complete' ? '✓ Done' : st === 'ready' ? '👀 Ready' : '⏳ Waiting'
+    const stBg    = st === 'complete' ? '#166534' : st === 'ready' ? '#fef3c7' : '#dbeafe'
+    const stColor = st === 'complete' ? '#86efac' : st === 'ready' ? '#92400e' : '#1e40af'
+    const cardBg  = st === 'complete' ? '#14532d' : purpleLight
+    const cardBorder = st === 'complete' ? '#166534' : st === 'ready' ? '#fcd34d' : border
     return (
-      <div style={{ background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '5px 6px' }}>
+      <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 5, padding: '5px 6px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, flex: 1 }}>{s.name}</span>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: total > 0 ? '#dcfce7' : '#fef3c7', color: total > 0 ? '#166534' : '#92400e' }}>
-            {total > 0 ? '✓' : 'Empty'}
+          <span style={{ fontSize: 11, fontWeight: 700, flex: 1, color: st === 'complete' ? '#fff' : '#111' }}>{s.name}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: stBg, color: stColor }}>
+            {stLabel}
           </span>
         </div>
-        <div style={{ fontSize: 10, color: '#6b7280', margin: '2px 0' }}>
-          {s.store || '—'}{showUser && s.userid ? ` · ${s.userid}` : ''} · {upcCount} UPCs · {total} qty{date ? ` · ${date}` : ''}
+        <div style={{ fontSize: 10, color: st === 'complete' ? '#4ade80' : '#6b7280', margin: '2px 0' }}>
+          {s.store || '—'}{showUser && s.userid ? ` · ${displayUser(s.userid)}` : ''} · {upcCount} UPCs · {total} qty{date ? ` · ${date}` : ''}
         </div>
         <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
           <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px', flex: 1 }}>Load</button>
@@ -516,7 +530,7 @@ export default function QDPage() {
           <button onClick={goHome} style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>← Home</button>
           <div style={{ width: 1, height: 16, background: '#d4c8f0' }} />
           <span style={{ fontSize: 12, color: '#9b8ec4' }}>
-            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{currentUser?.userid}</span>
+            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{displayUser(currentUser?.userid)}</span>
             {currentUser?.store ? <> · {currentUser.store === 'ALL' ? 'All Stores' : currentUser.store}</> : ''}
           </span>
         </div>
