@@ -289,12 +289,8 @@ export default function ReportsPage() {
                     return (
                       <tr key={i} style={{ background: rowBg }}>
                         <td style={{ color: isGreen ? '#4ade80' : gray, fontSize: 10 }}>{formatDate(item.time)}</td>
-                        <td>
-                          <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700, background: '#ede9fe', color: purpleD, border: `1px solid ${border}`, whiteSpace: 'nowrap' }}>
-                            {item.module}
-                          </span>
-                        </td>
-                        <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purpleD }}>{item.store}</td>
+                        <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purpleD }}>{item.module}</td>
+                        <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purpleD }}>{item.store === 'ALL' ? '—' : item.store}</td>
                         <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purple }}>{item.userid}</td>
                         <td style={{ color: isGreen ? '#fff' : '#111', maxWidth: 260 }}>{item.label}</td>
                         <td>
