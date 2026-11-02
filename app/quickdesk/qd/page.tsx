@@ -279,6 +279,10 @@ export default function QDPage() {
   const totalQty = session ? Object.values(session.data).reduce((s, r) => s + (r.qty as number), 0) : 0
   const uniqueCount = session?.order_list.length ?? 0
   const rows = session ? (sortAsc ? session.order_list : [...session.order_list].reverse()) : []
+  const _targeted = pendingScanRef.current?.startsWith('__target__') ? pendingScanRef.current.slice('__target__'.length) : ''
+  const nextPlaceholderKey = (_targeted && session?.data[_targeted]?._isPlaceholder === 1)
+    ? _targeted
+    : session?.order_list.find(k => session.data[k]?._isPlaceholder === 1) ?? ''
 
   const filteredHistory = allSessions.filter(s => {
     const q = historySearch.toLowerCase()
@@ -596,6 +600,7 @@ export default function QDPage() {
                     {rows.map((upc, ri) => {
                       const row = session.data[upc]
                       const isPlaceholder = row._isPlaceholder === 1
+                      const isNextTarget = upc === nextPlaceholderKey
                       const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
                       const cellSt: React.CSSProperties = {
                         display: 'block', width: '100%', height: '100%',
@@ -606,7 +611,7 @@ export default function QDPage() {
                       return (
                         <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}>
                           <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '4px 4px' }}>{ri + 1}</td>
-                          <td style={{ ...tdSt, background: isPlaceholder ? '#dcfce7' : rowBg }}>
+                          <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg }}>
                             <input
                               type="text"
                               defaultValue={isPlaceholder ? '' : upc}
