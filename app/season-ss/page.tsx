@@ -511,7 +511,7 @@ export default function SeasonSSPage() {
               ref={invoiceRef} autoFocus value={invoiceQ}
               onChange={e => { setInvoiceQ(e.target.value); if (e.target.value) setBrandQ('') }}
               placeholder="Invoice number…"
-              style={{ border: 'none', outline: 'none', fontSize: 16, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
+              style={{ border: 'none', outline: 'none', fontSize: 13, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
               onBlur={() => { if (window.visualViewport) { (document.documentElement.style as any).zoom = '1' } }}
             />
           </div>
@@ -525,7 +525,7 @@ export default function SeasonSSPage() {
               onChange={e => { onBrandInput(e.target.value); if (e.target.value) setInvoiceQ('') }}
               onFocus={() => { if (brandQ.length >= 1) setShowSugg(true) }}
               placeholder="Brand name…"
-              style={{ border: 'none', outline: 'none', fontSize: 16, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
+              style={{ border: 'none', outline: 'none', fontSize: 13, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
               autoComplete="off"
               onBlur={() => { if (window.visualViewport) { (document.documentElement.style as any).zoom = '1' } }}
             />
