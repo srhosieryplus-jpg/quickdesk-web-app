@@ -151,13 +151,35 @@ export default function QDPage() {
         ? targetedKey
         : order.find(k => d[k]?.['_isPlaceholder'] === 1)
 
-      // 1. If UPC already exists as a real scanned row — just increment qty, leave placeholders alone
+      // 1. If user clicked a specific placeholder row, always fill it (even if UPC already scanned elsewhere)
+      if (targetedKey && d[targetedKey]?.['_isPlaceholder'] === 1) {
+        const placeholderData = { ...d[targetedKey] }
+        const idx = order.indexOf(targetedKey)
+        delete d[targetedKey]
+        order.splice(idx, 1)
+        if (d[upc] && d[upc]['_isPlaceholder'] !== 1) {
+          // UPC exists elsewhere — remove that row, place it at the targeted slot with combined qty
+          const combinedQty = (d[upc].qty as number) + 1
+          const oldIdx = order.indexOf(upc)
+          if (oldIdx !== -1) order.splice(oldIdx, 1)
+          delete d[upc]
+          const insertIdx = oldIdx !== -1 && oldIdx < idx ? idx - 1 : idx
+          d[upc] = { ...placeholderData, _isPlaceholder: 0, qty: combinedQty }
+          order.splice(insertIdx, 0, upc)
+        } else {
+          d[upc] = { ...placeholderData, _isPlaceholder: 0, qty: 1 }
+          order.splice(idx, 0, upc)
+        }
+        return { ...prev, order_list: order, data: d }
+      }
+
+      // 2. If UPC already exists as a real scanned row — just increment qty, leave placeholders alone
       if (d[upc] && d[upc]['_isPlaceholder'] !== 1) {
         d[upc] = { ...d[upc], qty: (d[upc].qty as number) + 1 }
         return { ...prev, order_list: order, data: d }
       }
 
-      // 2. Fresh UPC — fill the next placeholder slot if one exists
+      // 3. Fresh UPC — fill the next placeholder slot if one exists
       if (placeholderKey) {
         const placeholderData = { ...d[placeholderKey] }
         const idx = order.indexOf(placeholderKey)
