@@ -328,6 +328,7 @@ export default function QDPage() {
       session.extra_cols.forEach(c => { row[c] = d[c] as string || '' })
       return row
     })
+    const hasRealScan = rows.some(r => r.upc && r.upc !== '')
     const payload = {
       name: session.name,
       store: session.store,
@@ -335,6 +336,7 @@ export default function QDPage() {
       rows,
       extra_cols: session.extra_cols,
       saved_at: new Date().toISOString(),
+      status: hasRealScan ? 'ready' : 'waiting',
     }
     if (session.id) {
       await supabase.from('upc_sessions').update(payload).eq('id', session.id)

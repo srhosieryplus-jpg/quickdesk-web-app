@@ -27,6 +27,7 @@ interface ICEntry {
 interface UPCSession {
   id: string; name: string; store: string; userid: string
   rows?: { upc: string; qty: number }[]; extra_cols?: string[]; saved_at: string
+  status?: 'waiting' | 'ready' | 'complete'
 }
 
 type TabId = 'overview' | 'tasks' | 'season' | 'ic' | 'upc'
@@ -75,7 +76,7 @@ export default function ReportsPage() {
     }
     const [t, s, i, up] = await Promise.all([
       q('tasks'), q('season_log'), q('ic_log'),
-      q('upc_sessions', 'id,name,store,userid,rows,extra_cols,saved_at'),
+      q('upc_sessions', 'id,name,store,userid,rows,extra_cols,saved_at,status'),
     ])
     setTasks(((t.data as unknown) as Task[]) || [])
     setSeason(((s.data as unknown) as SeasonLog[]) || [])
@@ -99,6 +100,13 @@ export default function ReportsPage() {
     showToast('🔄 Refreshed')
   }
 
+  async function markComplete(id: string) {
+    await supabase.from('upc_sessions').update({ status: 'complete' }).eq('id', id)
+    setUpc(prev => prev.map(r => r.id === id ? { ...r, status: 'complete' } : r))
+    showToast('✅ Marked complete')
+  }
+
+  const isAdmin = user?.store === 'ALL'
   const q = filter.toLowerCase()
   const filteredTasks  = tasks.filter(r =>
     (!pendingOnly || !r.done) &&
@@ -114,6 +122,15 @@ export default function ReportsPage() {
   const filteredUpc = upc.filter(r =>
     (!q || r.name.toLowerCase().includes(q) || r.store.toLowerCase().includes(q) || r.userid?.toLowerCase().includes(q))
   )
+
+  function upcStatus(r: UPCSession): 'waiting' | 'ready' | 'complete' {
+    if (r.status === 'complete') return 'complete'
+    if (r.status === 'ready') return 'ready'
+    // fallback: derive from rows for old records without status field
+    const rows = r.rows || []
+    const hasReal = rows.some(x => x.upc && x.upc !== '')
+    return hasReal ? 'ready' : 'waiting'
+  }
 
   // merged feed for overview
   type FeedItem = {
@@ -147,16 +164,15 @@ export default function ReportsPage() {
       statusBorder:r.status === 'Pushed In' ? '#86efac' : '#fcd34d',
     })),
     ...upc.map(r => {
-      const rows = r.rows || []
-      const hasPlaceholders = rows.some(x => !x.upc || (x as any)._isPlaceholder === 1)
+      const st = upcStatus(r)
       return {
         time: r.saved_at, module: 'UPC', store: r.store, label: r.name,
         userid: displayUser(r.userid),
-        isPending: hasPlaceholders,
-        status: hasPlaceholders ? '⏳ Awaiting' : '✓ Complete',
-        statusColor: hasPlaceholders ? '#1e40af' : '#166534',
-        statusBg:    hasPlaceholders ? '#dbeafe' : '#dcfce7',
-        statusBorder:hasPlaceholders ? '#93c5fd' : '#86efac',
+        isPending: st === 'waiting' || st === 'ready',
+        status: st === 'waiting' ? '⏳ Waiting' : st === 'ready' ? '👀 Ready' : '✓ Complete',
+        statusColor: st === 'waiting' ? '#1e40af' : st === 'ready' ? '#92400e' : '#166534',
+        statusBg:    st === 'waiting' ? '#dbeafe' : st === 'ready' ? '#fef3c7' : '#dcfce7',
+        statusBorder:st === 'waiting' ? '#93c5fd' : st === 'ready' ? '#fcd34d' : '#86efac',
       }
     }),
   ].sort((a, b) => b.time.localeCompare(a.time))
@@ -450,32 +466,46 @@ export default function ReportsPage() {
                     <th className="ic-col-hide">Rows</th>
                     <th className="ic-col-hide">Total Qty</th>
                     <th>Status</th>
+                    {isAdmin && <th></th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUpc.length === 0 && <tr><td colSpan={7} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No UPC sessions found.</td></tr>}
+                  {filteredUpc.length === 0 && <tr><td colSpan={isAdmin ? 8 : 7} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No UPC sessions found.</td></tr>}
                   {filteredUpc.map((r, i) => {
                     const rows = r.rows || []
-                    const hasPlaceholders = rows.some(x => !x.upc || (x as any)._isPlaceholder === 1)
                     const totalQty = rows.reduce((s, x) => s + (x.qty || 0), 0)
-                    const complete = !hasPlaceholders
+                    const st = upcStatus(r)
+                    const rowBg = st === 'complete'
+                      ? (i%2===0 ? '#14532d' : '#166534')
+                      : (i%2===0 ? '#fff' : '#faf8ff')
+                    const isGreen = st === 'complete'
                     return (
-                      <tr key={r.id} style={{ background: i%2===0 ? '#fff' : '#faf8ff' }}>
-                        <td style={{ color: gray, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
-                        <td style={{ color: purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
-                        <td style={{ fontWeight: 600 }}>{r.store}</td>
-                        <td style={{ color: purpleD, fontWeight: 700 }}>{r.name}</td>
-                        <td className="ic-col-hide" style={{ textAlign: 'center', color: gray }}>{rows.length}</td>
-                        <td className="ic-col-hide" style={{ textAlign: 'center', fontWeight: 700, color: purple }}>{totalQty || '—'}</td>
+                      <tr key={r.id} style={{ background: rowBg }}>
+                        <td style={{ color: isGreen ? '#4ade80' : gray, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
+                        <td style={{ color: isGreen ? '#86efac' : purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
+                        <td style={{ fontWeight: 600, color: isGreen ? '#86efac' : '#1f2937' }}>{r.store}</td>
+                        <td style={{ color: isGreen ? '#fff' : purpleD, fontWeight: 700 }}>{r.name}</td>
+                        <td className="ic-col-hide" style={{ textAlign: 'center', color: isGreen ? '#4ade80' : gray }}>{rows.length}</td>
+                        <td className="ic-col-hide" style={{ textAlign: 'center', fontWeight: 700, color: isGreen ? '#86efac' : purple }}>{totalQty || '—'}</td>
                         <td>
-                          <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700,
-                            background: complete ? '#166534' : '#dbeafe',
-                            color: complete ? '#86efac' : '#1e40af',
-                            border: complete ? '1px solid #4ade80' : '1px solid #93c5fd',
+                          <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
+                            background: st === 'complete' ? '#166534' : st === 'ready' ? '#fef3c7' : '#dbeafe',
+                            color:      st === 'complete' ? '#86efac' : st === 'ready' ? '#92400e' : '#1e40af',
+                            border:     st === 'complete' ? '1px solid #4ade80' : st === 'ready' ? '1px solid #fcd34d' : '1px solid #93c5fd',
                           }}>
-                            {complete ? '✓ Complete' : '⏳ Awaiting'}
+                            {st === 'complete' ? '✓ Complete' : st === 'ready' ? '👀 Ready' : '⏳ Waiting'}
                           </span>
                         </td>
+                        {isAdmin && (
+                          <td style={{ paddingRight: 10 }}>
+                            {st !== 'complete' && (
+                              <button onClick={() => markComplete(r.id)}
+                                style={{ background: '#166534', border: 'none', color: '#86efac', borderRadius: 5, padding: '2px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                ✓ Complete
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     )
                   })}
