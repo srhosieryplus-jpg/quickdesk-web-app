@@ -153,16 +153,23 @@ export default function QDPage() {
 
       if (placeholderKey) {
         // Fill the placeholder with this UPC
-        const existing = { ...d[placeholderKey], _isPlaceholder: 0, qty: 1 }
+        const placeholderData = { ...d[placeholderKey] }
         const idx = order.indexOf(placeholderKey)
         delete d[placeholderKey]
+
         if (d[upc] && d[upc]['_isPlaceholder'] !== 1) {
-          // UPC already exists as a scanned row — merge qty, remove placeholder slot
-          d[upc] = { ...d[upc], qty: (d[upc].qty as number) + 1 }
-          order.splice(idx, 1)
+          // UPC already scanned elsewhere — combine qty, fill placeholder position,
+          // remove the old duplicate row so there's only one row per UPC
+          const combinedQty = (d[upc].qty as number) + 1
+          const oldIdx = order.indexOf(upc)
+          if (oldIdx !== -1) order.splice(oldIdx, 1)
+          // Place the filled row at the placeholder's position (adjust for splice)
+          const insertIdx = oldIdx !== -1 && oldIdx < idx ? idx - 1 : idx
+          d[upc] = { ...placeholderData, _isPlaceholder: 0, qty: combinedQty }
+          order.splice(insertIdx, 0, upc)
         } else {
           // Normal fill: replace placeholder key with the scanned UPC
-          d[upc] = existing
+          d[upc] = { ...placeholderData, _isPlaceholder: 0, qty: 1 }
           order[idx] = upc
         }
         return { ...prev, order_list: order, data: d }
