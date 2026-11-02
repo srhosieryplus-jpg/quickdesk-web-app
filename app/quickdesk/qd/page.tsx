@@ -130,6 +130,13 @@ export default function QDPage() {
     upc = upc.trim()
     if (!session) { pendingScanRef.current = upc; setShowModal(true); return }
     if (!upc) return
+
+    // Check if user tapped a specific placeholder row to target it
+    const targetedKey = pendingScanRef.current?.startsWith('__target__')
+      ? pendingScanRef.current.slice('__target__'.length)
+      : null
+    if (targetedKey) pendingScanRef.current = null
+
     setSession(prev => {
       if (!prev) return prev
       const d = { ...prev.data }
@@ -141,11 +148,13 @@ export default function QDPage() {
         return { ...prev, order_list: order, data: d }
       }
 
-      // 2. Find next placeholder (unscanned) row and assign this UPC to it
-      const placeholderKey = order.find(k => d[k]?.['_isPlaceholder'] === 1)
+      // 2. Use targeted placeholder if user clicked a specific row, else next in order
+      const placeholderKey = (targetedKey && d[targetedKey]?.['_isPlaceholder'] === 1)
+        ? targetedKey
+        : order.find(k => d[k]?.['_isPlaceholder'] === 1)
+
       if (placeholderKey) {
         const existing = { ...d[placeholderKey], _isPlaceholder: 0, qty: 1 }
-        // Move the row: replace placeholder key with real UPC
         d[upc] = existing
         delete d[placeholderKey]
         const idx = order.indexOf(placeholderKey)
@@ -566,32 +575,50 @@ export default function QDPage() {
                   {session ? 'Start scanning barcodes.' : 'Start a session and scan barcodes to begin.'}
                 </div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: 32 }} />
+                    <col style={{ width: 130 }} />
+                    <col style={{ width: 56 }} />
+                    {session.extra_cols.map(c => <col key={c} style={{ width: 80 }} />)}
+                    <col style={{ width: 28 }} />
+                  </colgroup>
                   <thead>
                     <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={thSt}>#</th>
+                      <th style={{ ...thSt, textAlign: 'center' }}>#</th>
                       <th style={thSt}>UPC</th>
-                      <th style={thSt}>Qty</th>
+                      <th style={{ ...thSt, textAlign: 'center' }}>Qty</th>
                       {session.extra_cols.map(c => <th key={c} style={thSt}>{c}</th>)}
-                      <th style={{ ...thSt, width: 32 }}></th>
+                      <th style={{ ...thSt, borderRight: 'none' }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((upc, ri) => {
                       const row = session.data[upc]
+                      const isPlaceholder = row._isPlaceholder === 1
+                      const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
+                      const cellSt: React.CSSProperties = {
+                        display: 'block', width: '100%', height: '100%',
+                        padding: '4px 7px', border: 'none', outline: 'none',
+                        fontSize: 12, background: 'transparent', fontFamily: 'Inter, sans-serif',
+                        boxSizing: 'border-box',
+                      }
                       return (
-                        <tr key={upc} style={{ background: ri % 2 === 0 ? purpleLight : '#fafafa', borderBottom: `1px solid #ede9fe` }}>
-                          <td style={{ ...tdSt, color: '#6b7280', fontSize: 10 }}>{ri + 1}</td>
-                          <td style={tdSt}>
+                        <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}>
+                          <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '4px 4px' }}>{ri + 1}</td>
+                          <td style={{ ...tdSt, background: isPlaceholder ? '#dcfce7' : rowBg }}>
                             <input
                               type="text"
-                              defaultValue={row._isPlaceholder ? '' : upc}
-                              placeholder="scan or type…"
-                              size={Math.max(8, (row._isPlaceholder ? 0 : upc.length) + 2)}
-                              style={{ minWidth: 80, maxWidth: 180, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 600, fontFamily: 'Courier New, monospace', background: '#fff', letterSpacing: '0.4px' }}
+                              defaultValue={isPlaceholder ? '' : upc}
+                              style={{ ...cellSt, fontWeight: 600, fontFamily: 'Courier New, monospace', letterSpacing: '0.4px', cursor: isPlaceholder ? 'pointer' : 'text' }}
+                              onFocus={isPlaceholder ? e => {
+                                // When user clicks a specific placeholder, mark it as the target for next scan
+                                pendingScanRef.current = '__target__' + upc
+                                e.currentTarget.blur()
+                              } : undefined}
                               onBlur={e => {
                                 const newUpc = e.target.value.trim()
-                                if (newUpc && newUpc !== upc) {
+                                if (!isPlaceholder && newUpc && newUpc !== upc) {
                                   setSession(prev => {
                                     if (!prev) return prev
                                     const d = { ...prev.data }
@@ -607,21 +634,20 @@ export default function QDPage() {
                           </td>
                           <td style={tdSt}>
                             <input type="number" min="0" value={row.qty}
-                              style={{ width: Math.max(44, String(row.qty).length * 10 + 24), padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 700, color: purple, textAlign: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}
+                              style={{ ...cellSt, fontWeight: 700, color: purple, textAlign: 'center' }}
                               onChange={e => updateQty(upc, e.target.value)}
                               onBlur={e => { if (!e.target.value || +e.target.value <= 0) removeUpc(upc) }} />
                           </td>
                           {session.extra_cols.map(col => (
                             <td key={col} style={tdSt}>
                               <input type="text" value={row[col] as string || ''}
-                                size={Math.max(5, ((row[col] as string) || '').length + 2)}
-                                style={{ minWidth: 48, maxWidth: 140, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif' }}
+                                style={{ ...cellSt }}
                                 onChange={e => updateExtra(upc, col, e.target.value)} />
                             </td>
                           ))}
-                          <td style={tdSt}>
+                          <td style={{ ...tdSt, borderRight: 'none', textAlign: 'center', padding: '2px' }}>
                             <button onClick={() => removeUpc(upc)}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 13, cursor: 'pointer', padding: '1px 5px', borderRadius: 3 }}>✕</button>
+                              style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 12, cursor: 'pointer', padding: '2px 4px', borderRadius: 3, lineHeight: 1 }}>✕</button>
                           </td>
                         </tr>
                       )
@@ -735,10 +761,11 @@ const inputSt: React.CSSProperties = {
 }
 
 const thSt: React.CSSProperties = {
-  padding: '4px 10px', textAlign: 'left', fontWeight: 700, fontSize: 10,
-  color: '#1A0A40', borderBottom: '2px solid #c4b5fd',
+  padding: '5px 8px', textAlign: 'left', fontWeight: 700, fontSize: 10,
+  color: '#1A0A40', borderBottom: '2px solid #c4b5fd', borderRight: '1px solid #ddd6fe',
+  whiteSpace: 'nowrap',
 }
 
 const tdSt: React.CSSProperties = {
-  padding: '3px 10px', verticalAlign: 'middle',
+  padding: '0', verticalAlign: 'middle', borderRight: '1px solid #ede9fe',
 }
