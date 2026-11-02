@@ -39,9 +39,11 @@ function displayUser(id: string | null | undefined) {
 }
 
 function formatDate(iso: string) {
-  if (!iso) return ''
+  if (!iso) return { date: '', full: '' }
   const d = new Date(iso)
-  return `${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}-${String(d.getFullYear()).slice(2)} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`
+  const date = `${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`
+  const time = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`
+  return { date, full: `${date} ${time}` }
 }
 
 const inputSt: React.CSSProperties = {
@@ -204,6 +206,7 @@ export default function ReportsPage() {
         @media (max-width: 700px) {
           .rpt-table th, .rpt-table td { padding: 3px 5px; font-size: 10px; }
           .ic-col-hide { display: none; }
+          .rpt-time { display: none; }
         }
         .rpt-tab { padding: 8px 14px; font-size: 12px; font-weight: 500; border: none; border-bottom: 2px solid transparent; background: none; color: ${gray}; cursor: pointer; white-space: nowrap; }
         .rpt-tab.active { font-weight: 700; color: ${purple}; border-bottom-color: ${purple}; }
@@ -318,7 +321,7 @@ export default function ReportsPage() {
                     const isGreen = rowBg === '#14532d' || rowBg === '#166534'
                     return (
                       <tr key={i} style={{ background: rowBg }}>
-                        <td style={{ color: isGreen ? '#4ade80' : gray, fontSize: 10 }}>{formatDate(item.time)}</td>
+                        <td style={{ color: isGreen ? '#4ade80' : gray, fontSize: 10 }}>{(() => { const f = formatDate(item.time); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
                         <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purpleD }}>{item.module}</td>
                         <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purpleD }}>{item.store === 'ALL' ? '—' : item.store}</td>
                         <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purple }}>{item.userid}</td>
@@ -360,7 +363,7 @@ export default function ReportsPage() {
                     const dim = done ? '#4ade80' : gray
                     return (
                       <tr key={r.id} style={{ background: rowBg }}>
-                        <td style={{ color: dim, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
+                        <td style={{ color: dim, fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
                         <td style={{ color: done ? '#86efac' : purple, fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
                         <td style={{ color: txt, fontWeight: 600 }}>{r.store}</td>
                         <td style={{ color: done ? '#fff' : '#111', maxWidth: 300 }}>{r.task}</td>
@@ -400,7 +403,7 @@ export default function ReportsPage() {
                   {filteredSeason.length === 0 && <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No season logs found.</td></tr>}
                   {filteredSeason.map((r, i) => (
                     <tr key={r.id} style={{ background: i%2===0 ? '#fff' : '#faf8ff' }}>
-                      <td style={{ color: gray, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
+                      <td style={{ color: gray, fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
                       <td style={{ color: purple, fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
                       <td style={{ fontWeight: 600 }}>{r.store}</td>
                       <td>
@@ -442,7 +445,7 @@ export default function ReportsPage() {
                     const dim = pushed ? '#4ade80' : gray
                     return (
                       <tr key={r.id} style={{ background: rowBg }}>
-                        <td style={{ color: dim, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
+                        <td style={{ color: dim, fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
                         <td style={{ color: pushed ? '#86efac' : purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
                         <td style={{ color: txt, fontWeight: 600 }}>{r.store}</td>
                         <td style={{ color: pushed ? '#fff' : purpleD, fontWeight: 700, fontFamily: 'monospace' }}>{r.order_num}</td>
@@ -492,7 +495,7 @@ export default function ReportsPage() {
                     const isGreen = st === 'complete'
                     return (
                       <tr key={r.id} style={{ background: rowBg }}>
-                        <td style={{ color: isGreen ? '#4ade80' : gray, fontSize: 10 }}>{formatDate(r.saved_at)}</td>
+                        <td style={{ color: isGreen ? '#4ade80' : gray, fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
                         <td style={{ color: isGreen ? '#86efac' : purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
                         <td style={{ fontWeight: 600, color: isGreen ? '#86efac' : '#1f2937' }}>{r.store}</td>
                         <td style={{ color: isGreen ? '#fff' : purpleD, fontWeight: 700 }}>{r.name}</td>
