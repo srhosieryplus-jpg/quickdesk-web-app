@@ -6,7 +6,7 @@ import { User } from '@/lib/types'
 
 const ALL_MODULES = [
   { id:'tasks',      label:'Tasks',              icon:'☑',  path:'/tasks',               bg:'#b8f0e6', iconColor:'#1a6b5a' },
-  { id:'season_ss',  label:'SS',                 icon:'sun', path:'/season-ss',           bg:'#d1fae5', iconColor:'#065f46' },
+  { id:'season_ss',  label:'SS',                 icon:'sun', path:'/season-ss',           bg:'#fcd34d', iconColor:'#78350f' },
   { id:'season_aw',  label:'AW',                 icon:'✻',  path:'/season-aw',  bg:'#bfdbfe', iconColor:'#1e40af' },
   { id:'ic',         label:'Infinity Classics',  icon:'∞',  path:'/ic-log',              bg:'#e9d5ff', iconColor:'#6b21a8' },
   { id:'po_tracker', label:'PO Tracker',         icon:'⊞',  path:'/po-tracker',          bg:'#fbcfe8', iconColor:'#9d174d' },
