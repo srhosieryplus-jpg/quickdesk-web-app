@@ -113,8 +113,8 @@ export default function QDPage() {
         const key = (r.upc as string) || (r.row_id as string) || String(Math.random())
         if (!order_list.includes(key)) order_list.push(key)
         const entry: ScanData = { qty: r.qty || 0 }
-        // Store upc separately if it differs from key
-        if (r.upc && r.upc !== key) entry['_upc'] = r.upc as string
+        // Mark unscanned rows so UPC column shows blank
+        entry['_isPlaceholder'] = r.upc ? 0 : 1
         extra_cols.forEach(c => { entry[c] = r[c] ?? '' })
         data[key] = entry
       }
@@ -565,7 +565,7 @@ export default function QDPage() {
                       return (
                         <tr key={upc} style={{ background: ri % 2 === 0 ? purpleLight : '#fafafa', borderBottom: `1px solid #ede9fe` }}>
                           <td style={{ ...tdSt, color: '#6b7280', fontSize: 10 }}>{ri + 1}</td>
-                          <td style={{ ...tdSt, fontFamily: 'Courier New, monospace', fontWeight: 600, letterSpacing: '0.4px' }}>{upc}</td>
+                          <td style={{ ...tdSt, fontFamily: 'Courier New, monospace', fontWeight: 600, letterSpacing: '0.4px' }}>{row._isPlaceholder ? '' : upc}</td>
                           <td style={tdSt}>
                             <input type="number" min="0" defaultValue={row.qty}
                               style={{ width: 52, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 700, color: purple, textAlign: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}
