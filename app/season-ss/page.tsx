@@ -21,11 +21,11 @@ interface SSRow {
   created_at: string
 }
 
-// ── theme (Spring/Summer — emerald green) ─────────────────────────────────────
-const green   = '#059669'
-const greenD  = '#065f46'
-const greenL  = '#ecfdf5'
-const border  = '#6ee7b7'
+// ── theme (Spring/Summer — amber yellow) ─────────────────────────────────────
+const green   = '#d97706'
+const greenD  = '#78350f'
+const greenL  = '#fffbeb'
+const border  = '#fcd34d'
 const amber   = '#d97706'
 const amberL  = '#fffbeb'
 
@@ -406,7 +406,7 @@ export default function SeasonSSPage() {
   function InfoRow({ label, value }: { label: string; value: string | number | null | undefined }) {
     return (
       <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '4px 0', borderBottom: `1px solid ${border}` }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#34d399', minWidth: 80, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', minWidth: 80, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
         <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{value ?? '—'}</span>
       </div>
     )
@@ -427,17 +427,17 @@ export default function SeasonSSPage() {
         .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
         .brand-row:hover { background: ${greenL}; border-color: ${border}; }
         .ss-main-table { border-collapse: collapse; width: 100%; font-size: 11px; }
-        .ss-main-table th { background: #a7f3d0; color: ${greenD}; font-size: 10px; font-weight: 800; padding: 5px 8px; text-align: left; border-bottom: 2px solid ${border}; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
-        .ss-main-table td { padding: 3px 8px; border-bottom: 1px solid #d1fae5; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; vertical-align: middle; }
+        .ss-main-table th { background: #fcd34d; color: ${greenD}; font-size: 10px; font-weight: 800; padding: 5px 8px; text-align: left; border-bottom: 2px solid ${border}; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+        .ss-main-table td { padding: 3px 8px; border-bottom: 1px solid #fef3c7; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; vertical-align: middle; }
         .ss-main-table tr:hover td { filter: brightness(0.96); }
         .ss-preview-table { border-collapse: collapse; width: 100%; font-size: 11px; }
-        .ss-preview-table th { background: #d1fae5; color: #065f46; font-size: 10px; font-weight: 800; padding: 5px 8px; text-align: left; border: 1px solid #a7f3d0; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
-        .ss-preview-table td { padding: 3px 8px; border: 1px solid #d1fae5; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+        .ss-preview-table th { background: #fef3c7; color: #78350f; font-size: 10px; font-weight: 800; padding: 5px 8px; text-align: left; border: 1px solid #fcd34d; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+        .ss-preview-table td { padding: 3px 8px; border: 1px solid #fef3c7; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
         .ss-preview-table tr:hover td { filter: brightness(0.97); }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 16px 12px; overflow-y: auto; }
         .modal-box { background: #fff; border-radius: 14px; box-shadow: 0 8px 48px rgba(0,0,0,0.22); width: 100%; max-width: 1000px; display: flex; flex-direction: column; min-height: 80vh; max-height: 94vh; }
-        .modal-head { padding: 14px 18px; border-bottom: 1px solid #d1fae5; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-        .modal-tabs { display: flex; gap: 2px; padding: 8px 16px 0; border-bottom: 1px solid #d1fae5; flex-shrink: 0; }
+        .modal-head { padding: 14px 18px; border-bottom: 1px solid #fef3c7; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+        .modal-tabs { display: flex; gap: 2px; padding: 8px 16px 0; border-bottom: 1px solid #fef3c7; flex-shrink: 0; }
         .modal-tab { padding: 7px 18px; border: none; background: none; font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 8px 8px 0 0; color: #64748b; }
         .modal-tab.active { background: ${green}; color: #fff; }
         .modal-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
@@ -463,20 +463,20 @@ export default function SeasonSSPage() {
       <div className="qs-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <button onClick={() => router.push('/selector')}
-            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#a7f3d0', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fcd34d', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
             ← Home
           </button>
-          <span style={{ fontSize: 12, color: '#6ee7b7' }}>
-            <span style={{ fontWeight: 700, color: '#a7f3d0' }}>{user?.userid}</span>
+          <span style={{ fontSize: 12, color: '#fbbf24' }}>
+            <span style={{ fontWeight: 700, color: '#fcd34d' }}>{user?.userid}</span>
             {user?.store && user.store !== 'ALL' && (
-              <span style={{ marginLeft: 6, background: greenD, color: '#a7f3d0', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '1px 6px' }}>{user.store}</span>
+              <span style={{ marginLeft: 6, background: greenD, color: '#fcd34d', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '1px 6px' }}>{user.store}</span>
             )}
           </span>
         </div>
 
         {/* Sun + title */}
         <div className="qs-logo">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a7f3d0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fcd34d" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="5"/>
             <line x1="12" y1="1" x2="12" y2="3"/>
             <line x1="12" y1="21" x2="12" y2="23"/>
@@ -488,8 +488,8 @@ export default function SeasonSSPage() {
             <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
           </svg>
           <span style={{ fontSize: 16, fontWeight: 900, color: '#fff', letterSpacing: '0.08em' }}>SS SEASON</span>
-          <span style={{ color: '#6ee7b7', fontSize: 16, fontWeight: 300, margin: '0 4px' }}>—</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#a7f3d0' }}>Invoice Log</span>
+          <span style={{ color: '#fbbf24', fontSize: 16, fontWeight: 300, margin: '0 4px' }}>—</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#fcd34d' }}>Invoice Log</span>
         </div>
 
         <div style={{ flexShrink: 0, minWidth: 80, display: 'flex', justifyContent: 'flex-end' }}>
@@ -505,7 +505,7 @@ export default function SeasonSSPage() {
       {/* ── SEARCH BAR ── */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '8px 16px' }}>
         <form onSubmit={handleSearch} style={{ width: '100%', maxWidth: 700, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 0, border: `1.5px solid ${border}`, borderRadius: 8, overflow: 'visible', background: '#fff' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', flex: 1, borderRight: `1px solid #d1fae5` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', flex: 1, borderRight: `1px solid #fef3c7` }}>
             <label style={{ ...labelSt, fontSize: 10, color: '#94a3b8' }}>INV#</label>
             <input
               ref={invoiceRef} autoFocus value={invoiceQ}
@@ -518,7 +518,7 @@ export default function SeasonSSPage() {
 
           <div style={{ padding: '0 10px', color: '#94a3b8', fontSize: 11, fontWeight: 700, flexShrink: 0, userSelect: 'none' }}>or</div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', flex: 1.4, borderLeft: `1px solid #d1fae5`, position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', flex: 1.4, borderLeft: `1px solid #fef3c7`, position: 'relative' }}>
             <label style={{ ...labelSt, fontSize: 10, color: '#94a3b8' }}>BRAND</label>
             <input
               ref={brandRef} value={brandQ}
@@ -559,7 +559,7 @@ export default function SeasonSSPage() {
                   <span style={{ fontSize: 13, fontWeight: 800, color: greenD }}>Invoice Found</span>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {state.row.logged && (
-                      <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>
+                      <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>
                         ✓ Logged by {state.row.logged_by}
                       </span>
                     )}
@@ -568,12 +568,12 @@ export default function SeasonSSPage() {
                 </div>
 
                 {loggedRow && loggedRow.id === state.row.id && (
-                  <div style={{ background: '#dcfce7', border: '1.5px solid #86efac', borderRadius: 8, padding: '8px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ background: '#fef3c7', border: '1.5px solid #fcd34d', borderRadius: 8, padding: '8px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 18 }}>✅</span>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d' }}>Logged successfully</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#92400e' }}>Logged successfully</div>
                       {loggedRow.po_no && (
-                        <div style={{ fontSize: 14, fontWeight: 900, color: '#166534', fontFamily: 'monospace', letterSpacing: '0.04em' }}>
+                        <div style={{ fontSize: 14, fontWeight: 900, color: '#92400e', fontFamily: 'monospace', letterSpacing: '0.04em' }}>
                           PO# {loggedRow.po_no}
                         </div>
                       )}
@@ -642,7 +642,7 @@ export default function SeasonSSPage() {
 
             {state.phase === 'brand' && (
               <div className="result-card">
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#34d399', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', marginBottom: 8 }}>
                   {state.results.length} invoice{state.results.length !== 1 ? 's' : ''} found for "{state.term}"
                   <button onClick={reset} style={{ float: 'right', background: 'none', border: 'none', color: '#94a3b8', fontSize: 14, cursor: 'pointer' }}>✕</button>
                 </div>
@@ -655,10 +655,10 @@ export default function SeasonSSPage() {
                         Invoice: {row.invoice_no}{row.po_no ? ` · PO: ${row.po_no}` : ''}{row.qty ? ` · Qty: ${row.qty}` : ''}
                       </div>
                       {row.logged && (
-                        <div style={{ fontSize: 10, color: '#15803d', fontWeight: 700 }}>✓ Logged by {row.logged_by} · {fmtTs(row.logged_at)}</div>
+                        <div style={{ fontSize: 10, color: '#92400e', fontWeight: 700 }}>✓ Logged by {row.logged_by} · {fmtTs(row.logged_at)}</div>
                       )}
                     </div>
-                    <span style={{ fontSize: 11, color: row.logged ? '#15803d' : '#34d399', fontWeight: 700 }}>
+                    <span style={{ fontSize: 11, color: row.logged ? '#92400e' : '#f59e0b', fontWeight: 700 }}>
                       {row.logged ? '✓ Done' : 'Select →'}
                     </span>
                   </div>
@@ -685,11 +685,11 @@ export default function SeasonSSPage() {
           <input value={tableFilter} onChange={e => setTableFilter(e.target.value)}
             placeholder="invoice, brand, PO, user…"
             style={{ ...inputSt, flex: 1 }} />
-          <button onClick={() => fetchStoreRows()} style={{ background: '#d1fae5', border: 'none', color: greenD, borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => fetchStoreRows()} style={{ background: '#fef3c7', border: 'none', color: greenD, borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ↺ Refresh
           </button>
           <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
-            {filteredStore.length} rows · <span style={{ color: '#15803d', fontWeight: 700 }}>✓ {loggedCount}</span>
+            {filteredStore.length} rows · <span style={{ color: '#92400e', fontWeight: 700 }}>✓ {loggedCount}</span>
             {flaggedCount > 0 && <> · <span style={{ color: '#92400e', fontWeight: 700 }}>⚑ {flaggedCount}</span></>}
           </span>
         </div>
@@ -697,7 +697,7 @@ export default function SeasonSSPage() {
 
       <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} onClick={() => setCtxMenu(null)}>
         {tableLoading ? (
-          <p style={{ padding: 24, color: '#6ee7b7', fontSize: 13 }}>Loading…</p>
+          <p style={{ padding: 24, color: '#fbbf24', fontSize: 13 }}>Loading…</p>
         ) : (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '0 8px 40px' }}>
             <table className="ss-main-table" style={{ maxWidth: 900 }}>
@@ -716,21 +716,21 @@ export default function SeasonSSPage() {
               </thead>
               <tbody>
                 {filteredStore.length === 0 && (
-                  <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#6ee7b7', fontSize: 13 }}>
+                  <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#fbbf24', fontSize: 13 }}>
                     {storeRows.length === 0 ? 'No invoices in system yet.' : 'No matches.'}
                   </td></tr>
                 )}
                 {filteredStore.map((r, i) => {
                   const logged = r.logged && !r.flagged
-                  const bg = r.flagged ? '#fffbeb' : logged ? (i % 2 === 0 ? '#14532d' : '#166534') : (i % 2 === 0 ? '#fff' : '#f0fdf4')
-                  const txt = logged ? '#86efac' : r.flagged ? '#92400e' : '#1f2937'
-                  const dim = logged ? '#4ade80' : r.flagged ? '#b45309' : '#6b7280'
+                  const bg = r.flagged ? '#fffbeb' : logged ? (i % 2 === 0 ? '#78350f' : '#92400e') : (i % 2 === 0 ? '#fff' : '#fffbeb')
+                  const txt = logged ? '#fcd34d' : r.flagged ? '#92400e' : '#1f2937'
+                  const dim = logged ? '#fbbf24' : r.flagged ? '#b45309' : '#6b7280'
                   return (
                     <tr key={r.id} style={{ background: bg, cursor: 'pointer' }}
                       onClick={() => { setState({ phase: 'found', row: r }); setInvoiceQ(r.invoice_no); setLoggedRow(r.logged ? r : null) }}
                       onContextMenu={e => { e.preventDefault(); setCtxMenu({ id: r.id, x: e.clientX, y: e.clientY }) }}>
                       <td style={{ color: dim, whiteSpace: 'nowrap', fontSize: 10 }}>{fmtDate(r.created_at)}</td>
-                      {isAdmin && <td style={{ fontWeight: 700, color: logged ? '#6ee7b7' : greenD, fontSize: 10 }}>{r.store}</td>}
+                      {isAdmin && <td style={{ fontWeight: 700, color: logged ? '#fbbf24' : greenD, fontSize: 10 }}>{r.store}</td>}
                       <td style={{ fontWeight: 600, color: txt }}>{r.brand}</td>
                       <td style={{ fontFamily: 'monospace', fontSize: 11, color: logged ? '#fff' : greenD, fontWeight: 700 }}>{r.invoice_no}</td>
                       <td className="ss-col-hide" style={{ fontFamily: 'monospace', fontSize: 11, color: txt }}>{r.po_no || '—'}</td>
@@ -739,8 +739,8 @@ export default function SeasonSSPage() {
                         {r.flagged
                           ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>⚑ Flagged</span>
                           : r.logged
-                            ? <span style={{ background: '#166534', color: '#86efac', border: '1px solid #4ade80', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>✓ Logged</span>
-                            : <span style={{ background: '#d1fae5', color: greenD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px' }}>Pending</span>
+                            ? <span style={{ background: '#92400e', color: '#fcd34d', border: '1px solid #fbbf24', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>✓ Logged</span>
+                            : <span style={{ background: '#fef3c7', color: greenD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px' }}>Pending</span>
                         }
                       </td>
                       <td className="ss-col-hide" style={{ fontSize: 10, color: dim }}>{r.logged_by || '—'}</td>
@@ -756,7 +756,7 @@ export default function SeasonSSPage() {
 
       {/* ── TOAST ── */}
       {toast && (
-        <div style={{ position: 'fixed', bottom: 24, right: 24, background: toastType === 'err' ? '#7f1d1d' : '#065f46', color: '#fff', padding: '10px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: toastType === 'err' ? '#7f1d1d' : '#78350f', color: '#fff', padding: '10px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
           {toast}
         </div>
       )}
@@ -815,7 +815,7 @@ export default function SeasonSSPage() {
                       </button>
                       <button onClick={() => { setPasteText(''); setPastePreview([]); setPasteResult(null) }} className="ss-btn ss-btn-gray">Clear</button>
                       {pasteResult && (
-                        <span style={{ fontSize: 12, fontWeight: 700, color: pasteResult.skip > 0 ? '#dc2626' : '#15803d' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: pasteResult.skip > 0 ? '#dc2626' : '#92400e' }}>
                           ✓ {pasteResult.ok} inserted{pasteResult.skip > 0 ? ` · ✕ ${pasteResult.skip} failed` : ''}
                         </span>
                       )}
@@ -827,12 +827,12 @@ export default function SeasonSSPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
                     <label style={{ ...labelSt, fontSize: 10 }}>PREVIEW — {pastePreview.length} ROW{pastePreview.length !== 1 ? 'S' : ''}</label>
                     {pastePreview.length > 0 ? (
-                      <div style={{ flex: 1, overflow: 'auto', border: '1px solid #d1fae5', borderRadius: 8 }}>
+                      <div style={{ flex: 1, overflow: 'auto', border: '1px solid #fef3c7', borderRadius: 8 }}>
                         <table className="ss-preview-table">
                           <thead><tr><th>#</th><th>Store</th><th>Brand</th><th>Invoice #</th><th>PO #</th><th>Qty</th></tr></thead>
                           <tbody>
                             {pastePreview.map((r, i) => (
-                              <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f0fdf4' }}>
+                              <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fffbeb' }}>
                                 <td style={{ color: '#94a3b8', width: 32 }}>{i + 1}</td>
                                 <td style={{ fontWeight: 700, color: greenD }}>{r.store}</td>
                                 <td>{r.brand}</td>
@@ -868,20 +868,20 @@ export default function SeasonSSPage() {
                 </div>
                 <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 10, fontWeight: 700 }}>
                   <span style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 4, padding: '1px 7px', color: '#92400e' }}>⚑ Flagged</span>
-                  <span style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 4, padding: '1px 7px', color: '#15803d' }}>✓ Logged</span>
-                  <span style={{ background: '#f0fdf4', border: '1px solid #a7f3d0', borderRadius: 4, padding: '1px 7px', color: greenD }}>Pending</span>
+                  <span style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 4, padding: '1px 7px', color: '#92400e' }}>✓ Logged</span>
+                  <span style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 4, padding: '1px 7px', color: greenD }}>Pending</span>
                 </div>
                 {ssLoading ? (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#6ee7b7' }}>Loading…</div>
+                  <div style={{ padding: 24, textAlign: 'center', color: '#fbbf24' }}>Loading…</div>
                 ) : (
-                  <div style={{ overflow: 'auto', maxHeight: 500, border: '1px solid #d1fae5', borderRadius: 8 }}>
+                  <div style={{ overflow: 'auto', maxHeight: 500, border: '1px solid #fef3c7', borderRadius: 8 }}>
                     <table className="ss-preview-table">
                       <thead>
                         <tr><th>#</th><th>Store</th><th>Brand</th><th>Invoice #</th><th>PO #</th><th>Qty</th><th>Status</th><th>Logged By</th><th>Logged At</th><th>Note</th></tr>
                       </thead>
                       <tbody>
                         {filteredSS.map((r, i) => {
-                          const bg = r.flagged ? '#fffbeb' : r.logged ? '#f0fdf4' : i % 2 === 0 ? '#fff' : '#f8faff'
+                          const bg = r.flagged ? '#fffbeb' : r.logged ? '#fffbeb' : i % 2 === 0 ? '#fff' : '#f8faff'
                           return (
                             <tr key={r.id} style={{ background: bg }}
                               onContextMenu={e => { e.preventDefault(); setCtxMenu({ id: r.id, x: e.clientX, y: e.clientY }) }}>
@@ -895,8 +895,8 @@ export default function SeasonSSPage() {
                                 {r.flagged
                                   ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>⚑ Flag</span>
                                   : r.logged
-                                    ? <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>✓ Done</span>
-                                    : <span style={{ background: '#d1fae5', color: greenD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>Pending</span>
+                                    ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>✓ Done</span>
+                                    : <span style={{ background: '#fef3c7', color: greenD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px' }}>Pending</span>
                                 }
                               </td>
                               <td style={{ color: '#64748b', fontSize: 10 }}>{r.logged_by || '—'}</td>
@@ -907,12 +907,12 @@ export default function SeasonSSPage() {
                         })}
                       </tbody>
                     </table>
-                    {filteredSS.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#6ee7b7', fontSize: 12 }}>No rows found</div>}
+                    {filteredSS.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#fbbf24', fontSize: 12 }}>No rows found</div>}
                   </div>
                 )}
                 <div style={{ marginTop: 8, display: 'flex', gap: 16, fontSize: 11, color: '#64748b' }}>
                   <span>{filteredSS.length} of {ssRows.length} rows</span>
-                  <span style={{ color: '#15803d', fontWeight: 700 }}>✓ {adminLoggedCount} logged</span>
+                  <span style={{ color: '#92400e', fontWeight: 700 }}>✓ {adminLoggedCount} logged</span>
                   <span style={{ color: '#92400e', fontWeight: 700 }}>⚑ {adminFlaggedCount} flagged</span>
                 </div>
               </div>
@@ -925,7 +925,7 @@ export default function SeasonSSPage() {
       {ctxMenu && (
         <div ref={ctxRef} style={{
           position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, background: '#fff',
-          border: '1px solid #d1fae5', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          border: '1px solid #fef3c7', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
           zIndex: 9000, minWidth: 150, padding: '4px 0', overflow: 'hidden',
         }}>
           {(() => {
