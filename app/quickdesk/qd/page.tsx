@@ -135,18 +135,16 @@ export default function QDPage() {
       const d = { ...prev.data }
       const order = [...prev.order_list]
 
-      // 1. If UPC already exists in a real row → increment qty
-      if (d[upc] && !d[upc]._isPlaceholder) {
+      // 1. If UPC already exists as a real scanned row → increment qty
+      if (d[upc] && d[upc]['_isPlaceholder'] !== 1) {
         d[upc] = { ...d[upc], qty: (d[upc].qty as number) + 1 }
         return { ...prev, order_list: order, data: d }
       }
 
       // 2. Find next placeholder (unscanned) row and assign this UPC to it
-      const placeholderKey = order.find(k => d[k]?._isPlaceholder)
+      const placeholderKey = order.find(k => d[k]?.['_isPlaceholder'] === 1)
       if (placeholderKey) {
-        const existing = { ...d[placeholderKey] }
-        delete existing._isPlaceholder
-        existing.qty = 1
+        const existing = { ...d[placeholderKey], _isPlaceholder: 0, qty: 1 }
         // Move the row: replace placeholder key with real UPC
         d[upc] = existing
         delete d[placeholderKey]
