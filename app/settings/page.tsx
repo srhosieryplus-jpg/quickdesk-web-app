@@ -1,4 +1,10 @@
 'use client'
+
+const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
+function displayUser(id: string | null | undefined) {
+  if (!id) return '—'
+  return USER_DISPLAY[id.toUpperCase()] ?? id
+}
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
@@ -1728,7 +1734,7 @@ export default function SettingsPage() {
           </button>
           <div style={{ width: 1, height: 16, background: border }} />
           <span style={{ fontSize: 12, color: '#9b8ec4' }}>
-            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{currentUser?.userid}</span>
+            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{displayUser(currentUser?.userid)}</span>
           </span>
         </div>
         <div className="settings-header-center" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

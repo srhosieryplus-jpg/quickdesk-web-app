@@ -1,4 +1,10 @@
 'use client'
+
+const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
+function displayUser(id: string | null | undefined) {
+  if (!id) return '—'
+  return USER_DISPLAY[id.toUpperCase()] ?? id
+}
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
@@ -180,7 +186,7 @@ export default function TasksPage() {
           </button>
           <div style={{ width: 1, height: 16, background: border }} />
           <span style={{ fontSize: 12, color: '#60a5fa' }}>
-            <span style={{ fontWeight: 700, color: tealD }}>{user?.userid}</span>
+            <span style={{ fontWeight: 700, color: tealD }}>{displayUser(user?.userid)}</span>
             {user?.store ? <> · {user.store === 'ALL' ? 'All Stores' : user.store}</> : ''}
           </span>
         </div>

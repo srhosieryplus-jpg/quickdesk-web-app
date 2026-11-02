@@ -1,4 +1,10 @@
 'use client'
+
+const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
+function displayUser(id: string | null | undefined) {
+  if (!id) return '—'
+  return USER_DISPLAY[id.toUpperCase()] ?? id
+}
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
@@ -467,7 +473,7 @@ export default function SeasonSSPage() {
             ← Home
           </button>
           <span style={{ fontSize: 12, color: '#fbbf24' }}>
-            <span style={{ fontWeight: 700, color: '#fcd34d' }}>{user?.userid}</span>
+            <span style={{ fontWeight: 700, color: '#fcd34d' }}>{displayUser(user?.userid)}</span>
             {user?.store && user.store !== 'ALL' && (
               <span style={{ marginLeft: 6, background: greenD, color: '#fcd34d', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '1px 6px' }}>{user.store}</span>
             )}

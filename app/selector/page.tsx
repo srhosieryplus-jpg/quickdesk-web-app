@@ -1,4 +1,10 @@
 'use client'
+
+const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
+function displayUser(id: string | null | undefined) {
+  if (!id) return '—'
+  return USER_DISPLAY[id.toUpperCase()] ?? id
+}
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession, clearSession } from '@/lib/auth'
@@ -92,7 +98,7 @@ export default function SelectorPage() {
         {/* Left: user info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9b8ec4', flexShrink: 0 }}>
           <span style={{ fontSize: 14 }}>👤</span>
-          <span style={{ fontWeight: 700, color: '#5b21b6' }}>{user.userid}</span>
+          <span style={{ fontWeight: 700, color: '#5b21b6' }}>{displayUser(user.userid)}</span>
           <span>·</span>
           <span>{user.store === 'ALL' ? 'All Stores' : user.store}</span>
         </div>
