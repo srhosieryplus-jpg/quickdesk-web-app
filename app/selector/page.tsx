@@ -84,9 +84,6 @@ export default function SelectorPage() {
         }
         @media (max-width: 500px) {
           .qs-logo { order: 3; width: 100%; justify-content: center; }
-          .mod-btn { gap: 5px !important; }
-          .mod-btn span { font-size: 9px !important; }
-          .mod-btn svg { width: 22px !important; height: 22px !important; }
         }
       `}</style>
 
@@ -125,8 +122,8 @@ export default function SelectorPage() {
 
       {/* Module grid — honeycomb */}
       {(() => {
-        const HEX = mobile ? 100 : 150
-        const COLS = mobile ? 3 : 4
+        const HEX = mobile ? 150 : 150
+        const COLS = mobile ? 2 : 4
         const H   = HEX * 0.866
         const GAP = mobile ? 4 : 6
         const W = HEX + GAP
