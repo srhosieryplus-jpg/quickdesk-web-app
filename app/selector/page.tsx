@@ -52,24 +52,37 @@ export default function SelectorPage() {
           justify-content: center;
         }
         .module-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(100px, 140px));
-          gap: 14px;
-          padding: 0 20px 40px;
-          max-width: 720px;
+          display: flex;
+          flex-wrap: wrap;
+          padding: 20px 20px 40px;
+          max-width: 680px;
           margin: 0 auto;
           justify-content: center;
+          gap: 0;
+        }
+        .hex-wrap {
+          width: 22%;
+          max-width: 130px;
+          padding: 4px 3px;
+          box-sizing: border-box;
+        }
+        .hex-wrap:nth-child(4n+3),
+        .hex-wrap:nth-child(4n+4) {
+          margin-top: -10px;
+        }
+        .hex-row-offset {
+          display: contents;
         }
         @media (max-width: 600px) {
           .qs-logo { order: 3; width: 100%; justify-content: center; }
-          .module-grid {
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            padding: 0 12px 32px;
-          }
+          .hex-wrap { width: 30%; max-width: none; }
+          .hex-wrap:nth-child(3n+2),
+          .hex-wrap:nth-child(3n+3) { margin-top: -8px; }
+          .hex-wrap:nth-child(4n+3),
+          .hex-wrap:nth-child(4n+4) { margin-top: 0; }
         }
         @media (max-width: 380px) {
-          .module-grid { grid-template-columns: repeat(2, 1fr); }
+          .hex-wrap { width: 45%; }
         }
         .mod-btn {
           display: flex;
@@ -80,15 +93,16 @@ export default function SelectorPage() {
           padding: 18px 8px;
           cursor: pointer;
           border: none;
-          border-radius: 16px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-          transition: transform 0.12s, box-shadow 0.12s;
-          aspect-ratio: 1;
+          border-radius: 0;
+          box-shadow: none;
+          clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+          transition: transform 0.12s, filter 0.12s;
+          aspect-ratio: 0.866;
           width: 100%;
         }
         .mod-btn:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+          transform: translateY(-3px) scale(1.05);
+          filter: brightness(1.08);
         }
         .mod-btn:active { transform: scale(0.97); }
       `}</style>
@@ -129,7 +143,8 @@ export default function SelectorPage() {
       {/* Module grid */}
       <div className="module-grid">
         {modules.map(m => (
-          <button key={m.id} className="mod-btn" onClick={() => router.push(m.path)} style={{ background: m.bg }}>
+          <div key={m.id} className="hex-wrap">
+          <button className="mod-btn" onClick={() => router.push(m.path)} style={{ background: m.bg }}>
             {m.icon === 'sun' ? (
               <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
                 {[0,45,90,135,180,225,270,315].map((deg, i) => {
@@ -166,6 +181,7 @@ export default function SelectorPage() {
               {m.label}
             </span>
           </button>
+          </div>
         ))}
       </div>
     </div>
