@@ -308,8 +308,9 @@ export default function ReportsPage() {
                   )}
                   {feed.map((item, i) => {
                     const isDone = !item.isPending && item.status !== 'Open'
-                    const rowBg = (item.module === 'Task' && !item.isPending && item.status === '✓ Done') ||
-                                  (item.module === 'IC' && !item.isPending)
+                    const rowBg = (item.module === 'Task' && item.status === '✓ Done') ||
+                                  (item.module === 'IC' && !item.isPending) ||
+                                  (item.module === 'UPC' && item.upcState === 'complete')
                       ? (i % 2 === 0 ? '#14532d' : '#166534')
                       : (i % 2 === 0 ? '#fff' : '#faf8ff')
                     const isGreen = rowBg === '#14532d' || rowBg === '#166534'
