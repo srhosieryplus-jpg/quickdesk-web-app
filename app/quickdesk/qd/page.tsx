@@ -31,6 +31,7 @@ type Tab = 'scanner' | 'history'
 export default function QDPage() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [scanVal, setScanVal] = useState('')
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const isAdmin = (u: User | null) => u && ADMINS.includes(u.userid.toUpperCase())
 
@@ -551,12 +552,21 @@ export default function QDPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <label style={labelSt}>Scan Barcode / UPC</label>
               <input ref={inputRef} type="text" placeholder="Scan or type code…"
+                value={scanVal}
                 style={{ ...inputSt, fontSize: 11, fontWeight: 600, letterSpacing: '0.8px' }}
+                onChange={e => setScanVal(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
-                    const v = (e.target as HTMLInputElement).value;
-                    if (v) { handleScan(v); (e.target as HTMLInputElement).value = '' }
+                    const v = scanVal.trim()
+                    if (v) { handleScan(v); setScanVal('') }
                   }
+                }}
+                onPaste={e => {
+                  // Allow paste then auto-submit after a tick
+                  setTimeout(() => {
+                    const v = inputRef.current?.value.trim()
+                    if (v) { handleScan(v); setScanVal('') }
+                  }, 50)
                 }} />
             </div>
 
@@ -724,17 +734,17 @@ export default function QDPage() {
                                 style={{ ...cellSt, fontWeight: 600, fontFamily: 'Courier New, monospace', letterSpacing: '0.4px' }}
                                 onBlur={e => {
                                   const newUpc = e.target.value.trim()
-                                  if (newUpc && newUpc !== upc) {
-                                    setSession(prev => {
-                                      if (!prev) return prev
-                                      const d = { ...prev.data }
-                                      const order = [...prev.order_list]
-                                      d[newUpc] = { ...d[upc], _isPlaceholder: 0 }
-                                      delete d[upc]
-                                      order[order.indexOf(upc)] = newUpc
-                                      return { ...prev, order_list: order, data: d }
-                                    })
-                                  }
+                                  if (!newUpc || newUpc === upc) return
+                                  setSession(prev => {
+                                    if (!prev) return prev
+                                    const d = { ...prev.data }
+                                    const order = [...prev.order_list]
+                                    if (!d[upc]) return prev // already renamed
+                                    d[newUpc] = { ...d[upc], _isPlaceholder: 0 }
+                                    delete d[upc]
+                                    order[order.indexOf(upc)] = newUpc
+                                    return { ...prev, order_list: order, data: d }
+                                  })
                                 }}
                               />
                             )}
