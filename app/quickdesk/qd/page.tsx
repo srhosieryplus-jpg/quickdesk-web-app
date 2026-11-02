@@ -582,16 +582,37 @@ export default function QDPage() {
                       return (
                         <tr key={upc} style={{ background: ri % 2 === 0 ? purpleLight : '#fafafa', borderBottom: `1px solid #ede9fe` }}>
                           <td style={{ ...tdSt, color: '#6b7280', fontSize: 10 }}>{ri + 1}</td>
-                          <td style={{ ...tdSt, fontFamily: 'Courier New, monospace', fontWeight: 600, letterSpacing: '0.4px' }}>{row._isPlaceholder ? '' : upc}</td>
                           <td style={tdSt}>
-                            <input type="number" min="0" defaultValue={row.qty}
+                            <input
+                              type="text"
+                              defaultValue={row._isPlaceholder ? '' : upc}
+                              placeholder="scan or type…"
+                              style={{ width: 130, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 600, fontFamily: 'Courier New, monospace', background: '#fff', letterSpacing: '0.4px' }}
+                              onBlur={e => {
+                                const newUpc = e.target.value.trim()
+                                if (newUpc && newUpc !== upc) {
+                                  setSession(prev => {
+                                    if (!prev) return prev
+                                    const d = { ...prev.data }
+                                    const order = [...prev.order_list]
+                                    d[newUpc] = { ...d[upc], _isPlaceholder: 0 }
+                                    delete d[upc]
+                                    order[order.indexOf(upc)] = newUpc
+                                    return { ...prev, order_list: order, data: d }
+                                  })
+                                }
+                              }}
+                            />
+                          </td>
+                          <td style={tdSt}>
+                            <input type="number" min="0" value={row.qty}
                               style={{ width: 52, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 700, color: purple, textAlign: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}
                               onChange={e => updateQty(upc, e.target.value)}
                               onBlur={e => { if (!e.target.value || +e.target.value <= 0) removeUpc(upc) }} />
                           </td>
                           {session.extra_cols.map(col => (
                             <td key={col} style={tdSt}>
-                              <input type="text" defaultValue={row[col] as string || ''}
+                              <input type="text" value={row[col] as string || ''}
                                 style={{ width: 72, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif' }}
                                 onChange={e => updateExtra(upc, col, e.target.value)} />
                             </td>
