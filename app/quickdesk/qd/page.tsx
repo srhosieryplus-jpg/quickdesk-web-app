@@ -110,7 +110,7 @@ export default function QDPage() {
   function loadSessionData(s: UPCSession & { id: string }) {
     // Migrate new-schema sessions (rows[]) back to old-schema (order_list/data)
     const raw = s as UPCSession & { id: string; rows?: { upc: string; qty: number; [k: string]: string | number }[]; extra_cols?: string[] }
-    if (raw.rows && raw.rows.length > 0 && (!s.order_list || s.order_list.length === 0)) {
+    if (raw.rows && raw.rows.length > 0) {
       const extra_cols = raw.extra_cols || []
       const order_list: string[] = []
       const data: Record<string, ScanData> = {}
