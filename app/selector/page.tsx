@@ -19,11 +19,16 @@ const ALL_MODULES = [
 export default function SelectorPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
+  const [mobile, setMobile] = useState(false)
 
   useEffect(() => {
     const u = getSession()
     if (!u) { router.push('/'); return }
     setUser(u)
+    const check = () => setMobile(window.innerWidth < 500)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
   }, [router])
 
   if (!user) return null
@@ -77,8 +82,11 @@ export default function SelectorPage() {
         .mod-btn:active {
           transform: translate(-50%, -50%) scale(0.96);
         }
-        @media (max-width: 600px) {
+        @media (max-width: 500px) {
           .qs-logo { order: 3; width: 100%; justify-content: center; }
+          .mod-btn { gap: 5px !important; }
+          .mod-btn span { font-size: 9px !important; }
+          .mod-btn svg { width: 22px !important; height: 22px !important; }
         }
       `}</style>
 
@@ -117,19 +125,13 @@ export default function SelectorPage() {
 
       {/* Module grid — honeycomb */}
       {(() => {
-        const HEX = 150   // hex width px
-        const H   = HEX * 0.866  // hex height
-        const GAP = 6     // gap between hexes
-        const COLS = 4
+        const HEX = mobile ? 100 : 150
+        const COLS = mobile ? 3 : 4
+        const H   = HEX * 0.866
+        const GAP = mobile ? 4 : 6
         const W = HEX + GAP
         const ROW_H = H * 0.75 + GAP * 0.5
-        const rows: number[][] = []
-        modules.forEach((_, i) => {
-          const r = Math.floor(i / COLS)
-          if (!rows[r]) rows[r] = []
-          rows[r].push(i)
-        })
-        const totalRows = rows.length
+        const totalRows = Math.ceil(modules.length / COLS)
         const gridW = COLS * W + HEX * 0.5
         const gridH = totalRows * ROW_H + H * 0.25 + 20
         return (
