@@ -146,27 +146,35 @@ export default function QDPage() {
       const d = { ...prev.data }
       const order = [...prev.order_list]
 
-      // 1. If UPC already exists as a real scanned row → increment qty
-      if (d[upc] && d[upc]['_isPlaceholder'] !== 1) {
-        d[upc] = { ...d[upc], qty: (d[upc].qty as number) + 1 }
-        return { ...prev, order_list: order, data: d }
-      }
-
-      // 2. Use targeted placeholder if user clicked a specific row, else next in order
+      // 1. Check for a placeholder to fill (targeted or next in order)
       const placeholderKey = (targetedKey && d[targetedKey]?.['_isPlaceholder'] === 1)
         ? targetedKey
         : order.find(k => d[k]?.['_isPlaceholder'] === 1)
 
       if (placeholderKey) {
+        // Fill the placeholder with this UPC
         const existing = { ...d[placeholderKey], _isPlaceholder: 0, qty: 1 }
-        d[upc] = existing
-        delete d[placeholderKey]
         const idx = order.indexOf(placeholderKey)
-        order[idx] = upc
+        delete d[placeholderKey]
+        if (d[upc] && d[upc]['_isPlaceholder'] !== 1) {
+          // UPC already exists as a scanned row — merge qty, remove placeholder slot
+          d[upc] = { ...d[upc], qty: (d[upc].qty as number) + 1 }
+          order.splice(idx, 1)
+        } else {
+          // Normal fill: replace placeholder key with the scanned UPC
+          d[upc] = existing
+          order[idx] = upc
+        }
         return { ...prev, order_list: order, data: d }
       }
 
-      // 3. No placeholder rows left — add new row at bottom
+      // 2. No placeholder rows — if UPC already exists as scanned row, increment qty
+      if (d[upc] && d[upc]['_isPlaceholder'] !== 1) {
+        d[upc] = { ...d[upc], qty: (d[upc].qty as number) + 1 }
+        return { ...prev, order_list: order, data: d }
+      }
+
+      // 3. Brand new UPC with no placeholder — add new row at bottom
       const empty: ScanData = { qty: 1 }
       prev.extra_cols.forEach(c => { empty[c] = '' })
       d[upc] = empty
