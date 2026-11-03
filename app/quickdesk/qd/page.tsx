@@ -324,7 +324,7 @@ export default function QDPage() {
           canvas.height = video.videoHeight
           ctx.drawImage(video, 0, 0)
           try {
-            const result = await reader.decodeFromImageElement(canvas)
+            const result = await reader.decodeFromImageUrl(canvas.toDataURL())
             if (result) {
               const code = result.getText()
               closeCamera()
