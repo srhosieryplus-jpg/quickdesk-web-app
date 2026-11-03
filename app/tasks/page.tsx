@@ -5,7 +5,7 @@ function displayUser(id: string | null | undefined) {
   if (!id) return '—'
   return USER_DISPLAY[id.toUpperCase()] ?? id
 }
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -31,6 +31,10 @@ export default function TasksPage() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [editSaving, setEditSaving] = useState(false)
+  const [pullY, setPullY] = useState(0)
+  const [pulling, setPulling] = useState(false)
+  const touchStartY = useRef(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const u = getSession()
@@ -178,7 +182,10 @@ export default function TasksPage() {
           .tasks-form input { width: 100% !important; }
           .tasks-refresh { display: none !important; }
           .tasks-search-row { flex-wrap: wrap; gap: 6px !important; }
-          .tasks-filter-meta { flex-direction: column; align-items: flex-start !important; gap: 4px !important; }
+          .tasks-filter-meta { flex-direction: row; flex-wrap: wrap; align-items: center !important; gap: 8px !important; width: 100%; }
+          .tasks-filter-meta label { flex-shrink: 0; }
+          .tasks-filter-meta span { flex-shrink: 0; }
+          .tasks-search-row > label { display: none; }
           .tasks-table-wrap { display: none; }
           .tasks-cards { display: block; padding: 8px 12px; }
         }
@@ -303,7 +310,27 @@ export default function TasksPage() {
       </div>
 
       {/* Mobile cards */}
-      <div className="tasks-cards">
+      <div className="tasks-cards"
+        ref={scrollRef}
+        onTouchStart={e => { touchStartY.current = e.touches[0].clientY; setPulling(false) }}
+        onTouchMove={e => {
+          const el = scrollRef.current
+          if (!el) return
+          const dy = e.touches[0].clientY - touchStartY.current
+          if (el.scrollTop === 0 && dy > 0) { setPullY(Math.min(dy, 72)); setPulling(true) }
+          else { setPullY(0); setPulling(false) }
+        }}
+        onTouchEnd={() => {
+          if (pullY > 50 && user) { fetchTasks(user); showToast('🔄 Refreshed') }
+          setPullY(0); setPulling(false)
+        }}
+        style={{ overflowY: 'auto' }}
+      >
+        {pulling && pullY > 10 && (
+          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: 12, color: teal, opacity: Math.min(pullY / 50, 1) }}>
+            {pullY > 50 ? '↑ Release to refresh' : '↓ Pull to refresh'}
+          </div>
+        )}
         {loading ? (
           <p style={{ padding: 24, color: teal, fontSize: 13 }}>Loading…</p>
         ) : filtered.length === 0 ? (
@@ -324,7 +351,7 @@ export default function TasksPage() {
                   <span style={{ color: '#15803d', fontWeight: 800, fontSize: 16, flexShrink: 0 }}>✓</span>
                 ) : null}
               </div>
-              {t.note ? <div style={{ fontSize: 12, color: dimColor, marginTop: 4 }}>{t.note}</div> : null}
+              {t.note ? <div style={{ fontSize: 12, color: dimColor, marginTop: 5 }}><span style={{ fontWeight: 700 }}>Note:</span> {t.note}</div> : null}
               <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 11, color: dimColor }}>
                 <span style={{ fontWeight: 700, color: t.done ? '#15803d' : '#1d4ed8' }}>{t.logged_by}</span>
                 <span>·</span>
