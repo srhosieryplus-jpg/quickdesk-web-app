@@ -183,6 +183,10 @@ export default function TasksPage() {
           .tasks-refresh { display: none !important; }
           .tasks-table-wrap { display: none; }
           .tasks-cards { display: block; padding: 8px 12px; }
+          .tasks-search-row label { display: none; }
+          .tasks-filter-meta { margin-top: 0 !important; }
+          .tasks-search-combined { display: flex !important; }
+          .tasks-search-stacked { display: none !important; }
         }
       `}</style>
 
@@ -235,8 +239,19 @@ export default function TasksPage() {
       </div>
 
       {/* Search bar */}
-      <div style={{ background: tealLight, borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-        <div style={{ width: '100%', maxWidth: 900, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ background: tealLight, borderBottom: `1px solid ${border}`, padding: '6px 12px' }}>
+        {/* Mobile: single row with search + checkbox */}
+        <div className="tasks-search-combined" style={{ display: 'none', alignItems: 'center', gap: 8 }}>
+          <input value={filter} onChange={e => setFilter(e.target.value)}
+            placeholder="Search tasks…"
+            style={{ ...inputSt, flex: 1, fontSize: 13 }} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#374151', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <input type="checkbox" checked={showCompleted} onChange={e => setShowCompleted(e.target.checked)} style={{ cursor: 'pointer', width: 16, height: 16, accentColor: teal }} />
+            Done
+          </label>
+        </div>
+        {/* Desktop: stacked layout */}
+        <div className="tasks-search-stacked" style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 900, margin: '0 auto' }}>
           <div className="tasks-search-row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <label style={{ ...labelSt, color: tealD, fontWeight: 700 }}>Search:</label>
             <input value={filter} onChange={e => setFilter(e.target.value)}
@@ -337,21 +352,21 @@ export default function TasksPage() {
           return (
             <div key={t.id} style={{ background: cardBg, border: `1px solid ${t.done ? '#86efac' : border}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}
               onContextMenu={ev => handleRowRightClick(ev, t.id)}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: textColor, textDecoration: t.done ? 'line-through' : 'none' }}>{t.task}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                {isAdmin ? (
+                  <input type="checkbox" checked={t.done} onChange={() => toggleDone(t)}
+                    style={{ cursor: 'pointer', width: 18, height: 18, accentColor: teal, flexShrink: 0, marginTop: 2 }} />
+                ) : t.done ? (
+                  <span style={{ color: '#15803d', fontWeight: 800, fontSize: 16, flexShrink: 0, marginTop: 1 }}>✓</span>
+                ) : null}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: textColor, textDecoration: t.done ? 'line-through' : 'none', wordBreak: 'break-word' }}>{t.task}</div>
                   {t.note ? (
-                    <div style={{ fontSize: 12, color: dimColor, marginTop: 4 }}>
-                      <span style={{ fontWeight: 700 }}>Note:</span> {t.note}
+                    <div style={{ fontSize: 12, color: dimColor, marginTop: 3, wordBreak: 'break-word' }}>
+                      <span style={{ fontWeight: 700 }}>Note: </span>{t.note}
                     </div>
                   ) : null}
                 </div>
-                {isAdmin ? (
-                  <input type="checkbox" checked={t.done} onChange={() => toggleDone(t)}
-                    style={{ cursor: 'pointer', width: 16, height: 16, accentColor: teal, flexShrink: 0, marginTop: 2 }} />
-                ) : t.done ? (
-                  <span style={{ color: '#15803d', fontWeight: 800, fontSize: 16, flexShrink: 0 }}>✓</span>
-                ) : null}
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 11, color: dimColor }}>
                 <span style={{ fontWeight: 700, color: t.done ? '#15803d' : '#1d4ed8' }}>{t.logged_by}</span>
