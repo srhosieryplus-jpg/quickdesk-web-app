@@ -178,8 +178,11 @@ export default function TasksPage() {
         .tasks-cards { display: none; }
         @media (max-width: 600px) {
           .tasks-center { order: 3; width: 100%; }
-          .tasks-form { gap: 8px; }
-          .tasks-form input { width: 100% !important; }
+          .tasks-form { flex-direction: column; align-items: stretch; gap: 6px; }
+          .tasks-form-row { display: flex; align-items: center; gap: 8px; }
+          .tasks-form-row label { min-width: 42px; }
+          .tasks-form-row input { flex: 1; }
+          .tasks-form-submit { width: 100%; }
           .tasks-refresh { display: none !important; }
           .tasks-table-wrap { display: none; }
           .tasks-cards { display: block; padding: 8px 12px; }
@@ -222,16 +225,20 @@ export default function TasksPage() {
 
       {/* Submit form */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', justifyContent: 'center' }}>
-        <form onSubmit={addTask} style={{ width: '100%', maxWidth: 900, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <label style={{ ...labelSt, color: tealD }}>Task:</label>
-          <input value={newTask} onChange={e => setNewTask(e.target.value)}
-            placeholder="Describe the task…"
-            style={{ ...inputSt, flex: 1, minWidth: 160 }} />
-          <label style={{ ...labelSt, color: tealD }}>Note:</label>
-          <input value={newNote} onChange={e => setNewNote(e.target.value)}
-            placeholder="optional…"
-            style={{ ...inputSt, width: 160 }} />
-          <button type="submit" disabled={saving || !newTask.trim()}
+        <form onSubmit={addTask} className="tasks-form" style={{ width: '100%', maxWidth: 900, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div className="tasks-form-row" style={{ display: 'contents' }}>
+            <label style={{ ...labelSt, color: tealD }}>Task:</label>
+            <input value={newTask} onChange={e => setNewTask(e.target.value)}
+              placeholder="Describe the task…"
+              style={{ ...inputSt, flex: 1, minWidth: 160 }} />
+          </div>
+          <div className="tasks-form-row" style={{ display: 'contents' }}>
+            <label style={{ ...labelSt, color: tealD }}>Note:</label>
+            <input value={newNote} onChange={e => setNewNote(e.target.value)}
+              placeholder="optional…"
+              style={{ ...inputSt, width: 160 }} />
+          </div>
+          <button type="submit" disabled={saving || !newTask.trim()} className="tasks-form-submit"
             style={{ background: teal, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: saving || !newTask.trim() ? 'default' : 'pointer', opacity: saving || !newTask.trim() ? 0.6 : 1, whiteSpace: 'nowrap' }}>
             {saving ? '…' : '✓ Submit Task'}
           </button>

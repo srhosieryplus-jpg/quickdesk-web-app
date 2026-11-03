@@ -51,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
           input:focus, select:focus, textarea:focus { border-color: #7c3aed; }
           @media (max-width: 768px) {
-            input, select, textarea { font-size: 16px !important; }
+            input, select, textarea { font-size: 16px !important; padding: 4px 8px !important; }
           }
           .toast { position: fixed; bottom: 20px; right: 20px; background: #1e1e1e; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 9999; font-family: 'Inter', sans-serif; }
         `}</style>
