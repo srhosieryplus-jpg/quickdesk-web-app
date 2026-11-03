@@ -283,7 +283,6 @@ export default function QDPage() {
   }
 
   function startBarcodeLoop() {
-    // @ts-expect-error BarcodeDetector is not in TS lib yet
     if (!('BarcodeDetector' in window)) {
       setCameraError('Barcode scanning not supported on this browser. Try Chrome on Android, or update iOS to 16.4+.')
       return
