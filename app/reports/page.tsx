@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -66,6 +66,10 @@ export default function ReportsPage() {
   const [season, setSeason] = useState<SeasonLog[]>([])
   const [ic, setIc]         = useState<ICEntry[]>([])
   const [upc, setUpc]       = useState<UPCSession[]>([])
+  const [pullY, setPullY]   = useState(0)
+  const [pulling, setPulling] = useState(false)
+  const touchStartY = useRef(0)
+  const cardsRef = useRef<HTMLDivElement>(null)
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
@@ -193,6 +197,53 @@ export default function ReportsPage() {
 
   const hasPendingToggle = tab === 'overview' || tab === 'tasks' || tab === 'ic'
 
+  type CardItem = {
+    id?: string; time: string; module: string; store: string; label: string
+    sublabel?: string; userid: string; status: string
+    statusColor: string; statusBg: string; statusBorder: string
+    isGreen: boolean; isPending: boolean; upcState?: 'waiting'|'ready'|'complete'
+  }
+  const mobileCards: CardItem[] = tab === 'overview' ? feed.map(item => ({
+    id: item.id, time: item.time, module: item.module, store: item.store,
+    label: item.label, userid: item.userid, status: item.status,
+    statusColor: item.statusColor, statusBg: item.statusBg, statusBorder: item.statusBorder,
+    isGreen: !item.isPending && item.status !== 'Open' && item.status !== '⏳ Waiting' && item.status !== '👀 Ready',
+    isPending: item.isPending ?? false, upcState: item.upcState,
+  })) : tab === 'tasks' ? filteredTasks.map(r => ({
+    id: r.id, time: r.saved_at, module: 'Task', store: r.store, label: r.task,
+    sublabel: r.note || undefined, userid: displayUser(r.logged_by),
+    status: r.done ? '✓ Done' : 'Open',
+    statusColor: r.done ? '#166534' : '#92400e',
+    statusBg: r.done ? '#dcfce7' : '#fef3c7',
+    statusBorder: r.done ? '#86efac' : '#fcd34d',
+    isGreen: r.done, isPending: false,
+  })) : tab === 'season' ? filteredSeason.map(r => ({
+    id: r.id, time: r.saved_at, module: r.season_type || 'Season', store: r.store,
+    label: `${r.vendor} — ${r.invoice}`, sublabel: r.note || undefined,
+    userid: displayUser(r.logged_by),
+    status: 'Logged', statusColor: '#1e40af', statusBg: '#dbeafe', statusBorder: '#93c5fd',
+    isGreen: false, isPending: false,
+  })) : tab === 'ic' ? filteredIc.map(r => ({
+    id: r.id, time: r.saved_at, module: 'IC', store: r.store,
+    label: r.order_num, sublabel: r.note || undefined, userid: displayUser(r.userid),
+    status: r.status === 'Pushed In' ? '✓ Pushed' : 'Pending',
+    statusColor: r.status === 'Pushed In' ? '#166534' : '#92400e',
+    statusBg: r.status === 'Pushed In' ? '#dcfce7' : '#fef3c7',
+    statusBorder: r.status === 'Pushed In' ? '#86efac' : '#fcd34d',
+    isGreen: r.status === 'Pushed In', isPending: r.status === 'Pending',
+  })) : filteredUpc.map(r => {
+    const st = upcStatus(r)
+    return {
+      id: r.id, time: r.saved_at, module: 'UPC', store: r.store,
+      label: r.name, userid: displayUser(r.userid),
+      status: st === 'waiting' ? '⏳ Waiting' : st === 'ready' ? '👀 Ready' : '✓ Complete',
+      statusColor: st === 'waiting' ? '#1e40af' : st === 'ready' ? '#92400e' : '#166534',
+      statusBg: st === 'waiting' ? '#dbeafe' : st === 'ready' ? '#fef3c7' : '#dcfce7',
+      statusBorder: st === 'waiting' ? '#93c5fd' : st === 'ready' ? '#fcd34d' : '#86efac',
+      isGreen: st === 'complete', isPending: false, upcState: st,
+    }
+  })
+
   return (
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
       <style>{`
@@ -203,10 +254,18 @@ export default function ReportsPage() {
         .rpt-table th { padding: 5px 8px; text-align: left; font-size: 10px; font-weight: 800; color: ${purpleD}; border-bottom: 2px solid ${border}; white-space: nowrap; background: #e8e4f8; position: sticky; top: 0; z-index: 1; }
         .rpt-table td { padding: 3px 8px; font-size: 11px; vertical-align: middle; border-bottom: 1px solid #e5e7eb; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
         .rpt-table tr:hover td { filter: brightness(0.97); }
+        .rpt-refresh { display: inline-block; }
+        .rpt-all-modules { display: inline; }
+        .rpt-body-table { display: block; }
+        .rpt-body-cards { display: none; }
         @media (max-width: 700px) {
           .rpt-table th, .rpt-table td { padding: 3px 5px; font-size: 10px; }
           .ic-col-hide { display: none; }
           .rpt-time { display: none; }
+          .rpt-refresh { display: none !important; }
+          .rpt-all-modules { display: none !important; }
+          .rpt-body-table { display: none; }
+          .rpt-body-cards { display: block; padding: 8px 12px; overflow-y: auto; flex: 1; }
         }
         .rpt-tab { padding: 8px 14px; font-size: 12px; font-weight: 500; border: none; border-bottom: 2px solid transparent; background: none; color: ${gray}; cursor: pointer; white-space: nowrap; }
         .rpt-tab.active { font-weight: 700; color: ${purple}; border-bottom-color: ${purple}; }
@@ -231,10 +290,10 @@ export default function ReportsPage() {
         <div className="rpt-center">
           <span style={{ fontSize: 18, color: purple }}>📋</span>
           <span style={{ fontSize: 15, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>REPORTS</span>
-          <span style={{ color: '#c4b5fd', fontSize: 13 }}>— All Modules</span>
+          <span className="rpt-all-modules" style={{ color: '#c4b5fd', fontSize: 13 }}>— All Modules</span>
         </div>
 
-        <div style={{ flexShrink: 0 }}>
+        <div className="rpt-refresh" style={{ flexShrink: 0 }}>
           <button onClick={refresh} disabled={refreshing}
             style={{ background: '#ede9fe', border: 'none', color: purpleD, borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             {refreshing ? '…' : '↺ Refresh'}
@@ -287,8 +346,8 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Body */}
-      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
+      {/* Body — desktop table */}
+      <div className="rpt-body-table" style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
         {loading ? (
           <p style={{ padding: 32, color: '#9b8ec4', fontSize: 13 }}>Loading…</p>
         ) : (
@@ -524,6 +583,71 @@ export default function ReportsPage() {
 
           </div>
         )}
+      </div>
+
+      {/* Body — mobile cards */}
+      <div className="rpt-body-cards"
+        ref={cardsRef}
+        onTouchStart={e => { touchStartY.current = e.touches[0].clientY; setPulling(false) }}
+        onTouchMove={e => {
+          const el = cardsRef.current
+          if (!el) return
+          const dy = e.touches[0].clientY - touchStartY.current
+          if (el.scrollTop === 0 && dy > 0) { setPullY(Math.min(dy, 72)); setPulling(true) }
+          else { setPullY(0); setPulling(false) }
+        }}
+        onTouchEnd={() => {
+          if (pullY > 50 && user) { fetchAll(user); showToast('🔄 Refreshed') }
+          setPullY(0); setPulling(false)
+        }}
+      >
+        {pulling && pullY > 10 && (
+          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: 12, color: purple, opacity: Math.min(pullY / 50, 1) }}>
+            {pullY > 50 ? '↑ Release to refresh' : '↓ Pull to refresh'}
+          </div>
+        )}
+        {loading ? (
+          <p style={{ padding: 24, color: purple, fontSize: 13 }}>Loading…</p>
+        ) : mobileCards.length === 0 ? (
+          <p style={{ padding: 24, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No entries found.</p>
+        ) : mobileCards.map((item, i) => (
+          <div key={item.id || i} style={{
+            background: item.isGreen ? '#14532d' : '#fff',
+            border: `1px solid ${item.isGreen ? '#166534' : border}`,
+            borderRadius: 10, padding: '10px 12px', marginBottom: 8,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: item.isGreen ? '#fff' : '#111', textDecoration: (item.module === 'Task' && item.status === '✓ Done') ? 'line-through' : 'none' }}>
+                  {item.label}
+                </div>
+                {item.sublabel ? (
+                  <div style={{ fontSize: 12, color: item.isGreen ? '#86efac' : gray, marginTop: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Note:</span> {item.sublabel}
+                  </div>
+                ) : null}
+              </div>
+              <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
+                background: item.statusBg, color: item.statusColor, border: `1px solid ${item.statusBorder}`,
+                whiteSpace: 'nowrap', flexShrink: 0,
+                cursor: isAdmin && item.module === 'UPC' && item.upcState ? 'pointer' : 'default',
+              }}
+                onClick={isAdmin && item.module === 'UPC' && item.id && item.upcState ? () => cycleUpcStatus(item.id!, item.upcState!) : undefined}
+              >
+                {item.status}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, fontSize: 11, color: item.isGreen ? '#86efac' : gray, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700, color: item.isGreen ? '#4ade80' : purple }}>{item.module}</span>
+              <span>·</span>
+              <span style={{ fontWeight: 700 }}>{item.userid}</span>
+              <span>·</span>
+              <span>{item.store === 'ALL' ? '—' : item.store}</span>
+              <span>·</span>
+              <span>{formatDate(item.time).date}</span>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Toast */}

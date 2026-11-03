@@ -181,11 +181,6 @@ export default function TasksPage() {
           .tasks-form { gap: 8px; }
           .tasks-form input { width: 100% !important; }
           .tasks-refresh { display: none !important; }
-          .tasks-search-row { flex-wrap: wrap; gap: 6px !important; }
-          .tasks-filter-meta { flex-direction: row; flex-wrap: wrap; align-items: center !important; gap: 8px !important; width: 100%; }
-          .tasks-filter-meta label { flex-shrink: 0; }
-          .tasks-filter-meta span { flex-shrink: 0; }
-          .tasks-search-row > label { display: none; }
           .tasks-table-wrap { display: none; }
           .tasks-cards { display: block; padding: 8px 12px; }
         }
@@ -247,13 +242,13 @@ export default function TasksPage() {
             <input value={filter} onChange={e => setFilter(e.target.value)}
               placeholder="task, note, store, user…"
               style={{ ...inputSt, flex: 1 }} />
-            <div className="tasks-filter-meta" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
-                <input type="checkbox" checked={showCompleted} onChange={e => setShowCompleted(e.target.checked)} style={{ cursor: 'pointer' }} />
-                Show completed
-              </label>
-              <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>{filtered.length} tasks</span>
-            </div>
+          </div>
+          <div className="tasks-filter-meta" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+              <input type="checkbox" checked={showCompleted} onChange={e => setShowCompleted(e.target.checked)} style={{ cursor: 'pointer' }} />
+              Show completed
+            </label>
+            <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>{filtered.length} tasks</span>
           </div>
         </div>
       </div>
@@ -343,7 +338,14 @@ export default function TasksPage() {
             <div key={t.id} style={{ background: cardBg, border: `1px solid ${t.done ? '#86efac' : border}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}
               onContextMenu={ev => handleRowRightClick(ev, t.id)}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: textColor, flex: 1, textDecoration: t.done ? 'line-through' : 'none' }}>{t.task}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: textColor, textDecoration: t.done ? 'line-through' : 'none' }}>{t.task}</div>
+                  {t.note ? (
+                    <div style={{ fontSize: 12, color: dimColor, marginTop: 4 }}>
+                      <span style={{ fontWeight: 700 }}>Note:</span> {t.note}
+                    </div>
+                  ) : null}
+                </div>
                 {isAdmin ? (
                   <input type="checkbox" checked={t.done} onChange={() => toggleDone(t)}
                     style={{ cursor: 'pointer', width: 16, height: 16, accentColor: teal, flexShrink: 0, marginTop: 2 }} />
@@ -351,7 +353,6 @@ export default function TasksPage() {
                   <span style={{ color: '#15803d', fontWeight: 800, fontSize: 16, flexShrink: 0 }}>✓</span>
                 ) : null}
               </div>
-              {t.note ? <div style={{ fontSize: 12, color: dimColor, marginTop: 5 }}><span style={{ fontWeight: 700 }}>Note:</span> {t.note}</div> : null}
               <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 11, color: dimColor }}>
                 <span style={{ fontWeight: 700, color: t.done ? '#15803d' : '#1d4ed8' }}>{t.logged_by}</span>
                 <span>·</span>
