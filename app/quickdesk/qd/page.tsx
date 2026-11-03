@@ -289,6 +289,7 @@ export default function QDPage() {
   }
 
   async function openCamera() {
+    if (!session) { setShowModal(true); return }
     setCameraError('')
     setLastScanned('')
     lastScannedRef.current = ''
@@ -409,6 +410,36 @@ export default function QDPage() {
     setLastScanned('')
     setScanFlash(false)
     setTimeout(() => inputRef.current?.focus(), 100)
+  }
+
+  async function doManualScan() {
+    if (!videoRef.current || videoRef.current.readyState < 2) return
+    cooldownRef.current = false
+    lastScannedRef.current = ''
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.current.videoWidth
+    canvas.height = videoRef.current.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(videoRef.current, 0, 0)
+    if ('BarcodeDetector' in window) {
+      try {
+        // @ts-expect-error
+        const detector = new window.BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'] })
+        const barcodes = await detector.detect(videoRef.current)
+        if (barcodes.length > 0) {
+          onScanned(normalizeBarcode(barcodes[0].rawValue as string, barcodes[0].format as string))
+        } else { showToast('No barcode found — try again') }
+      } catch { showToast('No barcode found — try again') }
+    } else {
+      import('@zxing/library').then(({ BrowserMultiFormatReader }) => {
+        const reader = new BrowserMultiFormatReader()
+        reader.decodeFromImageUrl(canvas.toDataURL()).then(result => {
+          const fmt = result.getBarcodeFormat()
+          onScanned(normalizeBarcode(result.getText(), fmt === 1 ? 'ean_13' : fmt === 14 ? 'upc_a' : ''))
+        }).catch(() => showToast('No barcode found — try again'))
+      })
+    }
   }
 
   // ── Smart Paste ────────────────────────────────────────────────────────────
@@ -1239,41 +1270,8 @@ export default function QDPage() {
             </button>
           </div>
 
-          {/* Video — tap to force scan */}
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
-            onClick={async () => {
-              if (!videoRef.current || videoRef.current.readyState < 2) return
-              // Manual tap overrides cooldown and same-code dedup
-              cooldownRef.current = false
-              lastScannedRef.current = ''
-              // Grab current frame and attempt decode
-              const canvas = document.createElement('canvas')
-              canvas.width = videoRef.current.videoWidth
-              canvas.height = videoRef.current.videoHeight
-              const ctx = canvas.getContext('2d')
-              if (!ctx) return
-              ctx.drawImage(videoRef.current, 0, 0)
-              if ('BarcodeDetector' in window) {
-                try {
-                  // @ts-expect-error
-                  const detector = new window.BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'] })
-                  const barcodes = await detector.detect(videoRef.current)
-                  if (barcodes.length > 0) {
-                    const b = barcodes[0]
-                    onScanned(normalizeBarcode(b.rawValue as string, b.format as string))
-                  } else { showToast('No barcode found — try again') }
-                } catch { showToast('No barcode found — try again') }
-              } else {
-                import('@zxing/library').then(({ BrowserMultiFormatReader }) => {
-                  const reader = new BrowserMultiFormatReader()
-                  reader.decodeFromImageUrl(canvas.toDataURL()).then(result => {
-                    const fmt = result.getBarcodeFormat()
-                    const fmtName = fmt === 1 ? 'ean_13' : fmt === 14 ? 'upc_a' : ''
-                    onScanned(normalizeBarcode(result.getText(), fmtName))
-                  }).catch(() => showToast('No barcode found — try again'))
-                })
-              }
-            }}>
+          {/* Video area */}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
             <video ref={videoRef} autoPlay playsInline muted
               style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             {/* Scan flash */}
@@ -1297,12 +1295,6 @@ export default function QDPage() {
                 </div>
               </div>
             )}
-            {/* Tap hint */}
-            {scanning && !cameraError && (
-              <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Tap screen to force scan</span>
-              </div>
-            )}
           </div>
 
           {/* Bottom controls */}
@@ -1321,8 +1313,14 @@ export default function QDPage() {
               ))}
             </div>
 
+            {/* Manual scan button */}
+            <button onClick={doManualScan}
+              style={{ width: '100%', padding: '12px 0', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 800, cursor: 'pointer', background: '#7c3aed', color: '#fff', letterSpacing: '0.04em' }}>
+              📷 Scan
+            </button>
+
             {/* Status / last scanned */}
-            <div style={{ textAlign: 'center', minHeight: 36 }}>
+            <div style={{ textAlign: 'center', minHeight: 24 }}>
               {cameraError ? (
                 <span style={{ color: '#fca5a5', fontSize: 12, lineHeight: 1.5 }}>{cameraError}</span>
               ) : lastScanned ? (
@@ -1332,9 +1330,9 @@ export default function QDPage() {
                   {camMode === 'continuous' && <span style={{ color: '#9ca3af', fontSize: 11 }}> — keep scanning…</span>}
                 </div>
               ) : scanning ? (
-                <span style={{ color: '#a78bfa', fontSize: 13 }}>Point camera at barcode…</span>
+                <span style={{ color: '#a78bfa', fontSize: 12 }}>Point camera at barcode, then tap Scan</span>
               ) : (
-                <span style={{ color: '#9ca3af', fontSize: 13 }}>Starting camera…</span>
+                <span style={{ color: '#9ca3af', fontSize: 12 }}>Starting camera…</span>
               )}
             </div>
           </div>
