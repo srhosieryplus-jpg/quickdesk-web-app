@@ -170,7 +170,8 @@ export default function TasksPage() {
       <style>{`
         .tasks-header { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid ${border}; background: rgba(255,255,255,0.6); backdrop-filter: blur(8px); }
         .tasks-center { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; pointer-events: none; }
-        .tasks-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        .tasks-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .tasks-form-row { display: flex; align-items: center; gap: 8px; }
         .tasks-search { width: 100%; max-width: 900px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .tasks-search input[type=text] { flex: 1; min-width: 120px; }
         .tasks-refresh { display: inline-block; }
@@ -179,9 +180,9 @@ export default function TasksPage() {
         @media (max-width: 600px) {
           .tasks-center { order: 3; width: 100%; }
           .tasks-form { flex-direction: column; align-items: stretch; gap: 6px; }
-          .tasks-form-row { display: flex; align-items: center; gap: 8px; }
-          .tasks-form-row label { min-width: 42px; }
-          .tasks-form-row input { flex: 1; }
+          .tasks-form-row { width: 100%; }
+          .tasks-form-row label { min-width: 44px; flex-shrink: 0; }
+          .tasks-form-row input { flex: 1; min-width: 0 !important; width: auto !important; }
           .tasks-form-submit { width: 100%; }
           .tasks-refresh { display: none !important; }
           .tasks-table-wrap { display: none; }
@@ -226,17 +227,17 @@ export default function TasksPage() {
       {/* Submit form */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', justifyContent: 'center' }}>
         <form onSubmit={addTask} className="tasks-form" style={{ width: '100%', maxWidth: 900, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <div className="tasks-form-row" style={{ display: 'contents' }}>
-            <label style={{ ...labelSt, color: tealD }}>Task:</label>
+          <div className="tasks-form-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
+            <label style={{ ...labelSt, color: tealD, whiteSpace: 'nowrap' }}>Task:</label>
             <input value={newTask} onChange={e => setNewTask(e.target.value)}
               placeholder="Describe the task…"
-              style={{ ...inputSt, flex: 1, minWidth: 160 }} />
+              style={{ ...inputSt, flex: 1, minWidth: 0 }} />
           </div>
-          <div className="tasks-form-row" style={{ display: 'contents' }}>
-            <label style={{ ...labelSt, color: tealD }}>Note:</label>
+          <div className="tasks-form-row" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 160 }}>
+            <label style={{ ...labelSt, color: tealD, whiteSpace: 'nowrap' }}>Note:</label>
             <input value={newNote} onChange={e => setNewNote(e.target.value)}
               placeholder="optional…"
-              style={{ ...inputSt, width: 160 }} />
+              style={{ ...inputSt, flex: 1, minWidth: 0, width: 140 }} />
           </div>
           <button type="submit" disabled={saving || !newTask.trim()} className="tasks-form-submit"
             style={{ background: teal, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: saving || !newTask.trim() ? 'default' : 'pointer', opacity: saving || !newTask.trim() ? 0.6 : 1, whiteSpace: 'nowrap' }}>
