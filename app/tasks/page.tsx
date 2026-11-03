@@ -141,7 +141,7 @@ export default function TasksPage() {
   function formatDate(iso: string) {
     if (!iso) return ''
     const d = new Date(iso)
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`
   }
 
   const isAdmin = user?.store === 'ALL'
@@ -169,10 +169,18 @@ export default function TasksPage() {
         .tasks-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
         .tasks-search { width: 100%; max-width: 900px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .tasks-search input[type=text] { flex: 1; min-width: 120px; }
+        .tasks-refresh { display: inline-block; }
+        .tasks-table-wrap { display: block; }
+        .tasks-cards { display: none; }
         @media (max-width: 600px) {
           .tasks-center { order: 3; width: 100%; }
           .tasks-form { gap: 8px; }
           .tasks-form input { width: 100% !important; }
+          .tasks-refresh { display: none !important; }
+          .tasks-search-row { flex-wrap: wrap; gap: 6px !important; }
+          .tasks-filter-meta { flex-direction: column; align-items: flex-start !important; gap: 4px !important; }
+          .tasks-table-wrap { display: none; }
+          .tasks-cards { display: block; padding: 8px 12px; }
         }
       `}</style>
 
@@ -198,7 +206,7 @@ export default function TasksPage() {
         </div>
 
         {/* Right */}
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <div className="tasks-refresh" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button onClick={() => user && fetchTasks(user)}
             style={{ background: '#dbeafe', border: 'none', color: '#1e3a8a', borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             🔄 Refresh
@@ -226,21 +234,25 @@ export default function TasksPage() {
 
       {/* Search bar */}
       <div style={{ background: tealLight, borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-        <div style={{ width: '100%', maxWidth: 900, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <label style={{ ...labelSt, color: tealD, fontWeight: 700 }}>Search:</label>
-          <input value={filter} onChange={e => setFilter(e.target.value)}
-            placeholder="task, note, store, user…"
-            style={{ ...inputSt, flex: 1 }} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
-            <input type="checkbox" checked={showCompleted} onChange={e => setShowCompleted(e.target.checked)} style={{ cursor: 'pointer' }} />
-            Show completed
-          </label>
-          <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>{filtered.length} tasks</span>
+        <div style={{ width: '100%', maxWidth: 900, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="tasks-search-row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <label style={{ ...labelSt, color: tealD, fontWeight: 700 }}>Search:</label>
+            <input value={filter} onChange={e => setFilter(e.target.value)}
+              placeholder="task, note, store, user…"
+              style={{ ...inputSt, flex: 1 }} />
+            <div className="tasks-filter-meta" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                <input type="checkbox" checked={showCompleted} onChange={e => setShowCompleted(e.target.checked)} style={{ cursor: 'pointer' }} />
+                Show completed
+              </label>
+              <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>{filtered.length} tasks</span>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Table */}
-      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
+      <div className="tasks-table-wrap" style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
         {loading ? (
           <p style={{ padding: 24, color: teal, fontSize: 13 }}>Loading…</p>
         ) : (
@@ -288,6 +300,41 @@ export default function TasksPage() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Mobile cards */}
+      <div className="tasks-cards">
+        {loading ? (
+          <p style={{ padding: 24, color: teal, fontSize: 13 }}>Loading…</p>
+        ) : filtered.length === 0 ? (
+          <p style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No tasks found.</p>
+        ) : filtered.map((t, i) => {
+          const cardBg = t.done ? '#dcfce7' : '#fff'
+          const textColor = t.done ? '#15803d' : '#111827'
+          const dimColor = t.done ? '#16a34a' : '#6b7280'
+          return (
+            <div key={t.id} style={{ background: cardBg, border: `1px solid ${t.done ? '#86efac' : border}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}
+              onContextMenu={ev => handleRowRightClick(ev, t.id)}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: textColor, flex: 1, textDecoration: t.done ? 'line-through' : 'none' }}>{t.task}</span>
+                {isAdmin ? (
+                  <input type="checkbox" checked={t.done} onChange={() => toggleDone(t)}
+                    style={{ cursor: 'pointer', width: 16, height: 16, accentColor: teal, flexShrink: 0, marginTop: 2 }} />
+                ) : t.done ? (
+                  <span style={{ color: '#15803d', fontWeight: 800, fontSize: 16, flexShrink: 0 }}>✓</span>
+                ) : null}
+              </div>
+              {t.note ? <div style={{ fontSize: 12, color: dimColor, marginTop: 4 }}>{t.note}</div> : null}
+              <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 11, color: dimColor }}>
+                <span style={{ fontWeight: 700, color: t.done ? '#15803d' : '#1d4ed8' }}>{t.logged_by}</span>
+                <span>·</span>
+                <span>{t.store}</span>
+                <span>·</span>
+                <span>{formatDate(t.saved_at)}</span>
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       {/* Context menu */}
