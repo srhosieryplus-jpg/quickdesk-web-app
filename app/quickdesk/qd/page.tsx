@@ -269,18 +269,14 @@ export default function QDPage() {
 
   // ── Camera scanning ────────────────────────────────────────────────────────
 
-  // Normalize barcode — preserve leading zeros, pad EAN/UPC to correct lengths
+  // Normalize barcode — preserve leading zeros, pad EAN/UPC only when format is known
   function normalizeBarcode(raw: string, format?: string): string {
-    // Keep as string, never convert to number
-    let code = raw.trim()
-    // Pad EAN-13 to 13 digits if numeric and close to length
-    if (format === 'ean_13' || (code.match(/^\d+$/) && code.length >= 11 && code.length <= 13)) {
-      if (code.match(/^\d+$/) && code.length < 13) code = code.padStart(13, '0')
-    }
-    // Pad UPC-A to 12 digits
-    if (format === 'upc_a' || (code.match(/^\d+$/) && code.length >= 10 && code.length <= 12 && code.length < 13)) {
-      if (code.match(/^\d+$/) && code.length < 12) code = code.padStart(12, '0')
-    }
+    const code = raw.trim()
+    // Only pad when the scanner explicitly tells us the format
+    if (format === 'ean_13' && code.match(/^\d+$/) && code.length < 13) return code.padStart(13, '0')
+    if (format === 'upc_a' && code.match(/^\d+$/) && code.length < 12) return code.padStart(12, '0')
+    if (format === 'ean_8' && code.match(/^\d+$/) && code.length < 8) return code.padStart(8, '0')
+    // All other formats (Code 128, Code 39, ITF, alphanumeric, etc.) pass through unchanged
     return code
   }
 
