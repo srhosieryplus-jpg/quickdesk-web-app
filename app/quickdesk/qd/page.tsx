@@ -671,6 +671,13 @@ export default function QDPage() {
           flex-wrap: wrap;
           gap: 4px;
         }
+        /* Smart Paste + Clear side by side — mobile only */
+        .qd-paste-clear { display: none !important; }
+        .qd-clear-desktop { display: flex; }
+        @media (max-width: 700px) {
+          .qd-paste-clear { display: flex !important; }
+          .qd-clear-desktop { display: none !important; }
+        }
       `}</style>
 
       {/* Header */}
@@ -825,11 +832,17 @@ export default function QDPage() {
               )}
             </div>
 
-            {/* Smart Paste button */}
-            <button onClick={() => setShowSmartPaste(true)}
-              style={{ width: '100%', ...btnSt('ghost'), justifyContent: 'center', fontSize: 11, padding: '5px 8px', background: '#ede9fe', color: '#6d28d9', border: `1px solid ${border}` }}>
-              📋 Smart Paste
-            </button>
+            {/* Smart Paste + Clear Session — side by side on mobile */}
+            <div className="qd-paste-clear" style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setShowSmartPaste(true)}
+                style={{ flex: 1, ...btnSt('ghost'), justifyContent: 'center', fontSize: 11, padding: '5px 6px', background: '#ede9fe', color: '#6d28d9', border: `1px solid ${border}` }}>
+                📋 Smart Paste
+              </button>
+              <button onClick={clearSession}
+                style={{ flex: 1, ...btnSt('red'), justifyContent: 'center', fontSize: 11, padding: '5px 6px' }}>
+                🗑 Clear
+              </button>
+            </div>
 
             <hr className="qd-recent-hr" style={{ border: 'none', borderTop: `1px solid ${border}` }} />
 
@@ -855,7 +868,16 @@ export default function QDPage() {
               </div>
             </div>
 
+            {/* Smart Paste — desktop only (mobile uses the inline pair above) */}
+            <button onClick={() => setShowSmartPaste(true)}
+              className="qd-clear-desktop"
+              style={{ width: '100%', ...btnSt('ghost'), justifyContent: 'center', fontSize: 11, padding: '5px 8px', background: '#ede9fe', color: '#6d28d9', border: `1px solid ${border}` }}>
+              📋 Smart Paste
+            </button>
+
+            {/* Clear Session — desktop only (mobile uses the inline pair above) */}
             <button onClick={clearSession}
+              className="qd-clear-desktop"
               style={{ width: '100%', ...btnSt('red'), justifyContent: 'center', fontSize: 11 }}>
               🗑 Clear Session
             </button>
@@ -1188,14 +1210,14 @@ export default function QDPage() {
             <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>📷 Scan Barcode</span>
             {/* Live stats in continuous mode */}
             {camMode === 'continuous' && session && (
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#a78bfa', lineHeight: 1 }}>{totalQty}</div>
-                  <div style={{ fontSize: 9, color: '#9ca3af' }}>QTY</div>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: '#a78bfa', lineHeight: 1 }}>{totalQty}</div>
+                  <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>QTY</div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#a78bfa', lineHeight: 1 }}>{uniqueCount}</div>
-                  <div style={{ fontSize: 9, color: '#9ca3af' }}>UPC</div>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: '#a78bfa', lineHeight: 1 }}>{uniqueCount}</div>
+                  <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>UPC</div>
                 </div>
               </div>
             )}
@@ -1205,8 +1227,38 @@ export default function QDPage() {
             </button>
           </div>
 
-          {/* Video */}
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          {/* Video — tap to force scan */}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
+            onClick={async () => {
+              if (!videoRef.current || videoRef.current.readyState < 2 || cooldownRef.current) return
+              // Grab current frame and attempt decode
+              const canvas = document.createElement('canvas')
+              canvas.width = videoRef.current.videoWidth
+              canvas.height = videoRef.current.videoHeight
+              const ctx = canvas.getContext('2d')
+              if (!ctx) return
+              ctx.drawImage(videoRef.current, 0, 0)
+              if ('BarcodeDetector' in window) {
+                try {
+                  // @ts-expect-error
+                  const detector = new window.BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'] })
+                  const barcodes = await detector.detect(videoRef.current)
+                  if (barcodes.length > 0) {
+                    const b = barcodes[0]
+                    onScanned(normalizeBarcode(b.rawValue as string, b.format as string))
+                  } else { showToast('No barcode found — try again') }
+                } catch { showToast('No barcode found — try again') }
+              } else {
+                import('@zxing/library').then(({ BrowserMultiFormatReader }) => {
+                  const reader = new BrowserMultiFormatReader()
+                  reader.decodeFromImageUrl(canvas.toDataURL()).then(result => {
+                    const fmt = result.getBarcodeFormat()
+                    const fmtName = fmt === 1 ? 'ean_13' : fmt === 14 ? 'upc_a' : ''
+                    onScanned(normalizeBarcode(result.getText(), fmtName))
+                  }).catch(() => showToast('No barcode found — try again'))
+                })
+              }
+            }}>
             <video ref={videoRef} autoPlay playsInline muted
               style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             {/* Scan flash */}
@@ -1230,7 +1282,14 @@ export default function QDPage() {
                 </div>
               </div>
             )}
+            {/* Tap hint */}
+            {scanning && !cameraError && (
+              <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Tap screen to force scan</span>
+              </div>
+            )}
           </div>
+        </div>
 
           {/* Bottom controls */}
           <div style={{ background: 'rgba(0,0,0,0.85)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
