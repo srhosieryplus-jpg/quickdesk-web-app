@@ -156,6 +156,14 @@ export default function QDPage() {
     setTimeout(() => inputRef.current?.focus(), 100)
   }
 
+  function resetZoom() {
+    const vp = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null
+    if (!vp) return
+    const orig = vp.content
+    vp.content = 'width=device-width, initial-scale=1, maximum-scale=1'
+    setTimeout(() => { vp.content = orig }, 50)
+  }
+
   function handleScan(upc: string) {
     upc = upc.trim()
     if (!session) { pendingScanRef.current = upc; setShowModal(true); return }
@@ -751,12 +759,12 @@ export default function QDPage() {
               <label style={labelSt}>Scan Barcode / UPC</label>
               <input ref={inputRef} type="text" placeholder="Scan or type code…"
                 value={scanVal}
-                style={{ ...inputSt, fontSize: 11, fontWeight: 600, letterSpacing: '0.8px' }}
+                style={{ ...inputSt, fontSize: 16, fontWeight: 600, letterSpacing: '0.8px' }}
                 onChange={e => setScanVal(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
                     const v = scanVal.trim()
-                    if (v) { handleScan(v); setScanVal('') }
+                    if (v) { handleScan(v); setScanVal(''); resetZoom() }
                   }
                 }}
                 onPaste={e => {
@@ -765,6 +773,7 @@ export default function QDPage() {
                     e.preventDefault()
                     handleScan(pasted)
                     setScanVal('')
+                    resetZoom()
                   }
                 }} />
             </div>
