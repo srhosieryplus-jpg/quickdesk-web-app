@@ -283,31 +283,63 @@ export default function QDPage() {
   }
 
   function startBarcodeLoop() {
-    if (!('BarcodeDetector' in window)) {
-      setCameraError('Barcode scanning not supported on this browser. Try Chrome on Android, or update iOS to 16.4+.')
-      return
-    }
     setScanning(true)
-    // @ts-expect-error
-    const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] })
-    async function tick() {
-      if (!videoRef.current || videoRef.current.readyState < 2) {
-        rafRef.current = requestAnimationFrame(tick)
-        return
-      }
-      try {
-        const barcodes = await detector.detect(videoRef.current)
-        if (barcodes.length > 0) {
-          const code = barcodes[0].rawValue as string
-          closeCamera()
-          handleScan(code)
-          showToast(`📷 Scanned: ${code}`)
+
+    // Try BarcodeDetector first (Chrome Android), fall back to ZXing (iOS Safari)
+    if ('BarcodeDetector' in window) {
+      // @ts-expect-error
+      const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] })
+      async function tick() {
+        if (!videoRef.current || videoRef.current.readyState < 2) {
+          rafRef.current = requestAnimationFrame(tick)
           return
         }
-      } catch { /* ignore frame errors */ }
+        try {
+          const barcodes = await detector.detect(videoRef.current)
+          if (barcodes.length > 0) {
+            const code = barcodes[0].rawValue as string
+            closeCamera()
+            handleScan(code)
+            showToast(`📷 Scanned: ${code}`)
+            return
+          }
+        } catch { /* ignore frame errors */ }
+        rafRef.current = requestAnimationFrame(tick)
+      }
       rafRef.current = requestAnimationFrame(tick)
+    } else {
+      // ZXing fallback — works on iOS Safari
+      import('@zxing/library').then(({ BrowserMultiFormatReader }) => {
+        const reader = new BrowserMultiFormatReader()
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+
+        async function tick() {
+          const video = videoRef.current
+          if (!video || video.readyState < 2 || !ctx) {
+            rafRef.current = requestAnimationFrame(tick)
+            return
+          }
+          canvas.width = video.videoWidth
+          canvas.height = video.videoHeight
+          ctx.drawImage(video, 0, 0)
+          try {
+            const result = reader.decodeFromCanvas(canvas)
+            if (result) {
+              const code = result.getText()
+              closeCamera()
+              handleScan(code)
+              showToast(`📷 Scanned: ${code}`)
+              return
+            }
+          } catch { /* no barcode in frame */ }
+          rafRef.current = requestAnimationFrame(tick)
+        }
+        rafRef.current = requestAnimationFrame(tick)
+      }).catch(() => {
+        setCameraError('Barcode scanning failed to load. Please try again.')
+      })
     }
-    rafRef.current = requestAnimationFrame(tick)
   }
 
   function closeCamera() {
