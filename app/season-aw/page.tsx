@@ -100,6 +100,10 @@ export default function SeasonAWPage() {
   const invoiceRef = useRef<HTMLInputElement>(null)
   const brandRef   = useRef<HTMLInputElement>(null)
   const suggRef    = useRef<HTMLDivElement>(null)
+  const [pullY, setPullY] = useState(0)
+  const [pulling, setPulling] = useState(false)
+  const touchStartY = useRef(0)
+  const tableScrollRef = useRef<HTMLDivElement>(null)
 
   // log form (appears on found card)
   const [logNote, setLogNote]       = useState('')
@@ -489,10 +493,12 @@ export default function SeasonAWPage() {
         .sugg-item { padding: 7px 12px; font-size: 12px; cursor: pointer; color: #1e293b; }
         .sugg-item:hover { background: ${blueL}; color: ${blueD}; font-weight: 600; }
         .aw-col-hide { }
+        .aw-refresh-btn { display: inline-block; }
         @media (max-width: 600px) {
           .aw-col-hide { display: none; }
           .aw-table td { height: 42px; padding: 4px 8px; font-size: 12px; }
           .aw-table th { font-size: 11px; padding: 6px 8px; }
+          .aw-refresh-btn { display: none !important; }
         }
       `}</style>
 
@@ -730,7 +736,7 @@ export default function SeasonAWPage() {
           <input value={tableFilter} onChange={e => setTableFilter(e.target.value)}
             placeholder="invoice, brand, PO, user…"
             style={{ ...inputSt, flex: 1 }} />
-          <button onClick={() => fetchStoreRows()} style={{ background: '#dbeafe', border: 'none', color: blueD, borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => fetchStoreRows()} className="aw-refresh-btn" style={{ background: '#dbeafe', border: 'none', color: blueD, borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ↺ Refresh
           </button>
           <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
@@ -740,7 +746,24 @@ export default function SeasonAWPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} onClick={() => setCtxMenu(null)}>
+      <div ref={tableScrollRef} style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} onClick={() => setCtxMenu(null)}
+        onTouchStart={e => { touchStartY.current = e.touches[0].clientY; setPulling(false) }}
+        onTouchMove={e => {
+          const el = tableScrollRef.current; if (!el) return
+          const dy = e.touches[0].clientY - touchStartY.current
+          if (el.scrollTop === 0 && dy > 0) { setPullY(Math.min(dy, 72)); setPulling(true) }
+          else { setPullY(0); setPulling(false) }
+        }}
+        onTouchEnd={() => {
+          if (pullY > 50) { fetchStoreRows(); }
+          setPullY(0); setPulling(false)
+        }}
+      >
+        {pulling && pullY > 10 && (
+          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: 12, color: '#2563eb', opacity: Math.min(pullY / 50, 1) }}>
+            {pullY > 50 ? '↑ Release to refresh' : '↓ Pull to refresh'}
+          </div>
+        )}
         {tableLoading ? (
           <p style={{ padding: 24, color: '#93c5fd', fontSize: 13 }}>Loading…</p>
         ) : (

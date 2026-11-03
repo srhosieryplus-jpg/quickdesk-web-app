@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -44,6 +44,10 @@ export default function ICLogPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingEntry, setEditingEntry] = useState<ICEntry | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null)
+  const [pullY, setPullY] = useState(0)
+  const [pulling, setPulling] = useState(false)
+  const touchStartY = useRef(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type)
@@ -246,11 +250,13 @@ export default function ICLogPage() {
         .iclog-center { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; pointer-events: none; }
         .iclog-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
         .iclog-store-inv { display: flex; align-items: center; gap: 6px; }
+        .iclog-refresh { display: inline-block; }
         @media (max-width: 600px) {
           .iclog-center { order: 3; width: 100%; }
           .iclog-form { gap: 6px; }
           .iclog-form input, .iclog-form select { width: 100% !important; }
           .iclog-store-inv { width: 100%; }
+          .iclog-refresh { display: none !important; }
         }
         .ic-table { border-collapse: collapse; font-size: 11px; width: 100%; max-width: 900px; }
         .ic-table th { padding: 5px 8px; text-align: left; font-size: 10px; font-weight: 700; color: ${purpleD}; border-bottom: 2px solid ${border}; white-space: nowrap; }
@@ -285,7 +291,7 @@ export default function ICLogPage() {
 
         {/* Right */}
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          <button onClick={refresh} disabled={saving}
+          <button onClick={refresh} disabled={saving} className="iclog-refresh"
             style={{ background: '#dcfce7', border: 'none', color: '#166534', borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             {saving ? '…' : '🔄 Refresh'}
           </button>
@@ -324,7 +330,24 @@ export default function ICLogPage() {
       </div>
 
       {/* Table */}
-      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} onClick={() => setContextMenu(null)}>
+      <div ref={scrollRef} style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} onClick={() => setContextMenu(null)}
+        onTouchStart={e => { touchStartY.current = e.touches[0].clientY; setPulling(false) }}
+        onTouchMove={e => {
+          const el = scrollRef.current; if (!el) return
+          const dy = e.touches[0].clientY - touchStartY.current
+          if (el.scrollTop === 0 && dy > 0) { setPullY(Math.min(dy, 72)); setPulling(true) }
+          else { setPullY(0); setPulling(false) }
+        }}
+        onTouchEnd={() => {
+          if (pullY > 50) { refresh() }
+          setPullY(0); setPulling(false)
+        }}
+      >
+        {pulling && pullY > 10 && (
+          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: 12, color: purple, opacity: Math.min(pullY / 50, 1) }}>
+            {pullY > 50 ? '↑ Release to refresh' : '↓ Pull to refresh'}
+          </div>
+        )}
         {loading ? (
           <p style={{ padding: 24, color: '#9b8ec4', fontSize: 13 }}>Loading…</p>
         ) : (

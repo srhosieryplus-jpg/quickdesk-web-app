@@ -80,6 +80,10 @@ export default function QDPage() {
   const camModeRef = useRef<'once' | 'continuous'>('once')
   const lastScannedRef = useRef('')
   const cooldownRef = useRef(false)
+  const [pullY, setPullY] = useState(0)
+  const [pulling, setPulling] = useState(false)
+  const touchStartY = useRef(0)
+  const historyScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const u = getSession()
@@ -714,10 +718,12 @@ export default function QDPage() {
         .qd-paste-clear { display: none !important; }
         .qd-clear-desktop { display: flex; }
         .qd-scan-input { font-size: 12px !important; }
+        .qd-refresh-btn { display: inline-flex; }
         @media (max-width: 700px) {
           .qd-paste-clear { display: flex !important; }
           .qd-clear-desktop { display: none !important; }
           .qd-scan-input { font-size: 16px !important; }
+          .qd-refresh-btn { display: none !important; }
         }
       `}</style>
 
@@ -1128,7 +1134,7 @@ export default function QDPage() {
               {isAdmin(currentUser) ? 'All Sessions' : 'My Sessions'} · {allSessions.length}
             </span>
             <div style={{ flex: 1 }} />
-            <button onClick={() => loadSessions()} style={{ ...btnSt('ghost'), fontSize: 11, padding: '3px 10px' }}>🔄 Refresh</button>
+            <button onClick={() => loadSessions()} className="qd-refresh-btn" style={{ ...btnSt('ghost'), fontSize: 11, padding: '3px 10px' }}>🔄 Refresh</button>
           </div>
           <input
             value={historySearch}
@@ -1136,7 +1142,24 @@ export default function QDPage() {
             placeholder={isAdmin(currentUser) ? 'Search by invoice, store or user…' : 'Search by invoice or store…'}
             style={{ ...inputSt, fontSize: 12 }}
           />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
+          <div ref={historyScrollRef} style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}
+            onTouchStart={e => { touchStartY.current = e.touches[0].clientY; setPulling(false) }}
+            onTouchMove={e => {
+              const el = historyScrollRef.current; if (!el) return
+              const dy = e.touches[0].clientY - touchStartY.current
+              if (el.scrollTop === 0 && dy > 0) { setPullY(Math.min(dy, 72)); setPulling(true) }
+              else { setPullY(0); setPulling(false) }
+            }}
+            onTouchEnd={() => {
+              if (pullY > 50) { loadSessions(); showToast('🔄 Refreshed') }
+              setPullY(0); setPulling(false)
+            }}
+          >
+            {pulling && pullY > 10 && (
+              <div style={{ textAlign: 'center', padding: '6px 0', fontSize: 12, color: '#7c3aed', opacity: Math.min(pullY / 50, 1) }}>
+                {pullY > 50 ? '↑ Release to refresh' : '↓ Pull to refresh'}
+              </div>
+            )}
             {filteredHistory.length === 0 && (
               <div style={{ color: '#6b7280', fontSize: 13, textAlign: 'center', padding: 32 }}>
                 {historySearch ? 'No results.' : 'No sessions yet.'}
