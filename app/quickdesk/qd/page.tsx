@@ -912,8 +912,8 @@ export default function QDPage() {
                   <thead>
                     <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
                       <th style={{ ...thSt, textAlign: 'center', width: 28 }}>#</th>
-                      <th style={{ ...thSt, whiteSpace: 'nowrap' }}>UPC</th>
-                      <th style={{ ...thSt, textAlign: 'center', width: 48 }}>Qty</th>
+                      <th style={{ ...thSt, whiteSpace: 'nowrap', width: '100%' }}>UPC</th>
+                      <th style={{ ...thSt, textAlign: 'center', width: 56, minWidth: 56 }}>Qty</th>
                       {session.extra_cols.map(c => <th key={c} style={{ ...thSt, whiteSpace: 'nowrap' }}>{c}</th>)}
                     </tr>
                   </thead>
@@ -923,7 +923,8 @@ export default function QDPage() {
                       if (!row) return null
                       const isPlaceholder = row._isPlaceholder === 1
                       const isNextTarget = upc === nextPlaceholderKey
-                      const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
+                      const isScanned = !isPlaceholder
+                      const rowBg = isScanned ? (ri % 2 === 0 ? '#dcfce7' : '#f0fdf4') : (ri % 2 === 0 ? '#f5f3ff' : '#ffffff')
                       const cellSt: React.CSSProperties = {
                         display: 'block', width: '100%', padding: '5px 7px',
                         border: 'none', outline: 'none', fontSize: 12,
@@ -970,7 +971,7 @@ export default function QDPage() {
                           </td>
                           <td style={tdSt}>
                             <input type="number" min="0" value={row.qty}
-                              style={{ ...cellSt, fontWeight: 700, color: isPlaceholder ? '#d1d5db' : purple, textAlign: 'center' }}
+                              style={{ ...cellSt, fontWeight: 700, color: isPlaceholder ? '#d1d5db' : isScanned ? '#15803d' : purple, textAlign: 'center' }}
                               onChange={e => updateQty(upc, e.target.value)} />
                           </td>
                           {session.extra_cols.map(col => (
