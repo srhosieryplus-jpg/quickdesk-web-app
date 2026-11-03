@@ -71,9 +71,15 @@ export default function QDPage() {
   const [showCamera, setShowCamera] = useState(false)
   const [cameraError, setCameraError] = useState('')
   const [scanning, setScanning] = useState(false)
+  const [camMode, setCamMode] = useState<'once' | 'continuous'>('once')
+  const [lastScanned, setLastScanned] = useState('')
+  const [scanFlash, setScanFlash] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number>(0)
+  const camModeRef = useRef<'once' | 'continuous'>('once')
+  const lastScannedRef = useRef('')
+  const cooldownRef = useRef(false)
 
   useEffect(() => {
     const u = getSession()
@@ -263,8 +269,27 @@ export default function QDPage() {
 
   // ── Camera scanning ────────────────────────────────────────────────────────
 
+  // Normalize barcode — preserve leading zeros, pad EAN/UPC to correct lengths
+  function normalizeBarcode(raw: string, format?: string): string {
+    // Keep as string, never convert to number
+    let code = raw.trim()
+    // Pad EAN-13 to 13 digits if numeric and close to length
+    if (format === 'ean_13' || (code.match(/^\d+$/) && code.length >= 11 && code.length <= 13)) {
+      if (code.match(/^\d+$/) && code.length < 13) code = code.padStart(13, '0')
+    }
+    // Pad UPC-A to 12 digits
+    if (format === 'upc_a' || (code.match(/^\d+$/) && code.length >= 10 && code.length <= 12 && code.length < 13)) {
+      if (code.match(/^\d+$/) && code.length < 12) code = code.padStart(12, '0')
+    }
+    return code
+  }
+
   async function openCamera() {
     setCameraError('')
+    setLastScanned('')
+    lastScannedRef.current = ''
+    cooldownRef.current = false
+    camModeRef.current = camMode
     setShowCamera(true)
     setScanning(false)
     try {
@@ -279,6 +304,27 @@ export default function QDPage() {
       }
     } catch {
       setCameraError('Camera access denied. Please allow camera permission and try again.')
+    }
+  }
+
+  function onScanned(code: string) {
+    // Debounce: ignore same code within 1.5s in continuous mode
+    if (cooldownRef.current) return
+    if (camModeRef.current === 'continuous' && code === lastScannedRef.current) return
+
+    cooldownRef.current = true
+    lastScannedRef.current = code
+    setLastScanned(code)
+    setScanFlash(true)
+    setTimeout(() => setScanFlash(false), 300)
+    handleScan(code)
+
+    if (camModeRef.current === 'once') {
+      closeCamera()
+      showToast(`📷 Scanned: ${code}`)
+    } else {
+      // In continuous mode, allow next scan after cooldown
+      setTimeout(() => { cooldownRef.current = false }, 1500)
     }
   }
 
@@ -297,11 +343,9 @@ export default function QDPage() {
         try {
           const barcodes = await detector.detect(videoRef.current)
           if (barcodes.length > 0) {
-            const code = barcodes[0].rawValue as string
-            closeCamera()
-            handleScan(code)
-            showToast(`📷 Scanned: ${code}`)
-            return
+            const b = barcodes[0]
+            const code = normalizeBarcode(b.rawValue as string, b.format as string)
+            onScanned(code)
           }
         } catch { /* ignore frame errors */ }
         rafRef.current = requestAnimationFrame(tick)
@@ -309,8 +353,15 @@ export default function QDPage() {
       rafRef.current = requestAnimationFrame(tick)
     } else {
       // ZXing fallback — works on iOS Safari
-      import('@zxing/library').then(({ BrowserMultiFormatReader }) => {
-        const reader = new BrowserMultiFormatReader()
+      import('@zxing/library').then(({ BrowserMultiFormatReader, BarcodeFormat }) => {
+        const hints = new Map()
+        hints.set(2, [
+          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+          BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+          BarcodeFormat.ITF, BarcodeFormat.QR_CODE,
+        ])
+        const reader = new BrowserMultiFormatReader(hints)
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
 
@@ -326,11 +377,11 @@ export default function QDPage() {
           try {
             const result = await reader.decodeFromImageUrl(canvas.toDataURL())
             if (result) {
-              const code = result.getText()
-              closeCamera()
-              handleScan(code)
-              showToast(`📷 Scanned: ${code}`)
-              return
+              const fmt = result.getBarcodeFormat()
+              // ZXing BarcodeFormat: EAN_13=1, UPC_A=14
+              const fmtName = fmt === 1 ? 'ean_13' : fmt === 14 ? 'upc_a' : ''
+              const code = normalizeBarcode(result.getText(), fmtName)
+              onScanned(code)
             }
           } catch { /* no barcode in frame */ }
           rafRef.current = requestAnimationFrame(tick)
@@ -351,6 +402,8 @@ export default function QDPage() {
     setShowCamera(false)
     setScanning(false)
     setCameraError('')
+    setLastScanned('')
+    setScanFlash(false)
     setTimeout(() => inputRef.current?.focus(), 100)
   }
 
@@ -1135,8 +1188,21 @@ export default function QDPage() {
       {showCamera && (
         <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 2000, display: 'flex', flexDirection: 'column' }}>
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(0,0,0,0.7)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: 'rgba(0,0,0,0.8)' }}>
             <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>📷 Scan Barcode</span>
+            {/* Live stats in continuous mode */}
+            {camMode === 'continuous' && session && (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#a78bfa', lineHeight: 1 }}>{totalQty}</div>
+                  <div style={{ fontSize: 9, color: '#9ca3af' }}>QTY</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#a78bfa', lineHeight: 1 }}>{uniqueCount}</div>
+                  <div style={{ fontSize: 9, color: '#9ca3af' }}>UPC</div>
+                </div>
+              </div>
+            )}
             <button onClick={closeCamera}
               style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', fontSize: 20, width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               ✕
@@ -1145,26 +1211,23 @@ export default function QDPage() {
 
           {/* Video */}
           <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {/* Scan flash */}
+            {scanFlash && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(124,58,237,0.35)', pointerEvents: 'none', transition: 'opacity 0.3s' }} />
+            )}
             {/* Aim reticle */}
             {scanning && !cameraError && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                <div style={{ width: 240, height: 140, border: '2px solid rgba(124,58,237,0.8)', borderRadius: 8, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)', position: 'relative' }}>
-                  {/* Corner marks */}
+                <div style={{ width: 240, height: 140, border: `2px solid ${scanFlash ? '#22c55e' : 'rgba(124,58,237,0.8)'}`, borderRadius: 8, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)', position: 'relative', transition: 'border-color 0.2s' }}>
                   {[['0%','0%','top','left'],['0%','100%','top','right'],['100%','0%','bottom','left'],['100%','100%','bottom','right']].map(([t,l,vp,hp]) => (
                     <div key={`${vp}${hp}`} style={{
-                      position: 'absolute', top: t, left: l,
-                      width: 18, height: 18,
-                      borderTop: vp === 'top' ? '3px solid #7c3aed' : 'none',
-                      borderBottom: vp === 'bottom' ? '3px solid #7c3aed' : 'none',
-                      borderLeft: hp === 'left' ? '3px solid #7c3aed' : 'none',
-                      borderRight: hp === 'right' ? '3px solid #7c3aed' : 'none',
+                      position: 'absolute', top: t, left: l, width: 18, height: 18,
+                      borderTop: vp === 'top' ? `3px solid ${scanFlash ? '#22c55e' : '#7c3aed'}` : 'none',
+                      borderBottom: vp === 'bottom' ? `3px solid ${scanFlash ? '#22c55e' : '#7c3aed'}` : 'none',
+                      borderLeft: hp === 'left' ? `3px solid ${scanFlash ? '#22c55e' : '#7c3aed'}` : 'none',
+                      borderRight: hp === 'right' ? `3px solid ${scanFlash ? '#22c55e' : '#7c3aed'}` : 'none',
                       transform: `translate(${hp === 'right' ? '50%' : '-50%'}, ${vp === 'bottom' ? '50%' : '-50%'})`,
                     }} />
                   ))}
@@ -1173,15 +1236,38 @@ export default function QDPage() {
             )}
           </div>
 
-          {/* Status bar */}
-          <div style={{ padding: '14px 16px', background: 'rgba(0,0,0,0.8)', textAlign: 'center' }}>
-            {cameraError ? (
-              <span style={{ color: '#fca5a5', fontSize: 13, lineHeight: 1.5 }}>{cameraError}</span>
-            ) : scanning ? (
-              <span style={{ color: '#a78bfa', fontSize: 13 }}>Point camera at barcode…</span>
-            ) : (
-              <span style={{ color: '#9ca3af', fontSize: 13 }}>Starting camera…</span>
-            )}
+          {/* Bottom controls */}
+          <div style={{ background: 'rgba(0,0,0,0.85)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Mode toggle */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['once', 'continuous'] as const).map(m => (
+                <button key={m} onClick={() => { setCamMode(m); camModeRef.current = m }}
+                  style={{
+                    flex: 1, padding: '8px 0', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    background: camMode === m ? '#7c3aed' : 'rgba(255,255,255,0.1)',
+                    color: camMode === m ? '#fff' : '#9ca3af',
+                  }}>
+                  {m === 'once' ? '1× Scan Once' : '∞ Continuous'}
+                </button>
+              ))}
+            </div>
+
+            {/* Status / last scanned */}
+            <div style={{ textAlign: 'center', minHeight: 36 }}>
+              {cameraError ? (
+                <span style={{ color: '#fca5a5', fontSize: 12, lineHeight: 1.5 }}>{cameraError}</span>
+              ) : lastScanned ? (
+                <div>
+                  <span style={{ color: '#4ade80', fontSize: 11, fontWeight: 700 }}>✓ </span>
+                  <span style={{ color: '#4ade80', fontSize: 13, fontFamily: 'Courier New, monospace', fontWeight: 700 }}>{lastScanned}</span>
+                  {camMode === 'continuous' && <span style={{ color: '#9ca3af', fontSize: 11 }}> — keep scanning…</span>}
+                </div>
+              ) : scanning ? (
+                <span style={{ color: '#a78bfa', fontSize: 13 }}>Point camera at barcode…</span>
+              ) : (
+                <span style={{ color: '#9ca3af', fontSize: 13 }}>Starting camera…</span>
+              )}
+            </div>
           </div>
         </div>
       )}
