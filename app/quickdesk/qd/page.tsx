@@ -582,19 +582,19 @@ export default function QDPage() {
     const date = s.saved_at ? new Date(s.saved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
     const st = s.status === 'complete' ? 'complete' : s.status === 'ready' ? 'ready' : total > 0 ? 'ready' : 'waiting'
     const stLabel = st === 'complete' ? '✓ Done' : st === 'ready' ? '👀 Ready' : '⏳ Waiting'
-    const stBg    = st === 'complete' ? '#166534' : st === 'ready' ? '#fef3c7' : '#dbeafe'
-    const stColor = st === 'complete' ? '#86efac' : st === 'ready' ? '#92400e' : '#1e40af'
-    const cardBg  = st === 'complete' ? '#14532d' : purpleLight
-    const cardBorder = st === 'complete' ? '#166534' : st === 'ready' ? '#fcd34d' : border
+    const stBg    = st === 'complete' ? '#bbf7d0' : st === 'ready' ? '#fef3c7' : '#dbeafe'
+    const stColor = st === 'complete' ? '#166534' : st === 'ready' ? '#92400e' : '#1e40af'
+    const cardBg  = st === 'complete' ? '#dcfce7' : purpleLight
+    const cardBorder = st === 'complete' ? '#86efac' : st === 'ready' ? '#fcd34d' : border
     return (
       <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 5, padding: '5px 6px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, flex: 1, color: st === 'complete' ? '#fff' : '#111' }}>{s.name}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, flex: 1, color: '#111' }}>{s.name}</span>
           <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: stBg, color: stColor }}>
             {stLabel}
           </span>
         </div>
-        <div style={{ fontSize: 10, color: st === 'complete' ? '#4ade80' : '#6b7280', margin: '2px 0' }}>
+        <div style={{ fontSize: 10, color: st === 'complete' ? '#15803d' : '#6b7280', margin: '2px 0' }}>
           {s.store || '—'}{showUser && s.userid ? ` · ${displayUser(s.userid)}` : ''} · {upcCount} UPCs · {total} qty{date ? ` · ${date}` : ''}
         </div>
         <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
@@ -917,12 +917,18 @@ export default function QDPage() {
                   {session ? 'Start scanning barcodes.' : 'Start a session and scan barcodes to begin.'}
                 </div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: 32 }} />
+                    <col />
+                    <col style={{ width: 60 }} />
+                    {session.extra_cols.map(c => <col key={c} style={{ width: 100 }} />)}
+                  </colgroup>
                   <thead>
                     <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={{ ...thSt, textAlign: 'center', width: 28 }}>#</th>
-                      <th style={{ ...thSt, whiteSpace: 'nowrap', width: '100%' }}>UPC</th>
-                      <th style={{ ...thSt, textAlign: 'center', width: 56, minWidth: 56 }}>Qty</th>
+                      <th style={{ ...thSt, textAlign: 'center' }}>#</th>
+                      <th style={{ ...thSt }}>UPC</th>
+                      <th style={{ ...thSt, textAlign: 'center' }}>Qty</th>
                       {session.extra_cols.map(c => <th key={c} style={{ ...thSt, whiteSpace: 'nowrap' }}>{c}</th>)}
                     </tr>
                   </thead>
@@ -932,8 +938,7 @@ export default function QDPage() {
                       if (!row) return null
                       const isPlaceholder = row._isPlaceholder === 1
                       const isNextTarget = upc === nextPlaceholderKey
-                      const isScanned = !isPlaceholder
-                      const rowBg = isScanned ? (ri % 2 === 0 ? '#dcfce7' : '#f0fdf4') : (ri % 2 === 0 ? '#f5f3ff' : '#ffffff')
+                      const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
                       const cellSt: React.CSSProperties = {
                         display: 'block', width: '100%', padding: '5px 7px',
                         border: 'none', outline: 'none', fontSize: 12,
@@ -980,7 +985,7 @@ export default function QDPage() {
                           </td>
                           <td style={tdSt}>
                             <input type="number" min="0" value={row.qty}
-                              style={{ ...cellSt, fontWeight: 700, color: isPlaceholder ? '#d1d5db' : isScanned ? '#15803d' : purple, textAlign: 'center' }}
+                              style={{ ...cellSt, fontWeight: 700, color: isPlaceholder ? '#d1d5db' : purple, textAlign: 'center' }}
                               onChange={e => updateQty(upc, e.target.value)} />
                           </td>
                           {session.extra_cols.map(col => (
