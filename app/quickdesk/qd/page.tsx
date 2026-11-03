@@ -1242,7 +1242,10 @@ export default function QDPage() {
           {/* Video — tap to force scan */}
           <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
             onClick={async () => {
-              if (!videoRef.current || videoRef.current.readyState < 2 || cooldownRef.current) return
+              if (!videoRef.current || videoRef.current.readyState < 2) return
+              // Manual tap overrides cooldown and same-code dedup
+              cooldownRef.current = false
+              lastScannedRef.current = ''
               // Grab current frame and attempt decode
               const canvas = document.createElement('canvas')
               canvas.width = videoRef.current.videoWidth
