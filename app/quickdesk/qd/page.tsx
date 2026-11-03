@@ -1289,7 +1289,6 @@ export default function QDPage() {
               </div>
             )}
           </div>
-        </div>
 
           {/* Bottom controls */}
           <div style={{ background: 'rgba(0,0,0,0.85)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
