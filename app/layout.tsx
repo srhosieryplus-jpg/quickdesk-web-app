@@ -4,6 +4,16 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'QuickDesk',
   description: 'QuickDesk Web',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'QuickDesk',
+  },
+  icons: {
+    icon: '/favicon.png',
+    apple: '/icon-180.png',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
