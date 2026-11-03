@@ -289,7 +289,7 @@ export default function QDPage() {
     if ('BarcodeDetector' in window) {
       // @ts-expect-error
       const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] })
-      async function tick() {
+      const tick = async () => {
         if (!videoRef.current || videoRef.current.readyState < 2) {
           rafRef.current = requestAnimationFrame(tick)
           return
@@ -314,7 +314,7 @@ export default function QDPage() {
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
 
-        async function tick() {
+        const tick = async () => {
           const video = videoRef.current
           if (!video || video.readyState < 2 || !ctx) {
             rafRef.current = requestAnimationFrame(tick)
