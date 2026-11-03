@@ -67,6 +67,14 @@ export default function QDPage() {
   const [pasteText, setPasteText] = useState('')
   const [pastePreview, setPastePreview] = useState<{ headers: string[]; rows: string[][] } | null>(null)
 
+  // Camera scanning
+  const [showCamera, setShowCamera] = useState(false)
+  const [cameraError, setCameraError] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const rafRef = useRef<number>(0)
+
   useEffect(() => {
     const u = getSession()
     if (!u) { router.push('/'); return }
@@ -251,6 +259,68 @@ export default function QDPage() {
       prev.order_list.forEach(upc => { const r = { ...d[upc] }; delete r[col]; d[upc] = r })
       return { ...prev, extra_cols: prev.extra_cols.filter(c => c !== col), data: d }
     })
+  }
+
+  // ── Camera scanning ────────────────────────────────────────────────────────
+
+  async function openCamera() {
+    setCameraError('')
+    setShowCamera(true)
+    setScanning(false)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      })
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
+        startBarcodeLoop()
+      }
+    } catch {
+      setCameraError('Camera access denied. Please allow camera permission and try again.')
+    }
+  }
+
+  function startBarcodeLoop() {
+    // @ts-expect-error BarcodeDetector is not in TS lib yet
+    if (!('BarcodeDetector' in window)) {
+      setCameraError('Barcode scanning not supported on this browser. Try Chrome on Android, or update iOS to 16.4+.')
+      return
+    }
+    setScanning(true)
+    // @ts-expect-error
+    const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] })
+    async function tick() {
+      if (!videoRef.current || videoRef.current.readyState < 2) {
+        rafRef.current = requestAnimationFrame(tick)
+        return
+      }
+      try {
+        const barcodes = await detector.detect(videoRef.current)
+        if (barcodes.length > 0) {
+          const code = barcodes[0].rawValue as string
+          closeCamera()
+          handleScan(code)
+          showToast(`📷 Scanned: ${code}`)
+          return
+        }
+      } catch { /* ignore frame errors */ }
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+  }
+
+  function closeCamera() {
+    cancelAnimationFrame(rafRef.current)
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+    setShowCamera(false)
+    setScanning(false)
+    setCameraError('')
+    setTimeout(() => inputRef.current?.focus(), 100)
   }
 
   // ── Smart Paste ────────────────────────────────────────────────────────────
@@ -575,6 +645,10 @@ export default function QDPage() {
           <button onClick={saveSession} disabled={saving || !session?.order_list.length}
             style={{ ...btnSt('yellow'), fontSize: 11, padding: '4px 10px', opacity: (!session?.order_list.length) ? 0.5 : 1 }}>
             {saving ? '…' : '💾'}
+          </button>
+          <button onClick={openCamera}
+            style={{ ...btnSt('ghost'), fontSize: 11, padding: '4px 10px', background: '#ede9fe', color: '#6d28d9', border: `1px solid ${border}` }}>
+            📷
           </button>
         </div>
       </div>
@@ -1022,6 +1096,61 @@ export default function QDPage() {
                 📋 Load Rows
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Camera overlay — mobile only */}
+      {showCamera && (
+        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 2000, display: 'flex', flexDirection: 'column' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(0,0,0,0.7)' }}>
+            <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>📷 Scan Barcode</span>
+            <button onClick={closeCamera}
+              style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', fontSize: 20, width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              ✕
+            </button>
+          </div>
+
+          {/* Video */}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+            {/* Aim reticle */}
+            {scanning && !cameraError && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                <div style={{ width: 240, height: 140, border: '2px solid rgba(124,58,237,0.8)', borderRadius: 8, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)', position: 'relative' }}>
+                  {/* Corner marks */}
+                  {[['0%','0%','top','left'],['0%','100%','top','right'],['100%','0%','bottom','left'],['100%','100%','bottom','right']].map(([t,l,vp,hp]) => (
+                    <div key={`${vp}${hp}`} style={{
+                      position: 'absolute', top: t, left: l,
+                      width: 18, height: 18,
+                      borderTop: vp === 'top' ? '3px solid #7c3aed' : 'none',
+                      borderBottom: vp === 'bottom' ? '3px solid #7c3aed' : 'none',
+                      borderLeft: hp === 'left' ? '3px solid #7c3aed' : 'none',
+                      borderRight: hp === 'right' ? '3px solid #7c3aed' : 'none',
+                      transform: `translate(${hp === 'right' ? '50%' : '-50%'}, ${vp === 'bottom' ? '50%' : '-50%'})`,
+                    }} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Status bar */}
+          <div style={{ padding: '14px 16px', background: 'rgba(0,0,0,0.8)', textAlign: 'center' }}>
+            {cameraError ? (
+              <span style={{ color: '#fca5a5', fontSize: 13, lineHeight: 1.5 }}>{cameraError}</span>
+            ) : scanning ? (
+              <span style={{ color: '#a78bfa', fontSize: 13 }}>Point camera at barcode…</span>
+            ) : (
+              <span style={{ color: '#9ca3af', fontSize: 13 }}>Starting camera…</span>
+            )}
           </div>
         </div>
       )}
