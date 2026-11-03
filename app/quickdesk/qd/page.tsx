@@ -584,8 +584,8 @@ export default function QDPage() {
     const stLabel = st === 'complete' ? '✓ Done' : st === 'ready' ? '👀 Ready' : '⏳ Waiting'
     const stBg    = st === 'complete' ? '#bbf7d0' : st === 'ready' ? '#fef3c7' : '#dbeafe'
     const stColor = st === 'complete' ? '#166534' : st === 'ready' ? '#92400e' : '#1e40af'
-    const cardBg  = st === 'complete' ? '#dcfce7' : purpleLight
-    const cardBorder = st === 'complete' ? '#86efac' : st === 'ready' ? '#fcd34d' : border
+    const cardBg  = st === 'complete' ? '#dcfce7' : st === 'ready' ? '#fffbeb' : '#eff6ff'
+    const cardBorder = st === 'complete' ? '#86efac' : st === 'ready' ? '#fcd34d' : '#93c5fd'
     return (
       <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 5, padding: '5px 6px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -682,9 +682,11 @@ export default function QDPage() {
         /* Smart Paste + Clear side by side — mobile only */
         .qd-paste-clear { display: none !important; }
         .qd-clear-desktop { display: flex; }
+        .qd-scan-input { font-size: 12px !important; }
         @media (max-width: 700px) {
           .qd-paste-clear { display: flex !important; }
           .qd-clear-desktop { display: none !important; }
+          .qd-scan-input { font-size: 16px !important; }
         }
       `}</style>
 
@@ -759,7 +761,8 @@ export default function QDPage() {
               <label style={labelSt}>Scan Barcode / UPC</label>
               <input ref={inputRef} type="text" placeholder="Scan or type code…"
                 value={scanVal}
-                style={{ ...inputSt, fontSize: 16, fontWeight: 600, letterSpacing: '0.8px' }}
+                className="qd-scan-input"
+                style={{ ...inputSt, fontWeight: 600, letterSpacing: '0.8px' }}
                 onChange={e => setScanVal(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
@@ -918,17 +921,11 @@ export default function QDPage() {
                 </div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-                  <colgroup>
-                    <col style={{ width: 32 }} />
-                    <col />
-                    <col style={{ width: 60 }} />
-                    {session.extra_cols.map(c => <col key={c} style={{ width: 100 }} />)}
-                  </colgroup>
                   <thead>
                     <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={{ ...thSt, textAlign: 'center' }}>#</th>
-                      <th style={{ ...thSt }}>UPC</th>
-                      <th style={{ ...thSt, textAlign: 'center' }}>Qty</th>
+                      <th style={{ ...thSt, textAlign: 'center', width: 28 }}>#</th>
+                      <th style={{ ...thSt, width: 'auto' }}>UPC</th>
+                      <th style={{ ...thSt, textAlign: 'center', width: 52 }}>Qty</th>
                       {session.extra_cols.map(c => <th key={c} style={{ ...thSt, whiteSpace: 'nowrap' }}>{c}</th>)}
                     </tr>
                   </thead>
@@ -949,7 +946,7 @@ export default function QDPage() {
                         <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}
                           onContextMenu={e => { e.preventDefault(); setCtxMenu({ upc, x: e.clientX, y: e.clientY }) }}>
                           <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '5px 4px', whiteSpace: 'nowrap' }}>{ri + 1}</td>
-                          <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg }}
+                          <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg, overflow: 'hidden', maxWidth: 0 }}
                             onClick={isPlaceholder ? () => setTargetedPlaceholder(upc) : undefined}>
                             {isPlaceholder ? (
                               <span style={{
