@@ -1793,7 +1793,7 @@ export default function SettingsPage() {
                 />
                 {userSearch && (
                   <span style={{ marginLeft: 8, fontSize: 11, color: '#9b8ec4' }}>
-                    {users.filter(u => u.userid.toLowerCase().includes(userSearch.toLowerCase())).length} result(s)
+                    {users.filter(u => [u.userid, u.store, u.location].some(v => v?.toLowerCase().includes(userSearch.toLowerCase()))).length} result(s)
                   </span>
                 )}
               </div>
@@ -1814,7 +1814,7 @@ export default function SettingsPage() {
                     {users.length === 0 && (
                       <tr><td colSpan={ALL_MODULES.length + 4} style={{ textAlign: 'center', color: '#b8aed8', padding: 28 }}>No users yet.</td></tr>
                     )}
-                    {users.filter(u => !userSearch || u.userid.toLowerCase().includes(userSearch.toLowerCase())).map((u, i) => {
+                    {users.filter(u => !userSearch || [u.userid, u.store, u.location].some(v => v?.toLowerCase().includes(userSearch.toLowerCase()))).map((u, i) => {
                       const mods = getModules(u)
                       const isDirty = dirty[u.id] !== undefined
                       return (
