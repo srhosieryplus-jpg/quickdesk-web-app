@@ -32,7 +32,7 @@ interface UPCSession {
 interface LogRequest {
   id: string; store: string; brand: string; invoice_no: string
   po_no: string | null; qty: number; note: string | null
-  logged_by: string; saved_at: string; season_type: 'SS' | 'AW'
+  logged_by: string; created_at: string; season_type: 'SS' | 'AW'
 }
 
 type TabId = 'overview' | 'tasks' | 'season' | 'ic' | 'upc'
@@ -87,7 +87,7 @@ export default function ReportsPage() {
       return r
     }
     const qFlag = (table: string) => {
-      let r = supabase.from(table).select('id,store,brand,invoice_no,po_no,qty,note,logged_by,saved_at').eq('flagged', true).order('saved_at', { ascending: false })
+      let r = supabase.from(table).select('id,store,brand,invoice_no,po_no,qty,note,logged_by,created_at').eq('flagged', true).order('created_at', { ascending: false })
       if (store) r = r.eq('store', store)
       return r
     }
@@ -102,7 +102,7 @@ export default function ReportsPage() {
     setUpc(((up.data as unknown) as UPCSession[]) || [])
     const ssRows = ((ss.data || []) as unknown as Omit<LogRequest, 'season_type'>[]).map(r => ({ ...r, season_type: 'SS' as const }))
     const awRows = ((aw.data || []) as unknown as Omit<LogRequest, 'season_type'>[]).map(r => ({ ...r, season_type: 'AW' as const }))
-    setLogRequests([...ssRows, ...awRows].sort((a, b) => b.saved_at.localeCompare(a.saved_at)))
+    setLogRequests([...ssRows, ...awRows].sort((a, b) => b.created_at.localeCompare(a.created_at)))
     setLoading(false)
   }, [])
 
@@ -253,13 +253,13 @@ export default function ReportsPage() {
       isGreen: false, isPending: false,
     })),
     ...filteredLogRequests.map(r => ({
-      id: r.id, time: r.saved_at, module: r.season_type, store: r.store,
+      id: r.id, time: r.created_at, module: r.season_type, store: r.store,
       label: `${r.brand} — ${r.invoice_no}`, sublabel: r.note || undefined,
       userid: displayUser(r.logged_by),
       status: '🏷️ Log Req', statusColor: '#78350f', statusBg: '#fde68a', statusBorder: '#fcd34d',
       isGreen: false, isPending: true,
     })),
-  ].sort((a, b) => b.time.localeCompare(a.time)) : tab === 'ic' ? filteredIc.map(r => ({
+  ].sort((a, b) => (b.time || '').localeCompare(a.time || '')) : tab === 'ic' ? filteredIc.map(r => ({
     id: r.id, time: r.saved_at, module: 'IC', store: r.store,
     label: r.order_num, sublabel: r.note || undefined, userid: displayUser(r.userid),
     status: r.status === 'Pushed In' ? '✓ Pushed' : 'Pending',
@@ -545,7 +545,7 @@ export default function ReportsPage() {
                     <tbody>
                       {filteredLogRequests.map((r, i) => (
                         <tr key={r.id} style={{ background: i%2===0 ? '#fffbeb' : '#fef9ee' }}>
-                          <td style={{ color: '#92400e', fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
+                          <td style={{ color: '#92400e', fontSize: 10 }}>{(() => { const f = formatDate(r.created_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
                           <td style={{ color: '#b45309', fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
                           <td style={{ fontWeight: 600, color: '#78350f' }}>{r.store}</td>
                           <td>
