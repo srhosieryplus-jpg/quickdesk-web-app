@@ -29,6 +29,11 @@ interface UPCSession {
   rows?: { upc: string; qty: number }[]; extra_cols?: string[]; saved_at: string
   status?: 'waiting' | 'ready' | 'complete'
 }
+interface LogRequest {
+  id: string; store: string; brand: string; invoice_no: string
+  po_no: string | null; qty: number; note: string | null
+  logged_by: string; saved_at: string; season_type: 'SS' | 'AW'
+}
 
 type TabId = 'overview' | 'tasks' | 'season' | 'ic' | 'upc'
 
@@ -62,10 +67,11 @@ export default function ReportsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [toast, setToast]     = useState('')
 
-  const [tasks, setTasks]   = useState<Task[]>([])
-  const [season, setSeason] = useState<SeasonLog[]>([])
-  const [ic, setIc]         = useState<ICEntry[]>([])
-  const [upc, setUpc]       = useState<UPCSession[]>([])
+  const [tasks, setTasks]       = useState<Task[]>([])
+  const [season, setSeason]     = useState<SeasonLog[]>([])
+  const [logRequests, setLogRequests] = useState<LogRequest[]>([])
+  const [ic, setIc]             = useState<ICEntry[]>([])
+  const [upc, setUpc]           = useState<UPCSession[]>([])
   const [pullY, setPullY]   = useState(0)
   const [pulling, setPulling] = useState(false)
   const touchStartY = useRef(0)
@@ -80,14 +86,23 @@ export default function ReportsPage() {
       if (store) r = r.eq('store', store)
       return r
     }
-    const [t, s, i, up] = await Promise.all([
+    const qFlag = (table: string) => {
+      let r = supabase.from(table).select('id,store,brand,invoice_no,po_no,qty,note,logged_by,saved_at').eq('flagged', true).order('saved_at', { ascending: false })
+      if (store) r = r.eq('store', store)
+      return r
+    }
+    const [t, s, i, up, ss, aw] = await Promise.all([
       q('tasks'), q('season_log'), q('ic_log'),
       q('upc_sessions', 'id,name,store,userid,rows,extra_cols,saved_at,status'),
+      qFlag('season_ss'), qFlag('season_aw'),
     ])
     setTasks(((t.data as unknown) as Task[]) || [])
     setSeason(((s.data as unknown) as SeasonLog[]) || [])
     setIc(((i.data as unknown) as ICEntry[]) || [])
     setUpc(((up.data as unknown) as UPCSession[]) || [])
+    const ssRows = ((ss.data || []) as unknown as Omit<LogRequest, 'season_type'>[]).map(r => ({ ...r, season_type: 'SS' as const }))
+    const awRows = ((aw.data || []) as unknown as Omit<LogRequest, 'season_type'>[]).map(r => ({ ...r, season_type: 'AW' as const }))
+    setLogRequests([...ssRows, ...awRows].sort((a, b) => b.saved_at.localeCompare(a.saved_at)))
     setLoading(false)
   }, [])
 
@@ -108,6 +123,14 @@ export default function ReportsPage() {
     showToast('🔄 Refreshed')
   }
 
+  async function toggleTaskDone(id: string, currentDone: boolean) {
+    const next = !currentDone
+    const { error } = await supabase.from('tasks').update({ done: next }).eq('id', id)
+    if (error) { showToast('❌ ' + error.message); return }
+    setTasks(prev => prev.map(r => r.id === id ? { ...r, done: next } : r))
+    showToast(next ? '✅ Marked done' : '↩ Marked open')
+  }
+
   async function cycleUpcStatus(id: string, current: 'waiting' | 'ready' | 'complete') {
     const next = current === 'waiting' ? 'ready' : current === 'ready' ? 'complete' : 'waiting'
     const { error } = await supabase.from('upc_sessions').update({ status: next }).eq('id', id)
@@ -125,6 +148,9 @@ export default function ReportsPage() {
   )
   const filteredSeason = season.filter(r =>
     (!q || r.vendor.toLowerCase().includes(q) || r.invoice.toLowerCase().includes(q) || r.store.toLowerCase().includes(q))
+  )
+  const filteredLogRequests = logRequests.filter(r =>
+    (!q || r.brand?.toLowerCase().includes(q) || r.invoice_no?.toLowerCase().includes(q) || r.store.toLowerCase().includes(q) || r.logged_by?.toLowerCase().includes(q))
   )
   const filteredIc = ic.filter(r =>
     (!pendingOnly || r.status === 'Pending') &&
@@ -202,6 +228,7 @@ export default function ReportsPage() {
     sublabel?: string; userid: string; status: string
     statusColor: string; statusBg: string; statusBorder: string
     isGreen: boolean; isPending: boolean; upcState?: 'waiting'|'ready'|'complete'
+    taskDone?: boolean
   }
   const mobileCards: CardItem[] = tab === 'overview' ? feed.map(item => ({
     id: item.id, time: item.time, module: item.module, store: item.store,
@@ -216,14 +243,23 @@ export default function ReportsPage() {
     statusColor: r.done ? '#166534' : '#92400e',
     statusBg: r.done ? '#dcfce7' : '#fef3c7',
     statusBorder: r.done ? '#86efac' : '#fcd34d',
-    isGreen: r.done, isPending: false,
-  })) : tab === 'season' ? filteredSeason.map(r => ({
-    id: r.id, time: r.saved_at, module: r.season_type || 'Season', store: r.store,
-    label: `${r.vendor} — ${r.invoice}`, sublabel: r.note || undefined,
-    userid: displayUser(r.logged_by),
-    status: 'Logged', statusColor: '#1e40af', statusBg: '#dbeafe', statusBorder: '#93c5fd',
-    isGreen: false, isPending: false,
-  })) : tab === 'ic' ? filteredIc.map(r => ({
+    isGreen: r.done, isPending: false, taskDone: r.done,
+  })) : tab === 'season' ? [
+    ...filteredSeason.map(r => ({
+      id: r.id, time: r.saved_at, module: r.season_type || 'Season', store: r.store,
+      label: `${r.vendor} — ${r.invoice}`, sublabel: r.note || undefined,
+      userid: displayUser(r.logged_by),
+      status: 'Logged', statusColor: '#1e40af', statusBg: '#dbeafe', statusBorder: '#93c5fd',
+      isGreen: false, isPending: false,
+    })),
+    ...filteredLogRequests.map(r => ({
+      id: r.id, time: r.saved_at, module: r.season_type, store: r.store,
+      label: `${r.brand} — ${r.invoice_no}`, sublabel: r.note || undefined,
+      userid: displayUser(r.logged_by),
+      status: '🏷️ Log Req', statusColor: '#78350f', statusBg: '#fde68a', statusBorder: '#fcd34d',
+      isGreen: false, isPending: true,
+    })),
+  ].sort((a, b) => b.time.localeCompare(a.time)) : tab === 'ic' ? filteredIc.map(r => ({
     id: r.id, time: r.saved_at, module: 'IC', store: r.store,
     label: r.order_num, sublabel: r.note || undefined, userid: displayUser(r.userid),
     status: r.status === 'Pushed In' ? '✓ Pushed' : 'Pending',
@@ -339,7 +375,7 @@ export default function ReportsPage() {
           <span style={{ fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap', marginLeft: 'auto' }}>
             {tab === 'overview' ? `${feed.length} entries` :
              tab === 'tasks'    ? `${filteredTasks.length} entries` :
-             tab === 'season'   ? `${filteredSeason.length} entries` :
+             tab === 'season'   ? `${filteredSeason.length + filteredLogRequests.length} entries` :
              tab === 'ic'       ? `${filteredIc.length} entries` :
              `${filteredUpc.length} entries`}
           </span>
@@ -429,11 +465,15 @@ export default function ReportsPage() {
                         <td style={{ color: done ? '#14532d' : '#111', maxWidth: 300 }}>{r.task}</td>
                         <td className="ic-col-hide" style={{ color: dim, maxWidth: 200 }}>{r.note || ''}</td>
                         <td>
-                          <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700,
-                            background: done ? '#bbf7d0' : '#fef3c7',
-                            color: done ? '#14532d' : '#92400e',
-                            border: done ? '1px solid #86efac' : '1px solid #fcd34d',
-                          }}>
+                          <span
+                            onClick={isAdmin ? () => toggleTaskDone(r.id, r.done) : undefined}
+                            title={isAdmin ? 'Click to toggle done' : undefined}
+                            style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700,
+                              background: done ? '#bbf7d0' : '#fef3c7',
+                              color: done ? '#14532d' : '#92400e',
+                              border: done ? '1px solid #86efac' : '1px solid #fcd34d',
+                              cursor: isAdmin ? 'pointer' : 'default',
+                            }}>
                             {done ? '✓ Done' : 'Open'}
                           </span>
                         </td>
@@ -446,6 +486,7 @@ export default function ReportsPage() {
 
             {/* SEASON LOGS */}
             {tab === 'season' && (
+              <>
               <table className="rpt-table" style={{ maxWidth: 960 }}>
                 <thead>
                   <tr>
@@ -479,6 +520,51 @@ export default function ReportsPage() {
                   ))}
                 </tbody>
               </table>
+
+              {/* LOG REQUESTS from SS/AW */}
+              {filteredLogRequests.length > 0 && (
+                <>
+                  <div style={{ padding: '10px 12px 4px', fontWeight: 700, fontSize: 12, color: '#b45309', background: '#fffbeb', borderTop: '2px solid #fcd34d', borderBottom: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>🏷️ Create Log Requests</span>
+                    <span style={{ background: '#fcd34d', color: '#78350f', borderRadius: 10, padding: '0 7px', fontSize: 10, fontWeight: 700 }}>{filteredLogRequests.length}</span>
+                  </div>
+                  <table className="rpt-table" style={{ maxWidth: 960 }}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>User</th>
+                        <th>Store</th>
+                        <th>Type</th>
+                        <th>Brand</th>
+                        <th>Invoice #</th>
+                        <th className="ic-col-hide">PO #</th>
+                        <th className="ic-col-hide">Qty</th>
+                        <th className="ic-col-hide">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredLogRequests.map((r, i) => (
+                        <tr key={r.id} style={{ background: i%2===0 ? '#fffbeb' : '#fef9ee' }}>
+                          <td style={{ color: '#92400e', fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
+                          <td style={{ color: '#b45309', fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
+                          <td style={{ fontWeight: 600, color: '#78350f' }}>{r.store}</td>
+                          <td>
+                            <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700, background: '#fde68a', color: '#78350f', border: '1px solid #fcd34d' }}>
+                              {r.season_type}
+                            </span>
+                          </td>
+                          <td style={{ fontWeight: 600, color: '#b45309' }}>{r.brand || '—'}</td>
+                          <td style={{ fontFamily: 'monospace', color: '#78350f' }}>{r.invoice_no || '—'}</td>
+                          <td className="ic-col-hide" style={{ color: '#92400e' }}>{r.po_no || '—'}</td>
+                          <td className="ic-col-hide" style={{ color: '#92400e', fontWeight: 600 }}>{r.qty ?? '—'}</td>
+                          <td className="ic-col-hide" style={{ color: '#b45309', maxWidth: 160 }}>{r.note || ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+              </>
             )}
 
             {/* IC LOG */}
@@ -632,9 +718,13 @@ export default function ReportsPage() {
               <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
                 background: item.statusBg, color: item.statusColor, border: `1px solid ${item.statusBorder}`,
                 whiteSpace: 'nowrap', flexShrink: 0,
-                cursor: isAdmin && item.module === 'UPC' && item.upcState ? 'pointer' : 'default',
+                cursor: isAdmin && (item.module === 'UPC' && item.upcState || item.module === 'Task') ? 'pointer' : 'default',
               }}
-                onClick={isAdmin && item.module === 'UPC' && item.id && item.upcState ? () => cycleUpcStatus(item.id!, item.upcState!) : undefined}
+                onClick={
+                  isAdmin && item.module === 'UPC' && item.id && item.upcState ? () => cycleUpcStatus(item.id!, item.upcState!) :
+                  isAdmin && item.module === 'Task' && item.id ? () => toggleTaskDone(item.id!, item.taskDone ?? false) :
+                  undefined
+                }
               >
                 {item.status}
               </span>
