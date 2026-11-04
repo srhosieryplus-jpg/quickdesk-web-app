@@ -260,17 +260,16 @@ export default function SeasonSSPage() {
     setSearching(true)
 
     if (inv) {
-      const { data } = await supabase
-        .from('season_ss').select('*')
-        .eq('store', user.store).ilike('invoice_no', inv).maybeSingle()
+      let q = supabase.from('season_ss').select('*').ilike('invoice_no', inv)
+      if (user.store !== 'ALL') q = q.eq('store', user.store)
+      const { data } = await q.maybeSingle()
       setSearching(false)
       if (data) setState({ phase: 'found', row: data as SSRow })
       else setState({ phase: 'notfound', term: inv, byBrand: false })
     } else {
-      const { data } = await supabase
-        .from('season_ss').select('*')
-        .eq('store', user.store).ilike('brand', `%${br}%`)
-        .order('created_at', { ascending: false })
+      let q = supabase.from('season_ss').select('*').ilike('brand', `%${br}%`)
+      if (user.store !== 'ALL') q = q.eq('store', user.store)
+      const { data } = await q.order('created_at', { ascending: false })
       setSearching(false)
       const results = (data || []) as SSRow[]
       if (results.length === 0) setState({ phase: 'notfound', term: br, byBrand: true })
@@ -900,15 +899,22 @@ export default function SeasonSSPage() {
                       <button onClick={async () => {
                         if (!pastePreview.length) return
                         setPasting(true)
-                        const rows = pastePreview.map(r => ({ store: r.store, brand: r.brand, invoice_no: r.invoice_no, po_no: r.po_no, qty: r.qty, logged: false, flagged: false }))
+                        const allRows = pastePreview.map(r => ({ store: r.store, brand: r.brand, invoice_no: r.invoice_no, po_no: r.po_no ?? '', qty: r.qty, logged: false, flagged: false }))
+                        // De-dupe against existing rows
+                        const invoiceNos = Array.from(new Set(allRows.map(r => r.invoice_no)))
+                        const { data: existing } = await supabase.from('season_ss').select('store,brand,invoice_no,po_no,qty').in('invoice_no', invoiceNos)
+                        const existingSet = new Set((existing || []).map(e => `${e.store}|${e.brand}|${e.invoice_no}|${e.po_no ?? ''}|${e.qty}`))
+                        const rows = allRows.filter(r => !existingSet.has(`${r.store}|${r.brand}|${r.invoice_no}|${r.po_no}|${r.qty}`))
+                        const dupes = allRows.length - rows.length
                         let ok = 0; let skip = 0
                         for (let i = 0; i < rows.length; i += 50) {
                           const batch = rows.slice(i, i + 50)
                           const { error, data } = await supabase.from('season_ss').insert(batch).select('id')
                           if (error) skip += batch.length; else ok += (data?.length || batch.length)
                         }
-                        setPasting(false); setPasteResult({ ok, skip })
-                        if (ok > 0) { fetchSS(); fetchStoreRows(); showToast(`✅ Inserted ${ok} rows`) }
+                        setPasting(false); setPasteResult({ ok, skip: skip + dupes })
+                        if (ok > 0) { fetchSS(); fetchStoreRows(); showToast(`✅ Inserted ${ok} rows${dupes > 0 ? ` · ${dupes} dupes skipped` : ''}`) }
+                        if (dupes > 0 && ok === 0) showToast(`⚠️ ${dupes} duplicate${dupes !== 1 ? 's' : ''} skipped — nothing new`, 'err')
                         if (skip > 0) showToast(`⚠️ ${skip} rows failed`, 'err')
                       }} disabled={pasting || pastePreview.length === 0} className="ss-btn ss-btn-primary">
                         {pasting ? '…inserting…' : `⚡ Insert ${pastePreview.length} rows`}
