@@ -257,7 +257,7 @@ export default function AutoCSVPage() {
       const { error } = await supabase.from('autocsv_log').insert({
         invoice_num: invoice, po_num: v.poNum,
         store: v.storeID || user.store, qty_total: v.qty,
-        pos_qty: v.posQty ?? null, userid: user.userid,
+        userid: user.userid,
       })
       if (error) errors.push(`${invoice}: ${error.message}`)
     }
