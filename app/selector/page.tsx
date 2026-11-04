@@ -18,8 +18,9 @@ const ALL_MODULES = [
   { id:'po_tracker', label:'PO Tracker',         icon:'⊞',  path:'/po-tracker',          bg:'#fbcfe8', iconColor:'#9d174d' },
   { id:'qd',         label:'UPC Scanner',        icon:'barcode', path:'/quickdesk/qd',    bg:'#fca5a5', iconColor:'#7f1d1d' },
   { id:'autocsv',    label:'Auto CSV',           icon:'⚡', path:'/autocsv',             bg:'#fcd34d', iconColor:'#78350f' },
-  { id:'reports',    label:'Reports',            icon:'clipboard', path:'/reports', bg:'#6ee7b7', iconColor:'#065f46' },
-  { id:'settings',   label:'Settings',           icon:'✿',  path:'/settings',            bg:'#e2e8f0', iconColor:'#334155' },
+  { id:'reports',      label:'Reports',            icon:'clipboard', path:'/reports',      bg:'#6ee7b7', iconColor:'#065f46' },
+  { id:'season_book',  label:'Season Book',        icon:'📒', path:'/season-book',         bg:'#ddd6fe', iconColor:'#5b21b6' },
+  { id:'settings',     label:'Settings',           icon:'✿',  path:'/settings',            bg:'#e2e8f0', iconColor:'#334155' },
 ]
 
 export default function SelectorPage() {
