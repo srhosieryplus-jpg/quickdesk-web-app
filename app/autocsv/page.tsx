@@ -263,17 +263,22 @@ export default function AutoCSVPage() {
     }
     if (errors.length > 0) {
       console.error('autocsv_log insert errors:', errors)
-      showToast(`❌ ${errors.length} insert error(s) — check console`)
     }
     const { data } = await supabase.from('autocsv_log').select('invoice_num')
     if (data) setLoggedInvoices(new Set(data.map((r: { invoice_num: string }) => r.invoice_num)))
-    return skipped
+    return { skipped, errors }
   }
 
   async function handleProcessAndLog() {
     if (!Object.keys(pendingLog).length) { showToast('⚠️ Process POS data first'); return }
-    const skipped = await logToSupabase(pendingLog, false)
-    const logged = Object.keys(pendingLog).length - (skipped || 0)
+    const result = await logToSupabase(pendingLog, false)
+    if (!result) return
+    const { skipped, errors } = result
+    if (errors.length > 0) {
+      showToast(`❌ Log failed: ${errors[0]}`)
+      return
+    }
+    const logged = Object.keys(pendingLog).length - skipped
     showToast(`✅ Logged ${logged} invoice${logged !== 1 ? 's' : ''}${skipped ? ` · ${skipped} skipped (already logged)` : ''}`)
     if (posErrors.length > 0) setShowAddFixed(true)
   }
@@ -287,7 +292,8 @@ export default function AutoCSVPage() {
       if (!grouped[r.invoice]) grouped[r.invoice] = { poNum: r.poNum, customer: r.customer, storeID: r.storeID, qty: 0 }
       grouped[r.invoice].qty += q
     }
-    await logToSupabase(grouped, true)
+    const result = await logToSupabase(grouped, true)
+    if (result?.errors.length) { showToast(`❌ Log failed: ${result.errors[0]}`); return }
     showToast(`✅ Added ${Object.keys(grouped).length} fixed invoice(s) to log`)
     setFixedInput(''); setShowAddFixed(false)
   }
