@@ -1502,6 +1502,7 @@ export default function SettingsPage() {
   const [adding, setAdding] = useState(false)
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
   const [editUser, setEditUser] = useState<DBUser | null>(null)
+  const [userSearch, setUserSearch] = useState('')
 
   // Stores tab
   const [stores, setStores] = useState<string[]>(() => {
@@ -1782,6 +1783,20 @@ export default function SettingsPage() {
             <p style={{ color: '#9b8ec4', padding: 24 }}>Loading…</p>
           ) : (
             <div style={{ flex: 1, overflow: 'auto', padding: '0 0 60px' }}>
+              {/* User search */}
+              <div style={{ padding: '8px 16px 4px' }}>
+                <input
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  placeholder="🔍 Search users…"
+                  style={{ width: '100%', maxWidth: 280, background: '#f5f3ff', border: '1.5px solid #c4b5fd', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#3730a3', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                />
+                {userSearch && (
+                  <span style={{ marginLeft: 8, fontSize: 11, color: '#9b8ec4' }}>
+                    {users.filter(u => u.userid.toLowerCase().includes(userSearch.toLowerCase())).length} result(s)
+                  </span>
+                )}
+              </div>
               <div style={{ overflowX: 'auto' }}>
                 <table className="ss-table">
                   <thead>
@@ -1799,7 +1814,7 @@ export default function SettingsPage() {
                     {users.length === 0 && (
                       <tr><td colSpan={ALL_MODULES.length + 4} style={{ textAlign: 'center', color: '#b8aed8', padding: 28 }}>No users yet.</td></tr>
                     )}
-                    {users.map((u, i) => {
+                    {users.filter(u => !userSearch || u.userid.toLowerCase().includes(userSearch.toLowerCase())).map((u, i) => {
                       const mods = getModules(u)
                       const isDirty = dirty[u.id] !== undefined
                       return (
