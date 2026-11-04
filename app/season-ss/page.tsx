@@ -54,6 +54,29 @@ type SearchState =
 function parsePasteData(raw: string): { brand: string; store: string; invoice_no: string; po_no: string | null; qty: number | null }[] {
   const lines = raw.split('\n').map(l => l.trimEnd()).filter(l => l.trim())
   const results: { brand: string; store: string; invoice_no: string; po_no: string | null; qty: number | null }[] = []
+
+  // Detect header row to determine column layout
+  const firstLine = lines[0]?.toLowerCase() || ''
+  const isNewFormat = firstLine.includes('storeid') || firstLine.includes('store') && firstLine.includes('brand') && firstLine.includes('invoice')
+
+  // New format: Storeid | Brand | Invoice # | Qty  (4 cols, header row present)
+  if (isNewFormat) {
+    for (const line of lines) {
+      const cols = line.split('\t')
+      const store      = cols[0]?.trim().toUpperCase()
+      const brand      = cols[1]?.trim()
+      const invoice_no = cols[2]?.trim()
+      const qtyRaw     = cols[3]?.trim().replace(/[^0-9]/g, '')
+      const qty        = qtyRaw ? parseInt(qtyRaw) : null
+      if (!store || !brand || !invoice_no) continue
+      // skip header row
+      if (store.toLowerCase() === 'storeid' || invoice_no.toLowerCase() === 'invoice #') continue
+      results.push({ brand, store, invoice_no, po_no: null, qty })
+    }
+    return results
+  }
+
+  // Legacy format: col[2]=brand, col[3]=store, col[5]=invoice_no, col[6]=po_no, col[9]=qty
   for (const line of lines) {
     const cols = line.split('\t')
     if (cols.length < 6) continue
