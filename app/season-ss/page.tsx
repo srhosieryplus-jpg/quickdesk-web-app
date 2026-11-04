@@ -493,7 +493,7 @@ export default function SeasonSSPage() {
         .sugg-item:hover { background: ${greenL}; color: ${greenD}; font-weight: 600; }
         .ss-col-hide { }
         .ss-refresh-btn { display: inline-block; }
-        .ss-table-wrap { display: block; }
+        .ss-table-wrap { display: flex; }
         .ss-cards { display: none; }
         @media (max-width: 600px) {
           .ss-col-hide { display: none; }
@@ -763,7 +763,7 @@ export default function SeasonSSPage() {
           <p style={{ padding: 24, color: '#fbbf24', fontSize: 13 }}>Loading…</p>
         ) : (
           <>
-          <div className="ss-table-wrap" style={{ display: 'flex', justifyContent: 'center', padding: '0 16px 40px' }}>
+          <div className="ss-table-wrap" style={{ justifyContent: 'center', padding: '0 16px 40px' }}>
           <div style={{ background: '#fff', border: '1px solid #93c5fd', overflow: 'auto', width: '100%', maxWidth: 900, alignSelf: 'flex-start' }}>
             <table className="ss-main-table">
               <thead>

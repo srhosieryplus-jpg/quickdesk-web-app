@@ -214,6 +214,12 @@ export default function ReportsPage() {
         upcState: st,
       }
     }),
+    ...logRequests.map(r => ({
+      time: r.created_at, module: r.season_type, store: r.store,
+      label: `${r.brand} — ${r.invoice_no || 'no invoice'}`, userid: displayUser(r.logged_by),
+      isPending: true,
+      status: '🏷️ Log Req', statusColor: '#78350f', statusBg: '#fde68a', statusBorder: '#fcd34d',
+    })),
   ].sort((a, b) => b.time.localeCompare(a.time))
 
   const feed = allFeed

@@ -523,7 +523,7 @@ export default function SeasonAWPage() {
         .sugg-item:hover { background: ${blueL}; color: ${blueD}; font-weight: 600; }
         .aw-col-hide { }
         .aw-refresh-btn { display: inline-block; }
-        .aw-table-wrap { display: block; }
+        .aw-table-wrap { display: flex; }
         .aw-cards { display: none; }
         @media (max-width: 600px) {
           .aw-col-hide { display: none; }
@@ -801,7 +801,7 @@ export default function SeasonAWPage() {
           <p style={{ padding: 24, color: '#93c5fd', fontSize: 13 }}>Loading…</p>
         ) : (
           <>
-          <div className="aw-table-wrap" style={{ display: 'flex', justifyContent: 'center', padding: '0 16px 40px' }}>
+          <div className="aw-table-wrap" style={{ justifyContent: 'center', padding: '0 16px 40px' }}>
           <div style={{ background: '#fff', border: '1px solid #93c5fd', overflow: 'auto', width: '100%', maxWidth: 900, alignSelf: 'flex-start' }}>
             <table className="aw-table">
               <thead>
