@@ -68,10 +68,11 @@ function parsePasteData(raw: string): { brand: string; store: string; invoice_no
       const invoice_no = cols[2]?.trim()
       const qtyRaw     = cols[3]?.trim().replace(/[^0-9]/g, '')
       const qty        = qtyRaw ? parseInt(qtyRaw) : null
+      const po_no      = cols[4]?.trim() || null
       if (!store || !brand || !invoice_no) continue
       // skip header row
       if (store.toLowerCase() === 'storeid' || invoice_no.toLowerCase() === 'invoice #') continue
-      results.push({ brand, store, invoice_no, po_no: null, qty })
+      results.push({ brand, store, invoice_no, po_no, qty })
     }
     return results
   }
