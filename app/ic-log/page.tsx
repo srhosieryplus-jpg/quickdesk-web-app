@@ -19,6 +19,16 @@ interface ICEntry {
   in_push_log: boolean
   note_pushed: boolean
   saved_at: string
+  pushed_at: string | null
+}
+
+interface AutoCSVRow {
+  id: string
+  invoice_num: string
+  po_num: string
+  store: string
+  qty_total: number
+  exported_at: string
 }
 
 const purple = '#7c3aed'
@@ -44,6 +54,11 @@ export default function ICLogPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingEntry, setEditingEntry] = useState<ICEntry | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null)
+  const [attachModal, setAttachModal] = useState<{ entry: ICEntry } | null>(null)
+  const [attachSearch, setAttachSearch] = useState('')
+  const [attachRows, setAttachRows] = useState<AutoCSVRow[]>([])
+  const [attachLoading, setAttachLoading] = useState(false)
+  const [attachSaving, setAttachSaving] = useState(false)
   const [pullY, setPullY] = useState(0)
   const [pulling, setPulling] = useState(false)
   const touchStartY = useRef(0)
@@ -91,6 +106,7 @@ export default function ICLogPage() {
         qty_pushed: match.qty_total || 0,
         in_push_log: true,
         note_pushed: true,
+        pushed_at: match.exported_at || null,
       }).eq('id', entry.id)
       matchedEntryIds.add(entry.id)
       didUpdate = true
@@ -120,6 +136,7 @@ export default function ICLogPage() {
           qty_pushed: match.qty_total || 0,
           in_push_log: true,
           note_pushed: true,
+          pushed_at: match.exported_at || null,
         }).eq('id', entry.id)
         didUpdate = true
       }
@@ -205,6 +222,45 @@ export default function ICLogPage() {
     if (!entry) return
     setEditingEntry(entry)
     setContextMenu(null)
+  }
+
+  async function openAttach(id: string) {
+    const entry = entries.find(e => e.id === id)
+    if (!entry) return
+    setContextMenu(null)
+    setAttachSearch('')
+    setAttachRows([])
+    setAttachModal({ entry })
+    setAttachLoading(true)
+    // Load recent autocsv_log rows for this store (last 60 days)
+    const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+    const { data } = await supabase
+      .from('autocsv_log')
+      .select('id, invoice_num, po_num, store, qty_total, exported_at')
+      .eq('store', entry.store)
+      .gte('exported_at', since)
+      .order('exported_at', { ascending: false })
+      .limit(200)
+    setAttachRows((data || []) as AutoCSVRow[])
+    setAttachLoading(false)
+  }
+
+  async function doAttach(row: AutoCSVRow) {
+    if (!attachModal) return
+    setAttachSaving(true)
+    const { error } = await supabase.from('ic_log').update({
+      status: 'Pushed In',
+      po_num: row.po_num || '',
+      qty_pushed: row.qty_total || 0,
+      in_push_log: true,
+      note_pushed: true,
+      pushed_at: row.exported_at || null,
+    }).eq('id', attachModal.entry.id)
+    setAttachSaving(false)
+    if (error) { showToast(`❌ ${error.message}`, 'err'); return }
+    setAttachModal(null)
+    showToast('✅ Attached — entry marked Pushed In')
+    fetchEntries()
   }
 
   async function saveEdit(e: React.FormEvent) {
@@ -364,7 +420,8 @@ export default function ICLogPage() {
           <table className="ic-table">
             <thead>
               <tr style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                <th>Date</th>
+                <th>Logged</th>
+                <th>Pushed (CSV)</th>
                 <th>User</th>
                 <th>Store</th>
                 <th>Invoice #</th>
@@ -377,7 +434,7 @@ export default function ICLogPage() {
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No entries yet.</td></tr>
+                <tr><td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No entries yet.</td></tr>
               )}
               {filtered.map((e, i) => {
                 const pushed = e.status === 'Pushed In'
@@ -390,6 +447,9 @@ export default function ICLogPage() {
                   <tr key={e.id} style={{ background: rowBg, cursor: 'context-menu' }}
                     onContextMenu={ev => handleRowRightClick(ev, e.id)}>
                     <td style={{ color: dimColor, whiteSpace: 'nowrap' }}>{formatDate(e.saved_at)}</td>
+                    <td style={{ color: pushed ? '#15803d' : '#d1d5db', whiteSpace: 'nowrap', fontStyle: pushed && !e.pushed_at ? 'italic' : 'normal' }}>
+                      {pushed ? (e.pushed_at ? formatDate(e.pushed_at) : '—') : ''}
+                    </td>
                     <td style={{ color: pushed ? '#166534' : purple, fontWeight: 700 }}>{e.userid}</td>
                     <td style={{ color: textColor, fontWeight: 600 }}>{e.store}</td>
                     <td style={{ color: pushed ? '#14532d' : purpleD, fontWeight: 700 }}>{e.order_num}</td>
@@ -474,9 +534,14 @@ export default function ICLogPage() {
                 <span>·</span>
                 <span>{e.store}</span>
                 <span>·</span>
-                <span>{formatDate(e.saved_at)}</span>
+                <span>Logged: {formatDate(e.saved_at)}</span>
                 {e.po_num ? <><span>·</span><span>PO: {e.po_num}</span></> : null}
               </div>
+              {pushed && (
+                <div style={{ fontSize: 11, marginTop: 3, color: '#15803d', fontWeight: 600 }}>
+                  📤 Pushed (CSV): {e.pushed_at ? formatDate(e.pushed_at) : '—'}
+                </div>
+              )}
             </div>
           )
         })}
@@ -487,12 +552,21 @@ export default function ICLogPage() {
         <div style={{
           position: 'fixed', top: contextMenu.y, left: contextMenu.x,
           background: '#fff', border: `1px solid ${border}`, borderRadius: 8,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: 200, overflow: 'hidden', minWidth: 120,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: 200, overflow: 'hidden', minWidth: 160,
         }} onClick={e => e.stopPropagation()}>
           <button onClick={() => openEdit(contextMenu.id)}
             style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: purpleD, fontWeight: 600, cursor: 'pointer' }}>
             ✏️ Edit
           </button>
+          {currentUser?.store === 'ALL' && (
+            <>
+              <div style={{ height: 1, background: border }} />
+              <button onClick={() => openAttach(contextMenu.id)}
+                style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: '#0369a1', fontWeight: 600, cursor: 'pointer' }}>
+                🔗 Attach to log entry…
+              </button>
+            </>
+          )}
           <div style={{ height: 1, background: border }} />
           <button onClick={() => deleteEntry(contextMenu.id)}
             style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>
@@ -538,6 +612,60 @@ export default function ICLogPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Attach Modal */}
+      {attachModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={e => { if (e.target === e.currentTarget) setAttachModal(null) }}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520, boxShadow: '0 8px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '80vh' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#0369a1' }}>🔗 Attach to AutoCSV Log Entry</div>
+            <div style={{ fontSize: 12, color: '#374151' }}>
+              IC entry: <span style={{ fontWeight: 700, color: purpleD }}>{attachModal.entry.order_num}</span>
+              {' '}· Store: <span style={{ fontWeight: 700 }}>{attachModal.entry.store}</span>
+            </div>
+            <input
+              autoFocus
+              value={attachSearch}
+              onChange={e => setAttachSearch(e.target.value)}
+              placeholder="Search by invoice #, PO #…"
+              style={{ ...inputSt, width: '100%', fontSize: 13 }}
+            />
+            <div style={{ overflowY: 'auto', flex: 1, border: `1px solid ${border}`, borderRadius: 8 }}>
+              {attachLoading ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>Loading…</div>
+              ) : (() => {
+                const q = attachSearch.toLowerCase()
+                const rows = attachRows.filter(r =>
+                  !q || r.invoice_num?.toLowerCase().includes(q) || r.po_num?.toLowerCase().includes(q)
+                )
+                if (!rows.length) return <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No entries found.</div>
+                return rows.map((r, i) => (
+                  <div key={r.id}
+                    style={{ padding: '10px 14px', borderBottom: i < rows.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: i % 2 === 0 ? '#fff' : '#f5f3ff', cursor: 'pointer' }}
+                    onClick={() => { if (!attachSaving) doAttach(r) }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>INV# {r.invoice_num}</div>
+                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                        {r.store} · Qty: {r.qty_total}
+                        {r.po_num ? ` · PO# ${r.po_num}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      <div style={{ fontWeight: 600 }}>📤 {formatDate(r.exported_at)}</div>
+                    </div>
+                  </div>
+                ))
+              })()}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setAttachModal(null)}
+                style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
