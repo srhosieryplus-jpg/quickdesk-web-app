@@ -261,7 +261,15 @@ export default function ICLogPage() {
         .ic-table { border-collapse: collapse; font-size: 12px; width: 100%; }
         .ic-table th { padding: 7px 10px; text-align: left; font-size: 11px; font-weight: 700; color: #1e3a8a; background: #dbeafe; border-bottom: 2px solid #93c5fd; white-space: nowrap; }
         .ic-table td { padding: 5px 10px; font-size: 12px; vertical-align: middle; border-bottom: 1px solid #e5e7eb; }
-        @media (max-width: 700px) {
+        .ic-table-wrap { display: block; }
+        .ic-cards { display: none; }
+        .iclog-order-label { display: inline; }
+        @media (max-width: 600px) {
+          .ic-table-wrap { display: none; }
+          .ic-cards { display: block; padding: 8px 12px; overflow-y: auto; }
+          .iclog-order-label { display: none; }
+        }
+        @media (min-width: 601px) and (max-width: 700px) {
           .ic-table th, .ic-table td { padding: 4px 6px; font-size: 11px; }
           .ic-col-hide { display: none; }
         }
@@ -286,7 +294,7 @@ export default function ICLogPage() {
         <div className="iclog-center">
           <span style={{ fontSize: 18, color: purple }}>∞</span>
           <span style={{ fontSize: 15, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>INFINITY CLASSICS</span>
-          <span style={{ color: '#c4b5fd', fontSize: 13 }}>— Order Log</span>
+          <span className="iclog-order-label" style={{ color: '#c4b5fd', fontSize: 13 }}>— Order Log</span>
         </div>
 
         {/* Right */}
@@ -329,8 +337,8 @@ export default function ICLogPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div ref={scrollRef} style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} onClick={() => setContextMenu(null)}
+      {/* Table — desktop */}
+      <div className="ic-table-wrap" ref={scrollRef} style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }} onClick={() => setContextMenu(null)}
         onTouchStart={e => { touchStartY.current = e.touches[0].clientY; setPulling(false) }}
         onTouchMove={e => {
           const el = scrollRef.current; if (!el) return
@@ -410,6 +418,68 @@ export default function ICLogPage() {
           </div>
           </div>
         )}
+      </div>
+
+      {/* Cards — mobile */}
+      <div className="ic-cards" ref={scrollRef}
+        onTouchStart={e => { touchStartY.current = e.touches[0].clientY; setPulling(false) }}
+        onTouchMove={e => {
+          const el = scrollRef.current; if (!el) return
+          const dy = e.touches[0].clientY - touchStartY.current
+          if (el.scrollTop === 0 && dy > 0) { setPullY(Math.min(dy, 72)); setPulling(true) }
+          else { setPullY(0); setPulling(false) }
+        }}
+        onTouchEnd={() => {
+          if (pullY > 50) { refresh() }
+          setPullY(0); setPulling(false)
+        }}
+      >
+        {pulling && pullY > 10 && (
+          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: 12, color: purple, opacity: Math.min(pullY / 50, 1) }}>
+            {pullY > 50 ? '↑ Release to refresh' : '↓ Pull to refresh'}
+          </div>
+        )}
+        {loading ? (
+          <p style={{ padding: 24, color: '#9b8ec4', fontSize: 13 }}>Loading…</p>
+        ) : filtered.length === 0 ? (
+          <p style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No entries yet.</p>
+        ) : filtered.map(e => {
+          const pushed = e.status === 'Pushed In'
+          const cardBg = pushed ? '#dcfce7' : '#fff'
+          const textColor = pushed ? '#14532d' : '#111827'
+          const dimColor = pushed ? '#15803d' : '#6b7280'
+          return (
+            <div key={e.id} style={{ background: cardBg, border: `1px solid ${pushed ? '#86efac' : border}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}
+              onContextMenu={ev => handleRowRightClick(ev, e.id)}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: pushed ? '#14532d' : purpleD, wordBreak: 'break-word' }}>{e.order_num}</div>
+                  {e.note ? (
+                    <div style={{ fontSize: 12, color: dimColor, marginTop: 3, wordBreak: 'break-word' }}>
+                      <span style={{ fontWeight: 700 }}>Note: </span>{e.note}
+                    </div>
+                  ) : null}
+                </div>
+                <span style={{
+                  display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, flexShrink: 0,
+                  background: pushed ? '#bbf7d0' : '#fef3c7',
+                  color: pushed ? '#14532d' : '#92400e',
+                  border: pushed ? '1px solid #86efac' : '1px solid #fcd34d',
+                }}>
+                  {pushed ? '✓ Pushed' : 'Pending'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 11, color: dimColor, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 700, color: pushed ? '#15803d' : purple }}>{e.userid}</span>
+                <span>·</span>
+                <span>{e.store}</span>
+                <span>·</span>
+                <span>{formatDate(e.saved_at)}</span>
+                {e.po_num ? <><span>·</span><span>PO: {e.po_num}</span></> : null}
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       {/* Context menu */}
