@@ -119,6 +119,12 @@ export default function SeasonBookPage() {
   const [extraSeasons, setExtraSeasons] = useState<string[]>([])
   const [showNewSeason, setShowNewSeason] = useState(false)
   const [newSeasonInput, setNewSeasonInput] = useState('')
+  const [showSeasonPanel, setShowSeasonPanel] = useState(false)
+
+  // Header search
+  const [headerSearch, setHeaderSearch] = useState('')
+  const [showHeaderDrop, setShowHeaderDrop] = useState(false)
+  const headerSearchRef = useRef<HTMLDivElement>(null)
 
   // Data
   const [rows, setRows] = useState<LedgerRow[]>([])
@@ -134,8 +140,11 @@ export default function SeasonBookPage() {
   const [activeBrand, setActiveBrand] = useState<string | null>(null)
 
   // Modal: new log entry
-  const [modal, setModal] = useState<'none'|'new-entry'|'edit-entry'|'add-payment'>('none')
+  const [modal, setModal] = useState<'none'|'new-entry'|'edit-entry'|'add-payment'|'quick-pay'>('none')
   const [editRow, setEditRow] = useState<LedgerRow | null>(null)
+  const [quickPayBrand, setQuickPayBrand] = useState<string | null>(null)
+  const [quickPayAmt, setQuickPayAmt] = useState('')
+  const [quickPayDate, setQuickPayDate] = useState(today())
 
   // Form state: drop number + per-store entries (TTC + TTP simultaneously)
   const [formDrop, setFormDrop] = useState(1)
@@ -185,6 +194,9 @@ export default function SeasonBookPage() {
       if (brandRef.current && !brandRef.current.contains(e.target as Node)) {
         setShowBrandDrop(false)
       }
+      if (headerSearchRef.current && !headerSearchRef.current.contains(e.target as Node)) {
+        setShowHeaderDrop(false)
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -195,6 +207,12 @@ export default function SeasonBookPage() {
   const filteredBrands = viewFilter
     ? brandsInSeason.filter(b => b.toLowerCase().includes(viewFilter.toLowerCase()))
     : brandsInSeason
+
+  // Header search: searches across all brands (from BRAND_LIST + in-season)
+  const allBrandOptions = Array.from(new Set([...BRAND_LIST, ...brandsInSeason]))
+  const headerSearchResults = headerSearch.trim()
+    ? allBrandOptions.filter(b => b.toLowerCase().includes(headerSearch.toLowerCase())).slice(0, 10)
+    : []
 
   // Rows for active brand
   const brandRows = activeBrand ? rows.filter(r => r.brand === activeBrand) : []
@@ -361,12 +379,8 @@ export default function SeasonBookPage() {
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         * { box-sizing: border-box; }
-        .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-bottom: 2px solid ${border}; background: ${purpleD}; }
-        .sb-season-btn { padding: 5px 12px; border-radius: 20px; border: 1.5px solid; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 0.12s; }
-        .sb-season-btn.active { background: #fff; color: ${purpleD}; border-color: #fff; }
-        .sb-season-btn:not(.active) { background: rgba(255,255,255,0.12); color: #e9d5ff; border-color: rgba(255,255,255,0.3); }
-        .sb-season-btn:hover:not(.active) { background: rgba(255,255,255,0.22); }
-        .sb-layout { display: flex; flex: 1; overflow: hidden; }
+        .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: relative; z-index: 100; }
+        .sb-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
         .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; }
         .sb-main { flex: 1; overflow-y: auto; padding: 16px; }
         .sb-brand-row { padding: 8px 14px; cursor: pointer; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; color: #374151; transition: background 0.1s; }
@@ -387,6 +401,15 @@ export default function SeasonBookPage() {
         .store-block { border: 1.5px solid #e0e7ff; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
         .store-block-head { font-size: 12px; font-weight: 800; color: ${purpleD}; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        /* Season slide panel */
+        .season-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 200; }
+        .season-panel { position: fixed; top: 0; left: 0; bottom: 0; width: 240px; background: #fff; z-index: 201; display: flex; flex-direction: column; box-shadow: 4px 0 24px rgba(0,0,0,0.18); transform: translateX(-100%); transition: transform 0.22s cubic-bezier(.4,0,.2,1); }
+        .season-panel.open { transform: translateX(0); }
+        .sp-head { padding: 14px 16px; background: ${purpleD}; display: flex; align-items: center; justify-content: space-between; }
+        .sp-season-row { padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 700; color: #374151; transition: background 0.1s; }
+        .sp-season-row:hover { background: #ede9fe; }
+        .sp-season-row.active { background: #ede9fe; color: ${purpleD}; }
+        .sp-season-row.active::after { content: '✓'; font-size: 12px; color: ${purpleD}; }
         @media (max-width: 600px) {
           .sb-layout { flex-direction: column; }
           .sb-sidebar { width: 100%; border-right: none; border-bottom: 1px solid ${border}; max-height: 180px; }
@@ -396,40 +419,116 @@ export default function SeasonBookPage() {
         }
       `}</style>
 
+      {/* Season slide-out panel */}
+      {showSeasonPanel && <div className="season-overlay" onClick={() => setShowSeasonPanel(false)} />}
+      <div className={`season-panel${showSeasonPanel ? ' open' : ''}`}>
+        <div className="sp-head">
+          <span style={{ fontSize: 14, fontWeight: 900, color: '#fff', letterSpacing: '0.06em' }}>📅 Seasons</span>
+          <button onClick={() => setShowSeasonPanel(false)}
+            style={{ background: 'none', border: 'none', color: '#e9d5ff', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {allSeasons.map(s => (
+            <div key={s} className={`sp-season-row${season === s ? ' active' : ''}`}
+              onClick={() => { setSeason(s); setActiveBrand(null); setShowSeasonPanel(false) }}>
+              {s}
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '10px 12px', borderTop: `1px solid ${border}` }}>
+          {showNewSeason ? (
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <input value={newSeasonInput} onChange={e => setNewSeasonInput(e.target.value.toUpperCase())}
+                placeholder="SS28" maxLength={5} autoFocus
+                onKeyDown={e => e.key === 'Enter' && createSeason()}
+                style={{ flex: 1, padding: '5px 8px', borderRadius: 5, border: `1.5px solid ${border}`, fontSize: 13, fontWeight: 700 }} />
+              <button onClick={createSeason}
+                style={{ background: purple, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 10px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>✓</button>
+              <button onClick={() => setShowNewSeason(false)}
+                style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '5px 8px', fontSize: 13, cursor: 'pointer' }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowNewSeason(true)}
+              style={{ width: '100%', background: '#ede9fe', color: purpleD, border: `1.5px dashed ${border}`, borderRadius: 7, padding: '7px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              + New Season
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Header */}
       <div className="sb-header">
+        {/* Hamburger season button */}
+        <button onClick={() => setShowSeasonPanel(true)}
+          title="Switch season"
+          style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', cursor: 'pointer', borderRadius: 6, padding: '5px 8px', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', width: 34, height: 34, flexShrink: 0 }}>
+          <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
+          <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
+          <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
+        </button>
+
         <button onClick={() => router.push('/selector')}
           style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
           ← Home
         </button>
-        <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.3)' }} />
-        <span style={{ fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '0.08em' }}>📒 SEASON BOOK</span>
+        <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.25)', flexShrink: 0 }} />
+        <span style={{ fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '0.08em', flexShrink: 0 }}>📒 SEASON BOOK</span>
+
+        {/* Active season badge */}
+        <span style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', fontSize: 12, fontWeight: 800, borderRadius: 12, padding: '3px 10px', border: '1.5px solid rgba(255,255,255,0.4)', cursor: 'pointer', flexShrink: 0 }}
+          onClick={() => setShowSeasonPanel(true)}>
+          {season}
+        </span>
+
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          {allSeasons.map(s => (
-            <button key={s} className={`sb-season-btn${season === s ? ' active' : ''}`}
-              onClick={() => { setSeason(s); setActiveBrand(null) }}>
-              {s}
-            </button>
-          ))}
-          {showNewSeason ? (
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <input value={newSeasonInput} onChange={e => setNewSeasonInput(e.target.value.toUpperCase())}
-                placeholder="SS28" maxLength={5}
-                onKeyDown={e => e.key === 'Enter' && createSeason()}
-                style={{ width: 60, padding: '3px 6px', borderRadius: 5, border: '1.5px solid #e9d5ff', fontSize: 12, fontWeight: 700 }} />
-              <button onClick={createSeason}
-                style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 5, padding: '3px 8px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✓</button>
-              <button onClick={() => setShowNewSeason(false)}
-                style={{ background: 'rgba(255,255,255,0.15)', color: '#e9d5ff', border: 'none', borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer' }}>✕</button>
+
+        {/* Header search */}
+        <div ref={headerSearchRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.15)', borderRadius: 7, border: '1.5px solid rgba(255,255,255,0.3)', overflow: 'hidden' }}>
+            <span style={{ padding: '0 8px', color: '#e9d5ff', fontSize: 14 }}>🔍</span>
+            <input
+              value={headerSearch}
+              onChange={e => { setHeaderSearch(e.target.value); setShowHeaderDrop(true) }}
+              onFocus={() => setShowHeaderDrop(true)}
+              placeholder="Search brand…"
+              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: 12, fontWeight: 500, padding: '5px 8px 5px 0', width: 140 }}
+            />
+            {headerSearch && (
+              <button onClick={() => { setHeaderSearch(''); setShowHeaderDrop(false) }}
+                style={{ background: 'none', border: 'none', color: '#e9d5ff', cursor: 'pointer', padding: '0 6px', fontSize: 14 }}>✕</button>
+            )}
+          </div>
+          {showHeaderDrop && headerSearchResults.length > 0 && (
+            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 8, zIndex: 300, minWidth: 200, maxHeight: 240, overflowY: 'auto', boxShadow: '0 6px 24px rgba(0,0,0,0.14)' }}>
+              {headerSearchResults.map(b => (
+                <div key={b}
+                  onClick={() => { setActiveBrand(b); setHeaderSearch(''); setShowHeaderDrop(false) }}
+                  style={{ padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', color: '#374151' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                  {b}
+                  {brandsInSeason.includes(b) && (
+                    <span style={{ fontSize: 10, color: purpleD, marginLeft: 6, fontWeight: 700 }}>in {season}</span>
+                  )}
+                </div>
+              ))}
             </div>
-          ) : (
-            <button onClick={() => setShowNewSeason(true)}
-              style={{ background: 'rgba(255,255,255,0.12)', color: '#e9d5ff', border: '1.5px dashed rgba(255,255,255,0.4)', borderRadius: 20, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              + Season
-            </button>
           )}
         </div>
+
+        {/* Action buttons */}
+        <button onClick={() => activeBrand ? openNewEntry(activeBrand) : setShowHeaderDrop(true)}
+          style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}>
+          + New
+        </button>
+        <button onClick={() => {
+          const brand = activeBrand
+          if (!brand) { showToast('⚠️ Select a brand first', 'err'); return }
+          setQuickPayBrand(brand); setQuickPayAmt(''); setQuickPayDate(today()); setModal('quick-pay')
+        }}
+          style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+          Payment
+        </button>
       </div>
 
       {/* Body */}
@@ -819,6 +918,72 @@ export default function SeasonBookPage() {
           </div>
         </div>
       )}
+
+      {/* ── Quick Payment Modal ──────────────────────────────────────────────── */}
+      {modal === 'quick-pay' && quickPayBrand && (() => {
+        const brandRowsForPay = rows.filter(r => r.brand === quickPayBrand && (r.balance_due ?? 0) > 0.001)
+        return (
+          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
+            <div className="modal-box" style={{ maxWidth: 460 }}>
+              <div className="modal-head">
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>💳 Payment — {quickPayBrand}</div>
+                  <div style={{ fontSize: 12, color: gray }}>{season}</div>
+                </div>
+                <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
+              </div>
+              <div className="modal-body">
+                {brandRowsForPay.length === 0 ? (
+                  <p style={{ fontSize: 13, color: gray, textAlign: 'center', padding: '12px 0' }}>No outstanding balance for {quickPayBrand} in {season}.</p>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 12, fontSize: 12, color: gray }}>
+                      Rows with balance due:
+                    </div>
+                    {brandRowsForPay.map(r => (
+                      <div key={r.id} style={{ background: '#faf5ff', border: `1px solid ${border}`, borderRadius: 7, padding: '8px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                        <div>
+                          <span style={{ fontWeight: 700, color: purpleD, fontSize: 13 }}>{r.store}</span>
+                          <span style={{ fontSize: 11, color: gray, marginLeft: 8 }}>Drop {r.drop_num}</span>
+                        </div>
+                        <span style={{ fontWeight: 800, color: '#dc2626', fontSize: 13 }}>{fmt$(r.balance_due, r.currency)} due</span>
+                      </div>
+                    ))}
+                    <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <label style={lbl}>Amount</label>
+                        <input type="number" value={quickPayAmt} onChange={e => setQuickPayAmt(e.target.value)}
+                          placeholder="0.00" step="0.01" autoFocus style={inp} />
+                      </div>
+                      <div>
+                        <label style={lbl}>Payment Date</label>
+                        <input type="date" value={quickPayDate} onChange={e => setQuickPayDate(e.target.value)} style={inp} />
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: gray }}>Payment will be applied to all rows with an outstanding balance.</div>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+                      <button onClick={() => setModal('none')}
+                        style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        Cancel
+                      </button>
+                      <button onClick={async () => {
+                        if (!quickPayAmt || !user) return
+                        for (const r of brandRowsForPay) {
+                          await addPayment(r, quickPayAmt, quickPayDate)
+                        }
+                        setModal('none')
+                      }}
+                        style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                        Apply Payment
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Toast */}
       {toast && (
