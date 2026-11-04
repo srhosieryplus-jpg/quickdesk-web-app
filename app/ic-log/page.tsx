@@ -258,11 +258,11 @@ export default function ICLogPage() {
           .iclog-store-inv { width: 100%; }
           .iclog-refresh { display: none !important; }
         }
-        .ic-table { border-collapse: collapse; font-size: 11px; width: 100%; max-width: 900px; }
-        .ic-table th { padding: 5px 8px; text-align: left; font-size: 10px; font-weight: 700; color: ${purpleD}; border-bottom: 2px solid ${border}; white-space: nowrap; }
-        .ic-table td { padding: 3px 7px; font-size: 11px; vertical-align: middle; border-bottom: 1px solid #e5e7eb; }
+        .ic-table { border-collapse: collapse; font-size: 12px; width: 100%; }
+        .ic-table th { padding: 7px 10px; text-align: left; font-size: 11px; font-weight: 700; color: #1e3a8a; background: #dbeafe; border-bottom: 2px solid #93c5fd; white-space: nowrap; }
+        .ic-table td { padding: 5px 10px; font-size: 12px; vertical-align: middle; border-bottom: 1px solid #e5e7eb; }
         @media (max-width: 700px) {
-          .ic-table th, .ic-table td { padding: 3px 5px; font-size: 10px; }
+          .ic-table th, .ic-table td { padding: 4px 6px; font-size: 11px; }
           .ic-col-hide { display: none; }
         }
       `}</style>
@@ -351,10 +351,11 @@ export default function ICLogPage() {
         {loading ? (
           <p style={{ padding: 24, color: '#9b8ec4', fontSize: 13 }}>Loading…</p>
         ) : (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 16px 16px' }}>
+          <div style={{ background: '#fff', border: '1px solid #93c5fd', overflow: 'auto', width: '100%', maxWidth: 900, alignSelf: 'flex-start' }}>
           <table className="ic-table">
             <thead>
-              <tr style={{ background: '#e8e4f8', position: 'sticky', top: 0, zIndex: 1 }}>
+              <tr style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                 <th>Date</th>
                 <th>User</th>
                 <th>Store</th>
@@ -373,39 +374,40 @@ export default function ICLogPage() {
               {filtered.map((e, i) => {
                 const pushed = e.status === 'Pushed In'
                 const rowBg = pushed
-                  ? (i % 2 === 0 ? '#14532d' : '#166534')
-                  : (i % 2 === 0 ? '#fff' : '#faf8ff')
-                const textColor = pushed ? '#86efac' : '#1f2937'
-                const dimColor = pushed ? '#4ade80' : '#6b7280'
+                  ? (i % 2 === 0 ? '#dcfce7' : '#d1fae5')
+                  : (i % 2 === 0 ? '#fff' : '#eff6ff')
+                const textColor = pushed ? '#166534' : '#1f2937'
+                const dimColor = pushed ? '#15803d' : '#6b7280'
                 return (
                   <tr key={e.id} style={{ background: rowBg, cursor: 'context-menu' }}
                     onContextMenu={ev => handleRowRightClick(ev, e.id)}>
                     <td style={{ color: dimColor, whiteSpace: 'nowrap' }}>{formatDate(e.saved_at)}</td>
-                    <td style={{ color: pushed ? '#86efac' : purple, fontWeight: 700 }}>{e.userid}</td>
+                    <td style={{ color: pushed ? '#166534' : purple, fontWeight: 700 }}>{e.userid}</td>
                     <td style={{ color: textColor, fontWeight: 600 }}>{e.store}</td>
-                    <td style={{ color: pushed ? '#fff' : purpleD, fontWeight: 700 }}>{e.order_num}</td>
+                    <td style={{ color: pushed ? '#14532d' : purpleD, fontWeight: 700 }}>{e.order_num}</td>
                     <td>
                       <span style={{
                         display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700,
-                        background: pushed ? '#166534' : '#fef3c7',
-                        color: pushed ? '#86efac' : '#92400e',
-                        border: pushed ? '1px solid #4ade80' : '1px solid #fcd34d',
+                        background: pushed ? '#bbf7d0' : '#fef3c7',
+                        color: pushed ? '#14532d' : '#92400e',
+                        border: pushed ? '1px solid #86efac' : '1px solid #fcd34d',
                         whiteSpace: 'nowrap',
                       }}>
                         {pushed ? '✓ Pushed' : 'Pending'}
                       </span>
                     </td>
-                    <td className="ic-col-hide" style={{ textAlign: 'center', color: pushed ? '#4ade80' : '#d1d5db' }}>
+                    <td className="ic-col-hide" style={{ textAlign: 'center', color: pushed ? '#16a34a' : '#d1d5db' }}>
                       {pushed ? '✓' : ''}
                     </td>
-                    <td className="ic-col-hide" style={{ color: pushed ? '#fff' : '#374151', fontWeight: pushed ? 600 : 400 }}>{e.po_num || ''}</td>
-                    <td className="ic-col-hide" style={{ color: pushed ? '#fff' : '#374151', fontWeight: pushed ? 600 : 400 }}>{pushed ? e.qty_pushed : ''}</td>
-                    <td style={{ color: dimColor, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.note}</td>
+                    <td className="ic-col-hide" style={{ color: textColor, fontWeight: pushed ? 600 : 400 }}>{e.po_num || '—'}</td>
+                    <td className="ic-col-hide" style={{ color: textColor, fontWeight: pushed ? 600 : 400 }}>{pushed ? e.qty_pushed : '—'}</td>
+                    <td style={{ color: dimColor, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.note || '—'}</td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
+          </div>
           </div>
         )}
       </div>
