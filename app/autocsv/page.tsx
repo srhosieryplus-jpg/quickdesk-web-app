@@ -251,13 +251,19 @@ export default function AutoCSVPage() {
   ) {
     if (!user) return
     let skipped = 0
+    const errors: string[] = []
     for (const [invoice, v] of Object.entries(grouped)) {
       if (!allowDupes && loggedInvoices.has(invoice)) { skipped++; continue }
-      await supabase.from('autocsv_log').insert({
+      const { error } = await supabase.from('autocsv_log').insert({
         invoice_num: invoice, po_num: v.poNum,
         store: v.storeID || user.store, qty_total: v.qty,
         pos_qty: v.posQty ?? null, userid: user.userid,
       })
+      if (error) errors.push(`${invoice}: ${error.message}`)
+    }
+    if (errors.length > 0) {
+      console.error('autocsv_log insert errors:', errors)
+      showToast(`❌ ${errors.length} insert error(s) — check console`)
     }
     const { data } = await supabase.from('autocsv_log').select('invoice_num')
     if (data) setLoggedInvoices(new Set(data.map((r: { invoice_num: string }) => r.invoice_num)))
