@@ -820,14 +820,34 @@ export default function AutoCSVPage() {
               const cardBorder = hasIC ? '#86efac' : '#93c5fd'
               return (
                 <div key={e.id} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
+                  {/* Top row: INV# + PO# + IC status badge */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: hasIC ? '#14532d' : '#1d4ed8' }}>{e.invoice_num}</div>
-                      <div style={{ fontSize: 11, color: hasIC ? '#16a34a' : '#6b7280', marginTop: 2 }}>
-                        {e.store} · Qty: {e.qty_total} · {dateStr} {timeStr}
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>
+                        <span style={{ color: '#6b7280', fontWeight: 600 }}>INV# </span>
+                        <span style={{ color: '#1d4ed8' }}>{e.invoice_num}</span>
+                        {e.po_num && (
+                          <>
+                            <span style={{ color: '#9ca3af', margin: '0 6px' }}>·</span>
+                            <span style={{ color: '#6b7280', fontWeight: 600 }}>PO# </span>
+                            <span style={{ color: '#111827', fontWeight: 700 }}>{e.po_num}</span>
+                          </>
+                        )}
                       </div>
-                      {e.po_num && <div style={{ fontSize: 11, color: hasIC ? '#16a34a' : '#6b7280' }}>PO: {e.po_num}</div>}
-                      {e.ic_order_num && <div style={{ fontSize: 11, color: '#0369a1', fontWeight: 700, marginTop: 2 }}>IC: {e.ic_order_num}{e.ic_logged_by ? ` · ${e.ic_logged_by}` : ''}</div>}
+                      {/* Middle row: store · qty · timestamp */}
+                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                        <span style={{ fontWeight: 700, color: '#374151' }}>{e.store}</span>
+                        <span style={{ margin: '0 4px' }}>·</span>
+                        <span>Qty: {e.qty_total}</span>
+                        <span style={{ margin: '0 4px' }}>·</span>
+                        <span>{dateStr} {timeStr}</span>
+                      </div>
+                      {/* IC row */}
+                      {e.ic_order_num && (
+                        <div style={{ fontSize: 11, color: '#0369a1', fontWeight: 700, marginTop: 4 }}>
+                          IC: {e.ic_order_num}{e.ic_logged_by ? ` · ${e.ic_logged_by}` : ''}
+                        </div>
+                      )}
                       {e.ic_note && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Note: {e.ic_note}</div>}
                     </div>
                     {e.ic_status && (
