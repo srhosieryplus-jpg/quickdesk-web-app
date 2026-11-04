@@ -511,7 +511,7 @@ export default function SeasonAWPage() {
         @media (max-width: 600px) { .qs-logo { order: 3; width: 100%; justify-content: center; } }
         .paste-layout { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
         @media (max-width: 700px) { .paste-layout { grid-template-columns: 1fr; } }
-        .paste-area { width: 100%; min-height: 260px; border: 1.5px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 11px; font-family: monospace; resize: none; outline: none; }
+        .paste-area { width: 100%; min-height: 120px; max-height: 180px; border: 1.5px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 11px; font-family: monospace; resize: vertical; outline: none; }
         .paste-area:focus { border-color: ${border}; }
         .sugg-box { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1.5px solid ${border}; border-radius: 0 0 8px 8px; box-shadow: 0 4px 16px rgba(30,64,175,0.12); z-index: 200; max-height: 220px; overflow-y: auto; }
         .sugg-item { padding: 7px 12px; font-size: 12px; cursor: pointer; color: #1e293b; }
@@ -935,11 +935,8 @@ export default function SeasonAWPage() {
                 </p>
                 <div className="paste-layout" style={{ flex: 1 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <label style={{ ...labelSt, fontSize: 10 }}>PASTE EXCEL DATA HERE</label>
-                    <textarea className="paste-area" value={pasteText}
-                      onChange={e => { setPasteText(e.target.value); setPasteResult(null); if (e.target.value.trim()) setPastePreview(parsePasteData(e.target.value)); else setPastePreview([]) }}
-                      placeholder="Paste tab-separated rows here…" style={{ flex: 1 }} />
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <label style={{ ...labelSt, fontSize: 10, marginRight: 4 }}>PASTE DATA</label>
                       <button onClick={async () => {
                         if (!pastePreview.length) return
                         setPasting(true)
@@ -963,6 +960,9 @@ export default function SeasonAWPage() {
                         </span>
                       )}
                     </div>
+                    <textarea className="paste-area" value={pasteText}
+                      onChange={e => { setPasteText(e.target.value); setPasteResult(null); if (e.target.value.trim()) setPastePreview(parsePasteData(e.target.value)); else setPastePreview([]) }}
+                      placeholder="Paste tab-separated rows here…" />
                     {pasteText && pastePreview.length === 0 && (
                       <div style={{ fontSize: 12, color: '#dc2626' }}>No rows parsed. Copy directly from Excel.</div>
                     )}
