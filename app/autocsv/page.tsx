@@ -680,7 +680,8 @@ export default function AutoCSVPage() {
       {activeTab === 'logbook' && (
         <div style={{ padding: '12px 16px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
-          <div className="log-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexShrink: 0 }}>
+          <div className="log-toolbar" style={{ display: 'flex', justifyContent: 'center', padding: '0 16px', marginBottom: 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', maxWidth: 1100 }}>
             <div className="log-title-block" style={{ flexShrink: 0 }}>
               <h3 style={{ fontSize: 13, fontWeight: 800, color: '#3b1f8c', margin: 0 }}>Push Log &amp; IC Cross-Reference</h3>
               <p style={{ fontSize: 10, color: '#9b8ec4', margin: 0 }}>
@@ -709,6 +710,7 @@ export default function AutoCSVPage() {
                 🗑{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
               </button>
             </div>
+          </div>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center', padding: '0 16px 16px' }}>
