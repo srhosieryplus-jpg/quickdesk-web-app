@@ -15,12 +15,13 @@ const ALL_MODULES = [
   { id: 'autocsv',    label: 'Auto CSV' },
   { id: 'qd',         label: 'UPC Scanner' },
   { id: 'reports',    label: 'Reports' },
-  { id: 'season_ss',  label: 'SS Season' },
-  { id: 'season_aw',  label: 'AW Season' },
-  { id: 'ic',         label: 'Infinity Classics' },
-  { id: 'po_tracker', label: 'PO Tracker' },
-  { id: 'tasks',      label: 'Tasks' },
-  { id: 'settings',   label: 'Settings' },
+  { id: 'season_ss',   label: 'SS Season' },
+  { id: 'season_aw',   label: 'AW Season' },
+  { id: 'season_book', label: 'Season Book' },
+  { id: 'ic',          label: 'Infinity Classics' },
+  { id: 'po_tracker',  label: 'PO Tracker' },
+  { id: 'tasks',       label: 'Tasks' },
+  { id: 'settings',    label: 'Settings' },
 ]
 
 const DEFAULT_STORES = ['ALL','PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
