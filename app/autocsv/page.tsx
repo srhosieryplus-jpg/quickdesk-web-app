@@ -711,7 +711,8 @@ export default function AutoCSVPage() {
             </div>
           </div>
 
-          <div style={{ background: '#fff', border: `1px solid #93c5fd`, borderRadius: 8, overflow: 'auto', flex: 1 }}>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center', padding: '0 16px 16px' }}>
+          <div style={{ background: '#fff', border: `1px solid #93c5fd`, borderRadius: 8, overflow: 'auto', width: '100%', maxWidth: 900, alignSelf: 'flex-start' }}>
             <table className="log-table" style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', minWidth: 480 }}>
               <thead>
                 <tr style={{ background: '#dbeafe', position: 'sticky', top: 0, zIndex: 1 }}>
@@ -782,6 +783,7 @@ export default function AutoCSVPage() {
                 })}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       )}
