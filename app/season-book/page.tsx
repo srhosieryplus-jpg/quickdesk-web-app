@@ -262,7 +262,7 @@ export default function SeasonBookPage() {
           season, brand: activeBrand, drop_num: formDrop, store: e.store,
           units: parseInt(e.units) || null,
           initial_total: init, deposit: dep, duties: dut, balance_due: bal,
-          payment_date: e.payment_date || null,
+          payment_date: (e.deposit && e.payment_date) ? e.payment_date : null,
           comment: e.comment || null,
           currency: e.currency,
           logged_by: user.userid,
@@ -296,7 +296,7 @@ export default function SeasonBookPage() {
     const { error } = await supabase.from('season_ledger').update({
       units: parseInt(e.units) || null,
       initial_total: init, deposit: dep, duties: dut, balance_due: bal,
-      payment_date: e.payment_date || null,
+      payment_date: (dep && e.payment_date) ? e.payment_date : null,
       comment: e.comment || null,
       currency: e.currency,
       updated_at: new Date().toISOString(),
