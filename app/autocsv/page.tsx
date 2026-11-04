@@ -307,7 +307,7 @@ export default function AutoCSVPage() {
   const taStyle: React.CSSProperties = {
     width: '100%', height: '100%', resize: 'none',
     background: '#faf9ff', border: 'none', outline: 'none',
-    fontFamily: 'monospace', fontSize: 16, color: '#2d1f6e',
+    fontFamily: 'monospace', fontSize: 12, color: '#2d1f6e',
     lineHeight: 1.5, padding: '10px 12px', boxSizing: 'border-box',
   }
 
@@ -548,7 +548,7 @@ export default function AutoCSVPage() {
                   onBlur={blurZoomReset}
                   placeholder="Paste POS system response here…"
                   className="acsv-ta"
-                  style={{ ...taStyle, fontSize: 16 }}
+                  style={taStyle}
                 />
               </div>
               <div style={{ padding: '5px 12px', borderTop: `1px solid ${border}`, background: '#faf9ff', fontSize: 11, color: '#9b8ec4' }}>
@@ -567,7 +567,7 @@ export default function AutoCSVPage() {
                     onChange={e => setFixedInput(e.target.value)}
                     onBlur={blurZoomReset}
                     placeholder="Paste corrected rows here…"
-                    style={{ ...taStyle, height: 90, background: '#fff', border: `1px solid #fcd34d`, borderRadius: 6, fontSize: 16 }}
+                    style={{ ...taStyle, height: 90, background: '#fff', border: `1px solid #fcd34d`, borderRadius: 6 }}
                   />
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                     <button onClick={() => { setShowAddFixed(false); setFixedInput('') }} style={smBtn('#f3f4f6', '#6b7280')}>Cancel</button>
