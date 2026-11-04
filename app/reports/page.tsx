@@ -614,17 +614,17 @@ export default function ReportsPage() {
           <p style={{ padding: 24, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No entries found.</p>
         ) : mobileCards.map((item, i) => (
           <div key={item.id || i} style={{
-            background: item.isGreen ? '#14532d' : '#fff',
-            border: `1px solid ${item.isGreen ? '#166534' : border}`,
+            background: item.isGreen ? '#dcfce7' : '#fff',
+            border: `1px solid ${item.isGreen ? '#86efac' : border}`,
             borderRadius: 10, padding: '10px 12px', marginBottom: 8,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: item.isGreen ? '#fff' : '#111', textDecoration: (item.module === 'Task' && item.status === '✓ Done') ? 'line-through' : 'none' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: item.isGreen ? '#14532d' : '#111', textDecoration: (item.module === 'Task' && item.status === '✓ Done') ? 'line-through' : 'none' }}>
                   {item.label}
                 </div>
                 {item.sublabel ? (
-                  <div style={{ fontSize: 12, color: item.isGreen ? '#86efac' : gray, marginTop: 4 }}>
+                  <div style={{ fontSize: 12, color: item.isGreen ? '#16a34a' : gray, marginTop: 4 }}>
                     <span style={{ fontWeight: 700 }}>Note:</span> {item.sublabel}
                   </div>
                 ) : null}
@@ -639,8 +639,8 @@ export default function ReportsPage() {
                 {item.status}
               </span>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 6, fontSize: 11, color: item.isGreen ? '#86efac' : gray, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 700, color: item.isGreen ? '#4ade80' : purple }}>{item.module}</span>
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, fontSize: 11, color: item.isGreen ? '#16a34a' : gray, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700, color: item.isGreen ? '#15803d' : purple }}>{item.module}</span>
               <span>·</span>
               <span style={{ fontWeight: 700 }}>{item.userid}</span>
               <span>·</span>

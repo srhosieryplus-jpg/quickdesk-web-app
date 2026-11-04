@@ -372,10 +372,14 @@ export default function AutoCSVPage() {
           .log-note-col { display: none; }
           .log-table td, .log-table th { padding: 5px 6px !important; font-size: 10px !important; }
           .log-table th { font-size: 9px !important; letter-spacing: 0 !important; }
+          .log-table-wrap { display: none !important; }
+          .log-cards { display: block !important; padding: 8px 12px; }
         }
         @media (min-width: 701px) {
           .log-col-hide { display: inline; }
           .log-note-col { display: table-cell; }
+          .log-table-wrap { display: flex !important; }
+          .log-cards { display: none !important; }
         }
       `}</style>
 
@@ -725,7 +729,7 @@ export default function AutoCSVPage() {
           </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center', padding: '0 16px 16px' }}>
+          <div className="log-table-wrap" style={{ flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center', padding: '0 16px 16px' }}>
           <div style={{ background: '#fff', border: `1px solid #93c5fd`, overflow: 'auto', width: '100%', maxWidth: 1100, alignSelf: 'flex-start' }}>
             <table className="log-table" style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', minWidth: 480 }}>
               <thead>
@@ -798,6 +802,45 @@ export default function AutoCSVPage() {
               </tbody>
             </table>
           </div>
+          </div>
+
+          {/* ── MOBILE CARDS ── */}
+          <div className="log-cards" style={{ display: 'none' }}>
+            {logLoading ? (
+              <p style={{ padding: 24, color: '#6b7280', fontSize: 13 }}>Loading…</p>
+            ) : filteredLog.length === 0 ? (
+              <p style={{ padding: 24, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No entries found.</p>
+            ) : filteredLog.map((e) => {
+              const hasIC = !!e.ic_order_num
+              const d = new Date(e.exported_at)
+              const dateStr = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`
+              const h = d.getHours() % 12 || 12
+              const timeStr = `${h}:${String(d.getMinutes()).padStart(2,'0')} ${d.getHours() >= 12 ? 'PM' : 'AM'}`
+              const cardBg = hasIC ? '#dcfce7' : '#fff'
+              const cardBorder = hasIC ? '#86efac' : '#93c5fd'
+              return (
+                <div key={e.id} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: hasIC ? '#14532d' : '#1d4ed8' }}>{e.invoice_num}</div>
+                      <div style={{ fontSize: 11, color: hasIC ? '#16a34a' : '#6b7280', marginTop: 2 }}>
+                        {e.store} · Qty: {e.qty_total} · {dateStr} {timeStr}
+                      </div>
+                      {e.po_num && <div style={{ fontSize: 11, color: hasIC ? '#16a34a' : '#6b7280' }}>PO: {e.po_num}</div>}
+                      {e.ic_order_num && <div style={{ fontSize: 11, color: '#0369a1', fontWeight: 700, marginTop: 2 }}>IC: {e.ic_order_num}{e.ic_logged_by ? ` · ${e.ic_logged_by}` : ''}</div>}
+                      {e.ic_note && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Note: {e.ic_note}</div>}
+                    </div>
+                    {e.ic_status && (
+                      <span style={{
+                        background: e.ic_status.toLowerCase().includes('push') ? '#dcfce7' : '#eff6ff',
+                        color: e.ic_status.toLowerCase().includes('push') ? '#15803d' : '#1d4ed8',
+                        borderRadius: 8, padding: '2px 8px', fontWeight: 700, fontSize: 10, flexShrink: 0,
+                      }}>{e.ic_status}</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
