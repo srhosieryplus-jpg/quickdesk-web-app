@@ -288,14 +288,20 @@ export default function SeasonAWPage() {
       if (data) setState({ phase: 'found', row: data as AWRow })
       else setState({ phase: 'notfound', term: inv, byBrand: false })
     } else {
-      // Brand search
-      let q = supabase.from('season_aw').select('*').ilike('brand', `%${br}%`)
-      if (user.store !== 'ALL') q = q.eq('store', user.store)
-      const { data } = await q.order('created_at', { ascending: false })
-      setSearching(false)
-      const results = (data || []) as AWRow[]
-      if (results.length === 0) setState({ phase: 'notfound', term: br, byBrand: true })
-      else setState({ phase: 'brand', results, term: br })
+      // Brand search — first try in-memory from already-loaded rows, fall back to DB
+      const inMemory = storeRows.filter(r => r.brand?.toLowerCase().includes(br.toLowerCase()))
+      if (inMemory.length > 0) {
+        setSearching(false)
+        setState({ phase: 'brand', results: inMemory, term: br })
+      } else {
+        let q = supabase.from('season_aw').select('*').ilike('brand', `%${br}%`)
+        if (user.store !== 'ALL') q = q.eq('store', user.store)
+        const { data } = await q.order('created_at', { ascending: false })
+        setSearching(false)
+        const results = (data || []) as AWRow[]
+        if (results.length === 0) setState({ phase: 'notfound', term: br, byBrand: true })
+        else setState({ phase: 'brand', results, term: br })
+      }
     }
   }
 
