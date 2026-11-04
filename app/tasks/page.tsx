@@ -148,6 +148,16 @@ export default function TasksPage() {
     return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`
   }
 
+  function formatDateTime(iso: string) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const date = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`
+    const h = d.getHours() % 12 || 12
+    const m = String(d.getMinutes()).padStart(2, '0')
+    const ampm = d.getHours() >= 12 ? 'PM' : 'AM'
+    return `${date} ${h}:${m} ${ampm}`
+  }
+
   const isAdmin = user?.store === 'ALL'
 
   const filtered = tasks.filter(t => {
@@ -172,6 +182,7 @@ export default function TasksPage() {
         .tasks-center { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; pointer-events: none; }
         .tasks-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .tasks-form-row { display: flex; align-items: center; gap: 8px; }
+        .tasks-time-col { display: inline; }
         .tasks-search { width: 100%; max-width: 900px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .tasks-search input[type=text] { flex: 1; min-width: 120px; }
         .tasks-refresh { display: inline-block; }
@@ -179,6 +190,7 @@ export default function TasksPage() {
         .tasks-cards { display: none; }
         @media (max-width: 600px) {
           .tasks-center { order: 3; width: 100%; }
+          .tasks-time-col { display: none !important; }
           .tasks-form { flex-direction: column; align-items: stretch; gap: 6px; }
           .tasks-form-row { width: 100%; }
           .tasks-form-row label { min-width: 44px; flex-shrink: 0; }
@@ -286,7 +298,9 @@ export default function TasksPage() {
               <thead>
                 <tr style={{ background: '#dbeafe', position: 'sticky', top: 0, zIndex: 1 }}>
                   {['Date', 'Submitted By', 'Store ID', 'Task', 'Note', 'Done'].map(h => (
-                    <th key={h} style={{ padding: '6px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: tealD, borderBottom: `2px solid ${border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ padding: '6px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: tealD, borderBottom: `2px solid ${border}`, whiteSpace: 'nowrap' }}>
+                      {h === 'Date' ? <><span>Date</span><span className="tasks-time-col"> / Time</span></> : h}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -303,7 +317,9 @@ export default function TasksPage() {
                   return (
                     <tr key={t.id} style={{ background: rowBg, cursor: 'context-menu' }}
                       onContextMenu={ev => handleRowRightClick(ev, t.id)}>
-                      <td style={{ ...tdSt, color: dimColor, whiteSpace: 'nowrap', fontSize: 11 }}>{formatDate(t.saved_at)}</td>
+                      <td style={{ ...tdSt, color: dimColor, whiteSpace: 'nowrap', fontSize: 11 }}>
+                        {formatDate(t.saved_at)}<span className="tasks-time-col" style={{ color: dimColor, fontSize: 10 }}> {formatDateTime(t.saved_at).split(' ').slice(1).join(' ')}</span>
+                      </td>
                       <td style={{ ...tdSt, color: t.done ? '#15803d' : '#1d4ed8', fontWeight: 700 }}>{t.logged_by}</td>
                       <td style={{ ...tdSt, color: textColor, fontWeight: 600 }}>{t.store}</td>
                       <td style={{ ...tdSt, color: textColor, textDecoration: t.done ? 'line-through' : 'none' }}>{t.task}</td>

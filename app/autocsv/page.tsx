@@ -711,79 +711,72 @@ export default function AutoCSVPage() {
             </div>
           </div>
 
-          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'auto', flex: 1, boxShadow: '0 2px 16px rgba(124,58,237,0.07)' }}>
-            <table className="log-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                <tr style={{ background: purpleLight, borderBottom: `2px solid ${border}` }}>
-                  <th style={{ padding: '10px 6px', width: 28 }}>
+          <div style={{ background: '#fff', border: `1px solid #93c5fd`, borderRadius: 8, overflow: 'auto', flex: 1 }}>
+            <table className="log-table" style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', minWidth: 480 }}>
+              <thead>
+                <tr style={{ background: '#dbeafe', position: 'sticky', top: 0, zIndex: 1 }}>
+                  <th style={{ padding: '6px 8px', width: 28, borderBottom: '2px solid #93c5fd' }}>
                     <input type="checkbox"
                       checked={filteredLog.length > 0 && selectedIds.size === filteredLog.length}
                       onChange={() => toggleSelectAll(filteredLog.map(e => e.id))}
                       style={{ cursor: 'pointer' }}
                     />
                   </th>
-                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Date</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Invoice #</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>PO #</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Store</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>CSV</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>POS</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: purple, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap', borderRight: `2px solid ${border}` }}>✓</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>IC #</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>By</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
-                  {/* Note — hidden on mobile */}
-                  <th className="log-note-col" style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Note</th>
+                  {['Date / Time', 'Invoice #', 'PO #', 'Store', 'CSV Qty', 'POS Qty', '✓', 'IC #', 'By', 'Status', 'Note'].map((h, hi) => (
+                    <th key={h} style={{ padding: '6px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#1e3a8a', borderBottom: '2px solid #93c5fd', whiteSpace: 'nowrap', ...(hi === 6 ? { textAlign: 'center' as const, borderRight: '2px solid #93c5fd' } : {}), ...(hi >= 7 ? { color: '#0369a1' } : {}) }}
+                      className={h === 'Note' ? 'log-note-col' : ''}
+                    >{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {logLoading ? (
-                  <tr><td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd', fontSize: 13 }}>Loading…</td></tr>
+                  <tr><td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>Loading…</td></tr>
                 ) : filteredLog.length === 0 ? (
-                  <tr><td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#c4b5fd' }}>No entries yet</td></tr>
+                  <tr><td colSpan={12} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No entries found.</td></tr>
                 ) : filteredLog.map((e, i) => {
                   const csvQty = e.qty_total
                   const posQty = e.pos_qty ?? null
                   const match  = posQty !== null ? csvQty === posQty : null
                   const hasIC  = !!e.ic_order_num
                   const isSel  = selectedIds.has(e.id)
-                  const d  = new Date(e.exported_at)
+                  const d = new Date(e.exported_at)
                   const dateStr = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`
-                  const timeStr = ` ${String(d.getHours()%12||12).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-                  const ts = dateStr + timeStr
+                  const h = d.getHours() % 12 || 12
+                  const timeStr = ` ${h}:${String(d.getMinutes()).padStart(2,'0')} ${d.getHours() >= 12 ? 'PM' : 'AM'}`
+                  const rowBg = isSel ? '#ede9fe' : hasIC ? (i%2===0 ? '#dcfce7' : '#d1fae5') : i%2===0 ? '#fff' : '#eff6ff'
+                  const textColor = hasIC ? '#15803d' : '#111827'
+                  const dimColor  = hasIC ? '#16a34a' : '#6b7280'
                   return (
-                    <tr key={e.id} style={{
-                      borderTop: i === 0 ? 'none' : `1px solid ${hasIC ? '#bbf7d0' : '#f0ebff'}`,
-                      background: isSel ? '#ede9fe' : hasIC ? (i%2===0 ? '#dcfce7' : '#d1fae5') : i%2===0 ? '#fff' : '#faf8ff',
-                    }}>
-                      <td style={{ padding: '7px 6px', textAlign: 'center' }}>
-                        <input type="checkbox" checked={isSel} onChange={() => toggleSelect(e.id)} style={{ cursor: 'pointer' }} />
+                    <tr key={e.id} style={{ background: rowBg, cursor: 'default' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>
+                        <input type="checkbox" checked={isSel} onChange={() => toggleSelect(e.id)} style={{ cursor: 'pointer', width: 13, height: 13 }} />
                       </td>
-                      <td style={{ padding: '7px 8px', fontSize: 11, color: '#9b8ec4', whiteSpace: 'nowrap' }}>
-                        {dateStr}<span className="log-col-hide">{timeStr}</span>
+                      <td style={{ padding: '6px 12px', fontSize: 11, color: dimColor, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb' }}>
+                        {dateStr}<span className="log-col-hide" style={{ fontSize: 10 }}>{timeStr}</span>
                       </td>
-                      <td style={{ padding: '7px 8px', fontSize: 12, fontWeight: 700, color: '#3b1f8c', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{e.invoice_num}</td>
-                      <td style={{ padding: '7px 8px', fontSize: 12, color: '#333', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{e.po_num || '—'}</td>
-                      <td style={{ padding: '7px 8px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{e.store}</td>
-                      <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center', fontFamily: 'monospace' }}>{csvQty}</td>
-                      <td style={{ padding: '7px 8px', fontSize: 12, color: posQty !== null ? '#333' : '#d1d5db', textAlign: 'center', fontFamily: 'monospace' }}>{posQty ?? '—'}</td>
-                      <td style={{ padding: '7px 8px', fontSize: 13, textAlign: 'center', borderRight: `2px solid ${border}` }}>
+                      <td style={{ padding: '6px 12px', fontSize: 12, fontWeight: 700, color: hasIC ? '#15803d' : '#1d4ed8', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb' }}>{e.invoice_num}</td>
+                      <td style={{ padding: '6px 12px', fontSize: 12, color: textColor, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb' }}>{e.po_num || '—'}</td>
+                      <td style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, color: textColor, borderBottom: '1px solid #e5e7eb' }}>{e.store}</td>
+                      <td style={{ padding: '6px 12px', fontSize: 12, textAlign: 'center', color: textColor, borderBottom: '1px solid #e5e7eb' }}>{csvQty}</td>
+                      <td style={{ padding: '6px 12px', fontSize: 12, color: posQty !== null ? textColor : '#d1d5db', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>{posQty ?? '—'}</td>
+                      <td style={{ padding: '6px 12px', fontSize: 13, textAlign: 'center', borderRight: '2px solid #93c5fd', borderBottom: '1px solid #e5e7eb' }}>
                         {match === true ? <span style={{ color: '#16a34a', fontWeight: 800 }}>✓</span>
                           : match === false ? <span style={{ color: '#dc2626', fontWeight: 800 }}>✗</span>
-                          : ''}
+                          : <span style={{ color: '#d1d5db' }}>—</span>}
                       </td>
-                      <td style={{ padding: '7px 8px', fontSize: 12, fontFamily: 'monospace', color: hasIC ? '#0369a1' : '#d1d5db', fontWeight: hasIC ? 700 : 400, whiteSpace: 'nowrap' }}>{e.ic_order_num || '—'}</td>
-                      <td style={{ padding: '7px 8px', fontSize: 12, color: e.ic_logged_by ? '#0369a1' : '#6b7280', whiteSpace: 'nowrap' }}>{e.ic_logged_by || <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                      <td style={{ padding: '7px 8px', fontSize: 11, whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '6px 12px', fontSize: 12, color: hasIC ? '#0369a1' : '#d1d5db', fontWeight: hasIC ? 700 : 400, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb' }}>{e.ic_order_num || '—'}</td>
+                      <td style={{ padding: '6px 12px', fontSize: 12, color: e.ic_logged_by ? '#0369a1' : '#d1d5db', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb' }}>{e.ic_logged_by || '—'}</td>
+                      <td style={{ padding: '6px 12px', fontSize: 11, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb' }}>
                         {e.ic_status ? (
                           <span style={{
                             background: e.ic_status.toLowerCase().includes('push') ? '#dcfce7' : '#eff6ff',
                             color: e.ic_status.toLowerCase().includes('push') ? '#15803d' : '#1d4ed8',
                             borderRadius: 4, padding: '2px 6px', fontWeight: 700, fontSize: 10,
                           }}>{e.ic_status}</span>
-                        ) : ''}
+                        ) : <span style={{ color: '#d1d5db' }}>—</span>}
                       </td>
-                      <td className="log-note-col" style={{ padding: '7px 8px', fontSize: 11, color: '#6b7280' }}>{e.ic_note || ''}</td>
+                      <td className="log-note-col" style={{ padding: '6px 12px', fontSize: 11, color: dimColor, borderBottom: '1px solid #e5e7eb' }}>{e.ic_note || ''}</td>
                     </tr>
                   )
                 })}
