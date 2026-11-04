@@ -380,6 +380,7 @@ export default function SeasonBookPage() {
       <style>{`
         * { box-sizing: border-box; }
         .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: relative; z-index: 100; }
+        .sb-subbar { padding: 8px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; }
         .sb-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
         .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; }
         .sb-main { flex: 1; overflow-y: auto; padding: 16px; }
@@ -458,77 +459,90 @@ export default function SeasonBookPage() {
 
       {/* Header */}
       <div className="sb-header">
-        {/* Hamburger season button */}
-        <button onClick={() => setShowSeasonPanel(true)}
-          title="Switch season"
-          style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', cursor: 'pointer', borderRadius: 6, padding: '5px 8px', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', width: 34, height: 34, flexShrink: 0 }}>
-          <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
-          <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
-          <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
-        </button>
+        {/* Left: hamburger + home */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+          <button onClick={() => setShowSeasonPanel(true)} title="Switch season"
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', cursor: 'pointer', borderRadius: 6, padding: '5px 7px', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', width: 34, height: 34, flexShrink: 0 }}>
+            <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
+            <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
+            <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
+          </button>
+          <button onClick={() => router.push('/selector')}
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
+            ← Home
+          </button>
+        </div>
 
-        <button onClick={() => router.push('/selector')}
-          style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
-          ← Home
-        </button>
-        <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.25)', flexShrink: 0 }} />
-        <span style={{ fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '0.08em', flexShrink: 0 }}>📒 SEASON BOOK</span>
+        {/* Center: title + season badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+          <span style={{ fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>📒 SEASON BOOK</span>
+          <span style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', fontSize: 12, fontWeight: 800, borderRadius: 12, padding: '3px 10px', border: '1.5px solid rgba(255,255,255,0.4)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            onClick={() => setShowSeasonPanel(true)}>
+            {season}
+          </span>
+        </div>
 
-        {/* Active season badge */}
-        <span style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', fontSize: 12, fontWeight: 800, borderRadius: 12, padding: '3px 10px', border: '1.5px solid rgba(255,255,255,0.4)', cursor: 'pointer', flexShrink: 0 }}
-          onClick={() => setShowSeasonPanel(true)}>
-          {season}
-        </span>
+        {/* Right: action buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
+          <button onClick={() => {
+            if (activeBrand) { openNewEntry(activeBrand) }
+            else { showToast('⚠️ Search and select a brand below first', 'err') }
+          }}
+            style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+            + New
+          </button>
+          <button onClick={() => {
+            if (!activeBrand) { showToast('⚠️ Select a brand first', 'err'); return }
+            setQuickPayBrand(activeBrand); setQuickPayAmt(''); setQuickPayDate(today()); setModal('quick-pay')
+          }}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            Payment
+          </button>
+        </div>
+      </div>
 
-        <div style={{ flex: 1 }} />
-
-        {/* Header search */}
-        <div ref={headerSearchRef} style={{ position: 'relative', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.15)', borderRadius: 7, border: '1.5px solid rgba(255,255,255,0.3)', overflow: 'hidden' }}>
-            <span style={{ padding: '0 8px', color: '#e9d5ff', fontSize: 14 }}>🔍</span>
+      {/* Sub-bar: search */}
+      <div className="sb-subbar">
+        <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+          <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
+            <span style={{ padding: '0 8px', color: gray, fontSize: 14 }}>🔍</span>
             <input
               value={headerSearch}
               onChange={e => { setHeaderSearch(e.target.value); setShowHeaderDrop(true) }}
               onFocus={() => setShowHeaderDrop(true)}
-              placeholder="Search brand…"
-              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: 12, fontWeight: 500, padding: '5px 8px 5px 0', width: 140 }}
+              placeholder="Search or select a brand…"
+              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#111', fontSize: 13, fontWeight: 500, padding: '6px 8px 6px 0', flex: 1 }}
             />
             {headerSearch && (
               <button onClick={() => { setHeaderSearch(''); setShowHeaderDrop(false) }}
-                style={{ background: 'none', border: 'none', color: '#e9d5ff', cursor: 'pointer', padding: '0 6px', fontSize: 14 }}>✕</button>
+                style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', padding: '0 8px', fontSize: 14 }}>✕</button>
             )}
           </div>
           {showHeaderDrop && headerSearchResults.length > 0 && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 8, zIndex: 300, minWidth: 200, maxHeight: 240, overflowY: 'auto', boxShadow: '0 6px 24px rgba(0,0,0,0.14)' }}>
+            <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 8, zIndex: 300, maxHeight: 240, overflowY: 'auto', boxShadow: '0 6px 24px rgba(0,0,0,0.14)' }}>
               {headerSearchResults.map(b => (
                 <div key={b}
                   onClick={() => { setActiveBrand(b); setHeaderSearch(''); setShowHeaderDrop(false) }}
-                  style={{ padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', color: '#374151' }}
+                  style={{ padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
                   onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                  {b}
+                  <span>{b}</span>
                   {brandsInSeason.includes(b) && (
-                    <span style={{ fontSize: 10, color: purpleD, marginLeft: 6, fontWeight: 700 }}>in {season}</span>
+                    <span style={{ fontSize: 10, color: purpleD, fontWeight: 700, background: '#ede9fe', borderRadius: 6, padding: '1px 6px' }}>in {season}</span>
                   )}
                 </div>
               ))}
             </div>
           )}
         </div>
-
-        {/* Action buttons */}
-        <button onClick={() => activeBrand ? openNewEntry(activeBrand) : setShowHeaderDrop(true)}
-          style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}>
-          + New
-        </button>
-        <button onClick={() => {
-          const brand = activeBrand
-          if (!brand) { showToast('⚠️ Select a brand first', 'err'); return }
-          setQuickPayBrand(brand); setQuickPayAmt(''); setQuickPayDate(today()); setModal('quick-pay')
-        }}
-          style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
-          Payment
-        </button>
+        {activeBrand && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: purpleD }}>
+            <span style={{ color: gray, fontWeight: 400 }}>Viewing:</span>
+            {activeBrand}
+            <button onClick={() => setActiveBrand(null)}
+              style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 }}>✕</button>
+          </div>
+        )}
       </div>
 
       {/* Body */}
