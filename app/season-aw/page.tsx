@@ -467,10 +467,10 @@ export default function SeasonAWPage() {
         .result-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; padding: 16px; margin: 0; box-shadow: 0 2px 12px rgba(30,64,175,0.07); }
         .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
         .brand-row:hover { background: ${blueL}; border-color: ${border}; }
-        .aw-table { border-collapse: collapse; width: 100%; font-size: 11px; }
-        .aw-table th { background: #dbeafe; color: ${blueD}; font-size: 10px; font-weight: 800; padding: 5px 8px; text-align: left; border-bottom: 2px solid ${border}; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
-        .aw-table td { padding: 3px 8px; border-bottom: 1px solid #e0e7ff; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; vertical-align: middle; }
-        .aw-table tr:hover td { filter: brightness(0.96); }
+        .aw-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+        .aw-table th { background: #dbeafe; color: #1e3a8a; font-size: 11px; font-weight: 700; padding: 7px 10px; text-align: left; border-bottom: 2px solid #93c5fd; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+        .aw-table td { padding: 5px 10px; border-bottom: 1px solid #e5e7eb; height: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; vertical-align: middle; }
+        .aw-table tr:hover td { filter: brightness(0.97); }
         .ss-table { border-collapse: collapse; width: 100%; font-size: 11px; }
         .ss-table th { background: #e0e7ff; color: #1e3a8a; font-size: 10px; font-weight: 800; padding: 5px 8px; text-align: left; border: 1px solid #c7d2fe; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
         .ss-table td { padding: 3px 8px; border: 1px solid #e0e7ff; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
@@ -767,8 +767,9 @@ export default function SeasonAWPage() {
         {tableLoading ? (
           <p style={{ padding: 24, color: '#93c5fd', fontSize: 13 }}>Loading…</p>
         ) : (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 8px 40px' }}>
-            <table className="aw-table" style={{ maxWidth: 900 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 16px 40px' }}>
+          <div style={{ background: '#fff', border: '1px solid #93c5fd', overflow: 'auto', width: '100%', maxWidth: 900, alignSelf: 'flex-start' }}>
+            <table className="aw-table">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -790,24 +791,24 @@ export default function SeasonAWPage() {
                 )}
                 {filteredStore.map((r, i) => {
                   const logged = r.logged && !r.flagged
-                  const bg = r.flagged ? '#fffbeb' : logged ? (i % 2 === 0 ? '#14532d' : '#166534') : (i % 2 === 0 ? '#fff' : '#f8faff')
-                  const txt = logged ? '#86efac' : r.flagged ? '#92400e' : '#1f2937'
-                  const dim = logged ? '#4ade80' : r.flagged ? '#b45309' : '#6b7280'
+                  const bg = r.flagged ? '#fffbeb' : logged ? (i % 2 === 0 ? '#dcfce7' : '#d1fae5') : (i % 2 === 0 ? '#fff' : '#eff6ff')
+                  const txt = logged ? '#166534' : r.flagged ? '#92400e' : '#1f2937'
+                  const dim = logged ? '#15803d' : r.flagged ? '#b45309' : '#6b7280'
                   return (
                     <tr key={r.id} style={{ background: bg, cursor: 'pointer' }}
                       onClick={() => { setState({ phase: 'found', row: r }); setInvoiceQ(r.invoice_no); setLoggedRow(r.logged ? r : null) }}
                       onContextMenu={e => { e.preventDefault(); setCtxMenu({ id: r.id, x: e.clientX, y: e.clientY }) }}>
-                      <td style={{ color: dim, whiteSpace: 'nowrap', fontSize: 10 }}>{fmtDate(r.created_at)}</td>
-                      {isAdmin && <td style={{ fontWeight: 700, color: logged ? '#93c5fd' : blueD, fontSize: 10 }}>{r.store}</td>}
+                      <td style={{ color: dim, whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(r.created_at)}</td>
+                      {isAdmin && <td style={{ fontWeight: 700, color: logged ? '#15803d' : blueD, fontSize: 11 }}>{r.store}</td>}
                       <td style={{ fontWeight: 600, color: txt }}>{r.brand}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: logged ? '#fff' : blueD, fontWeight: 700 }}>{r.invoice_no}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: 12, color: logged ? '#14532d' : blueD, fontWeight: 700 }}>{r.invoice_no}</td>
                       <td className="aw-col-hide" style={{ fontFamily: 'monospace', fontSize: 11, color: txt }}>{r.po_no || '—'}</td>
                       <td className="aw-col-hide" style={{ textAlign: 'right', color: txt }}>{r.qty ?? '—'}</td>
                       <td>
                         {r.flagged
                           ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>⚑ Flagged</span>
                           : r.logged
-                            ? <span style={{ background: '#166534', color: '#86efac', border: '1px solid #4ade80', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>✓ Logged</span>
+                            ? <span style={{ background: '#bbf7d0', color: '#14532d', border: '1px solid #86efac', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>✓ Logged</span>
                             : <span style={{ background: '#e0e7ff', color: blueD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px' }}>Pending</span>
                         }
                       </td>
@@ -818,6 +819,7 @@ export default function SeasonAWPage() {
                 })}
               </tbody>
             </table>
+          </div>
           </div>
         )}
       </div>

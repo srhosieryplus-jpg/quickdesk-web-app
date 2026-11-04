@@ -250,9 +250,9 @@ export default function ReportsPage() {
         * { box-sizing: border-box; }
         .rpt-header { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid ${border}; background: rgba(255,255,255,0.6); backdrop-filter: blur(8px); }
         .rpt-center { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; pointer-events: none; }
-        .rpt-table { border-collapse: collapse; width: 100%; font-size: 11px; }
-        .rpt-table th { padding: 5px 8px; text-align: left; font-size: 10px; font-weight: 800; color: ${purpleD}; border-bottom: 2px solid ${border}; white-space: nowrap; background: #e8e4f8; position: sticky; top: 0; z-index: 1; }
-        .rpt-table td { padding: 3px 8px; font-size: 11px; vertical-align: middle; border-bottom: 1px solid #e5e7eb; height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+        .rpt-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+        .rpt-table th { padding: 7px 10px; text-align: left; font-size: 11px; font-weight: 700; color: #1e3a8a; border-bottom: 2px solid #93c5fd; white-space: nowrap; background: #dbeafe; position: sticky; top: 0; z-index: 1; }
+        .rpt-table td { padding: 5px 10px; font-size: 12px; vertical-align: middle; border-bottom: 1px solid #e5e7eb; height: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
         .rpt-table tr:hover td { filter: brightness(0.97); }
         .rpt-refresh { display: inline-block; }
         .rpt-all-modules { display: inline; }
@@ -351,7 +351,8 @@ export default function ReportsPage() {
         {loading ? (
           <p style={{ padding: 32, color: '#9b8ec4', fontSize: 13 }}>Loading…</p>
         ) : (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 8px 40px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '0 16px 40px' }}>
+          <div style={{ background: '#fff', border: '1px solid #93c5fd', overflow: 'auto', width: '100%', maxWidth: 960, alignSelf: 'flex-start' }}>
 
             {/* OVERVIEW */}
             {tab === 'overview' && (
@@ -375,16 +376,16 @@ export default function ReportsPage() {
                     const rowBg = (item.module === 'Task' && item.status === '✓ Done') ||
                                   (item.module === 'IC' && !item.isPending) ||
                                   (item.module === 'UPC' && item.upcState === 'complete')
-                      ? (i % 2 === 0 ? '#14532d' : '#166534')
-                      : (i % 2 === 0 ? '#fff' : '#faf8ff')
-                    const isGreen = rowBg === '#14532d' || rowBg === '#166534'
+                      ? (i % 2 === 0 ? '#dcfce7' : '#d1fae5')
+                      : (i % 2 === 0 ? '#fff' : '#eff6ff')
+                    const isGreen = rowBg === '#dcfce7' || rowBg === '#d1fae5'
                     return (
                       <tr key={i} style={{ background: rowBg }}>
-                        <td style={{ color: isGreen ? '#4ade80' : gray, fontSize: 10 }}>{(() => { const f = formatDate(item.time); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
-                        <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purpleD }}>{item.module}</td>
-                        <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purpleD }}>{item.store === 'ALL' ? '—' : item.store}</td>
-                        <td style={{ fontWeight: 700, color: isGreen ? '#86efac' : purple }}>{item.userid}</td>
-                        <td style={{ color: isGreen ? '#fff' : '#111', maxWidth: 260 }}>{item.label}</td>
+                        <td style={{ color: isGreen ? '#15803d' : gray, fontSize: 11 }}>{(() => { const f = formatDate(item.time); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
+                        <td style={{ fontWeight: 700, color: isGreen ? '#166534' : purpleD }}>{item.module}</td>
+                        <td style={{ fontWeight: 700, color: isGreen ? '#166534' : purpleD }}>{item.store === 'ALL' ? '—' : item.store}</td>
+                        <td style={{ fontWeight: 700, color: isGreen ? '#166534' : purple }}>{item.userid}</td>
+                        <td style={{ color: isGreen ? '#14532d' : '#111', maxWidth: 260 }}>{item.label}</td>
                         <td>
                           <span
                             onClick={isAdmin && item.module === 'UPC' && item.id && item.upcState ? () => cycleUpcStatus(item.id!, item.upcState!) : undefined}
@@ -417,21 +418,21 @@ export default function ReportsPage() {
                   {filteredTasks.length === 0 && <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No tasks found.</td></tr>}
                   {filteredTasks.map((r, i) => {
                     const done = r.done
-                    const rowBg = done ? (i%2===0 ? '#14532d' : '#166534') : (i%2===0 ? '#fff' : '#faf8ff')
-                    const txt = done ? '#86efac' : '#1f2937'
-                    const dim = done ? '#4ade80' : gray
+                    const rowBg = done ? (i%2===0 ? '#dcfce7' : '#d1fae5') : (i%2===0 ? '#fff' : '#eff6ff')
+                    const txt = done ? '#166534' : '#1f2937'
+                    const dim = done ? '#15803d' : gray
                     return (
                       <tr key={r.id} style={{ background: rowBg }}>
-                        <td style={{ color: dim, fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
-                        <td style={{ color: done ? '#86efac' : purple, fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
+                        <td style={{ color: dim, fontSize: 11 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
+                        <td style={{ color: done ? '#166534' : purple, fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
                         <td style={{ color: txt, fontWeight: 600 }}>{r.store}</td>
-                        <td style={{ color: done ? '#fff' : '#111', maxWidth: 300 }}>{r.task}</td>
+                        <td style={{ color: done ? '#14532d' : '#111', maxWidth: 300 }}>{r.task}</td>
                         <td className="ic-col-hide" style={{ color: dim, maxWidth: 200 }}>{r.note || ''}</td>
                         <td>
                           <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700,
-                            background: done ? '#166534' : '#fef3c7',
-                            color: done ? '#86efac' : '#92400e',
-                            border: done ? '1px solid #4ade80' : '1px solid #fcd34d',
+                            background: done ? '#bbf7d0' : '#fef3c7',
+                            color: done ? '#14532d' : '#92400e',
+                            border: done ? '1px solid #86efac' : '1px solid #fcd34d',
                           }}>
                             {done ? '✓ Done' : 'Open'}
                           </span>
@@ -461,7 +462,7 @@ export default function ReportsPage() {
                 <tbody>
                   {filteredSeason.length === 0 && <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No season logs found.</td></tr>}
                   {filteredSeason.map((r, i) => (
-                    <tr key={r.id} style={{ background: i%2===0 ? '#fff' : '#faf8ff' }}>
+                    <tr key={r.id} style={{ background: i%2===0 ? '#fff' : '#eff6ff' }}>
                       <td style={{ color: gray, fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
                       <td style={{ color: purple, fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
                       <td style={{ fontWeight: 600 }}>{r.store}</td>
@@ -499,27 +500,27 @@ export default function ReportsPage() {
                   {filteredIc.length === 0 && <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No IC entries found.</td></tr>}
                   {filteredIc.map((r, i) => {
                     const pushed = r.status === 'Pushed In'
-                    const rowBg = pushed ? (i%2===0 ? '#14532d' : '#166534') : (i%2===0 ? '#fff' : '#faf8ff')
-                    const txt = pushed ? '#86efac' : '#1f2937'
-                    const dim = pushed ? '#4ade80' : gray
+                    const rowBg = pushed ? (i%2===0 ? '#dcfce7' : '#d1fae5') : (i%2===0 ? '#fff' : '#eff6ff')
+                    const txt = pushed ? '#166534' : '#1f2937'
+                    const dim = pushed ? '#15803d' : gray
                     return (
                       <tr key={r.id} style={{ background: rowBg }}>
-                        <td style={{ color: dim, fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
-                        <td style={{ color: pushed ? '#86efac' : purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
+                        <td style={{ color: dim, fontSize: 11 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
+                        <td style={{ color: pushed ? '#166534' : purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
                         <td style={{ color: txt, fontWeight: 600 }}>{r.store}</td>
-                        <td style={{ color: pushed ? '#fff' : purpleD, fontWeight: 700, fontFamily: 'monospace' }}>{r.order_num}</td>
+                        <td style={{ color: pushed ? '#14532d' : purpleD, fontWeight: 700, fontFamily: 'monospace' }}>{r.order_num}</td>
                         <td>
                           <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700,
-                            background: pushed ? '#166534' : '#fef3c7',
-                            color: pushed ? '#86efac' : '#92400e',
-                            border: pushed ? '1px solid #4ade80' : '1px solid #fcd34d',
+                            background: pushed ? '#bbf7d0' : '#fef3c7',
+                            color: pushed ? '#14532d' : '#92400e',
+                            border: pushed ? '1px solid #86efac' : '1px solid #fcd34d',
                           }}>
                             {pushed ? '✓ Pushed' : 'Pending'}
                           </span>
                         </td>
-                        <td className="ic-col-hide" style={{ color: pushed ? '#fff' : '#374151' }}>{r.po_num || ''}</td>
-                        <td className="ic-col-hide" style={{ color: pushed ? '#fff' : '#374151', fontWeight: pushed ? 600 : 400 }}>{pushed ? r.qty_pushed : ''}</td>
-                        <td className="ic-col-hide" style={{ color: dim, maxWidth: 160 }}>{r.note || ''}</td>
+                        <td className="ic-col-hide" style={{ color: txt }}>{r.po_num || '—'}</td>
+                        <td className="ic-col-hide" style={{ color: txt, fontWeight: pushed ? 600 : 400 }}>{pushed ? r.qty_pushed : '—'}</td>
+                        <td className="ic-col-hide" style={{ color: dim, maxWidth: 160 }}>{r.note || '—'}</td>
                       </tr>
                     )
                   })}
@@ -549,25 +550,25 @@ export default function ReportsPage() {
                     const totalQty = rows.reduce((s, x) => s + (x.qty || 0), 0)
                     const st = upcStatus(r)
                     const rowBg = st === 'complete'
-                      ? (i%2===0 ? '#14532d' : '#166534')
-                      : (i%2===0 ? '#fff' : '#faf8ff')
+                      ? (i%2===0 ? '#dcfce7' : '#d1fae5')
+                      : (i%2===0 ? '#fff' : '#eff6ff')
                     const isGreen = st === 'complete'
                     return (
                       <tr key={r.id} style={{ background: rowBg }}>
-                        <td style={{ color: isGreen ? '#4ade80' : gray, fontSize: 10 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
-                        <td style={{ color: isGreen ? '#86efac' : purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
-                        <td style={{ fontWeight: 600, color: isGreen ? '#86efac' : '#1f2937' }}>{r.store}</td>
-                        <td style={{ color: isGreen ? '#fff' : purpleD, fontWeight: 700 }}>{r.name}</td>
-                        <td className="ic-col-hide" style={{ textAlign: 'center', color: isGreen ? '#4ade80' : gray }}>{rows.length}</td>
-                        <td className="ic-col-hide" style={{ textAlign: 'center', fontWeight: 700, color: isGreen ? '#86efac' : purple }}>{totalQty || '—'}</td>
+                        <td style={{ color: isGreen ? '#15803d' : gray, fontSize: 11 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
+                        <td style={{ color: isGreen ? '#166534' : purple, fontWeight: 700 }}>{displayUser(r.userid)}</td>
+                        <td style={{ fontWeight: 600, color: isGreen ? '#166534' : '#1f2937' }}>{r.store}</td>
+                        <td style={{ color: isGreen ? '#14532d' : purpleD, fontWeight: 700 }}>{r.name}</td>
+                        <td className="ic-col-hide" style={{ textAlign: 'center', color: isGreen ? '#15803d' : gray }}>{rows.length}</td>
+                        <td className="ic-col-hide" style={{ textAlign: 'center', fontWeight: 700, color: isGreen ? '#166634' : purple }}>{totalQty || '—'}</td>
                         <td>
                           <span
                             onClick={isAdmin ? () => cycleUpcStatus(r.id, st) : undefined}
                             title={isAdmin ? 'Click to change status' : undefined}
                             style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
-                              background: st === 'complete' ? '#166534' : st === 'ready' ? '#fef3c7' : '#dbeafe',
-                              color:      st === 'complete' ? '#86efac' : st === 'ready' ? '#92400e' : '#1e40af',
-                              border:     st === 'complete' ? '1px solid #4ade80' : st === 'ready' ? '1px solid #fcd34d' : '1px solid #93c5fd',
+                              background: st === 'complete' ? '#bbf7d0' : st === 'ready' ? '#fef3c7' : '#dbeafe',
+                              color:      st === 'complete' ? '#14532d' : st === 'ready' ? '#92400e' : '#1e40af',
+                              border:     st === 'complete' ? '1px solid #86efac' : st === 'ready' ? '1px solid #fcd34d' : '1px solid #93c5fd',
                               cursor: isAdmin ? 'pointer' : 'default',
                             }}>
                             {st === 'complete' ? '✓ Complete' : st === 'ready' ? '👀 Ready' : '⏳ Waiting'}
@@ -581,6 +582,7 @@ export default function ReportsPage() {
               </table>
             )}
 
+          </div>
           </div>
         )}
       </div>
