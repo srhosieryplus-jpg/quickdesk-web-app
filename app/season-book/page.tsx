@@ -440,7 +440,7 @@ export default function SeasonBookPage() {
         .store-table tr:last-child td { border-bottom: none; }
         .bal-green { color: #15803d; font-weight: 700; }
         .bal-red   { color: #dc2626; font-weight: 700; }
-        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; }
+        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
         .modal-box { background: #fff; border-radius: 14px; width: 100%; max-width: 680px; box-shadow: 0 8px 48px rgba(0,0,0,0.22); }
         .modal-head { padding: 14px 18px; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; }
         .modal-body { padding: 16px 18px 20px; }
@@ -1016,8 +1016,9 @@ export default function SeasonBookPage() {
         const maxDrop = existingDrops.length > 0 ? Math.max(...existingDrops.map(r => r.drop_num)) : 0
 
         return (
-          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
-            <div className="modal-box">
+          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}
+            style={{ alignItems: 'center' }}>
+            <div className="modal-box" style={{ maxWidth: 500 }}>
               <div className="modal-head">
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>{editRow.brand} — {editRow.store}</div>
@@ -1028,75 +1029,81 @@ export default function SeasonBookPage() {
               <div className="modal-body">
                 {formStores.slice(0,1).map((entry, idx) => {
                   const sym = CURRENCY_SYMBOLS[entry.currency]
+                  const upd = (patch: Partial<StoreEntry>) =>
+                    setFormStores(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p))
                   return (
-                    <div key={entry.store}>
-                      {/* Currency picker */}
-                      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <label style={lbl}>Currency</label>
-                        <select value={entry.currency}
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, currency: e.target.value as Currency } : p))}
-                          style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 5, padding: '4px 6px', background: '#f5f3ff', color: purpleD, cursor: 'pointer', width: 46 }}>
-                          <option value="USD">$</option>
-                          <option value="EUR">€</option>
-                        </select>
+                    <div key={entry.store} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                      {/* Row 1: Invoice # and Order # */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={lbl}>Invoice #</label>
+                          <input value={entry.invoice_num} placeholder="e.g. INV-001"
+                            onChange={e => upd({ invoice_num: e.target.value })} style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Order #</label>
+                          <input value={entry.order_num} placeholder="e.g. ORD-001"
+                            onChange={e => upd({ order_num: e.target.value })} style={inp} />
+                        </div>
                       </div>
-                      <div className="form-grid">
+
+                      {/* Row 2: Currency + Units + Initial Total */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 1fr', gap: 8, alignItems: 'end' }}>
+                        <div>
+                          <label style={lbl}>Cur</label>
+                          <select value={entry.currency} onChange={e => upd({ currency: e.target.value as Currency })}
+                            style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 6, padding: '5px 4px', background: '#f5f3ff', color: purpleD, cursor: 'pointer', width: '100%' }}>
+                            <option value="USD">$</option>
+                            <option value="EUR">€</option>
+                          </select>
+                        </div>
                         <div>
                           <label style={lbl}>Units</label>
-                          <input type="number" value={entry.units}
-                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, units: e.target.value } : p))}
-                            style={inp} />
+                          <input type="number" value={entry.units} placeholder="0"
+                            onChange={e => upd({ units: e.target.value })} style={inp} />
                         </div>
                         <div>
                           <label style={lbl}>Initial Total ({sym})</label>
-                          <input type="number" value={entry.initial_total} step="0.01"
-                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, initial_total: e.target.value } : p))}
-                            style={inp} />
+                          <input type="number" value={entry.initial_total} step="0.01" placeholder="0.00"
+                            onChange={e => upd({ initial_total: e.target.value })} style={inp} />
+                        </div>
+                      </div>
+
+                      {/* Row 3: Duties + Deposit + Payment Date */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={lbl}>Duties ({sym})</label>
+                          <input type="number" value={entry.duties} step="0.01" placeholder="0.00"
+                            onChange={e => upd({ duties: e.target.value })} style={inp} />
                         </div>
                         <div>
                           <label style={lbl}>Deposit ({sym})</label>
-                          <input type="number" value={entry.deposit} step="0.01"
-                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, deposit: e.target.value } : p))}
-                            style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>Duties ({sym})</label>
-                          <input type="number" value={entry.duties} step="0.01"
-                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, duties: e.target.value } : p))}
-                            style={inp} />
+                          <input type="number" value={entry.deposit} step="0.01" placeholder="0.00"
+                            onChange={e => upd({ deposit: e.target.value })} style={inp} />
                         </div>
                         <div>
                           <label style={lbl}>Payment Date</label>
                           <input type="date" value={entry.payment_date}
-                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, payment_date: e.target.value } : p))}
-                            style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>Comment</label>
-                          <input value={entry.comment}
-                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, comment: e.target.value } : p))}
-                            style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>Invoice #</label>
-                          <input value={entry.invoice_num} placeholder="e.g. INV-001"
-                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, invoice_num: e.target.value } : p))}
-                            style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>Order #</label>
-                          <input value={entry.order_num} placeholder="e.g. ORD-2024-01"
-                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, order_num: e.target.value } : p))}
-                            style={inp} />
+                            onChange={e => upd({ payment_date: e.target.value })} style={inp} />
                         </div>
                       </div>
+
+                      {/* Row 4: Comment (full width) */}
+                      <div>
+                        <label style={lbl}>Comment</label>
+                        <input value={entry.comment} placeholder="Optional note"
+                          onChange={e => upd({ comment: e.target.value })} style={inp} />
+                      </div>
+
+                      {/* Live balance */}
                       {(entry.initial_total || entry.deposit || entry.duties) && (() => {
                         const init = parseFloat(entry.initial_total) || 0
                         const dep  = parseFloat(entry.deposit) || 0
                         const dut  = parseFloat(entry.duties) || 0
                         const bal  = init - dep - dut
                         return (
-                          <div style={{ marginTop: 10, fontSize: 13, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
+                          <div style={{ fontSize: 13, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
                             Balance Due: {sym}{bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
                         )
