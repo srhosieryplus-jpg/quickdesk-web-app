@@ -10,6 +10,10 @@ const gray = '#6b7280'
 
 const LS_ABBREV_KEY = 'hairAcc_abbrevMap'
 const LS_COLORS_KEY = 'hairAcc_colorMap'
+const LS_COLMAP_KEY = 'hairAcc_colMapping'
+
+type ColRole = 'styleNum' | 'description' | 'price' | 'ignore'
+interface ColMapping { [colIdx: number]: ColRole }
 
 function loadSaved<T>(key: string, fallback: T): T {
   try {
@@ -34,43 +38,64 @@ interface ColorEntry {
   qty: string    // e.g. "12"
 }
 
-// ── Parser ─────────────────────────────────────────────────────────────────
-function parsePaste(text: string): RawRow[] {
-  const lines = text.split('\n')
+// ── Split paste into 2D grid ───────────────────────────────────────────────
+function splitGrid(text: string): string[][] {
+  return text.split('\n').map(l => l.split('\t').map(c => c.trim()))
+}
+
+function maxCols(grid: string[][]): number {
+  return grid.reduce((m, r) => Math.max(m, r.length), 0)
+}
+
+// ── Guess initial column roles from grid ───────────────────────────────────
+function guessColRoles(grid: string[][]): ColMapping {
+  const n = maxCols(grid)
+  const mapping: ColMapping = {}
+  for (let i = 0; i < n; i++) {
+    const vals = grid.map(r => r[i] ?? '').filter(Boolean)
+    const numericCount = vals.filter(v => !isNaN(parseFloat(v))).length
+    const shortNumeric = vals.filter(v => /^\d{4,6}$/.test(v)).length
+    if (shortNumeric > 0) mapping[i] = 'styleNum'
+    else if (numericCount / (vals.length || 1) > 0.6) mapping[i] = 'price'
+    else mapping[i] = 'description'
+  }
+  return mapping
+}
+
+// ── Parser — uses explicit ColMapping ─────────────────────────────────────
+function parsePaste(text: string, mapping: ColMapping): RawRow[] {
+  const grid = splitGrid(text)
   const rows: RawRow[] = []
-  let currentVendor = ''
+  let currentVendorId = ''
 
-  const splitLines = lines.map(l => l.split('\t').map(c => c.trim()))
-  const hasVendorCol = splitLines.some(cols => /^\d{4,6}$/.test(cols[0] ?? ''))
+  const styleNumCol   = Object.entries(mapping).find(([,v]) => v === 'styleNum')?.[0]
+  const descCol       = Object.entries(mapping).find(([,v]) => v === 'description')?.[0]
+  const priceCol      = Object.entries(mapping).find(([,v]) => v === 'price')?.[0]
 
-  for (const cols of splitLines) {
-    let vendorCell = ''
-    let styleCell = ''
-    let priceCell = ''
+  const snIdx  = styleNumCol  != null ? parseInt(styleNumCol)  : -1
+  const dIdx   = descCol      != null ? parseInt(descCol)      : -1
+  const pIdx   = priceCol     != null ? parseInt(priceCol)     : -1
 
-    if (hasVendorCol) {
-      vendorCell = cols[0] ?? ''
-      styleCell  = cols[1] ?? ''
-      priceCell  = cols[2] ?? ''
-    } else {
-      styleCell = cols[0] ?? ''
-      priceCell = cols[1] ?? ''
+  for (const cols of grid) {
+    const styleNum  = snIdx  >= 0 ? (cols[snIdx]  ?? '').trim() : ''
+    const desc      = dIdx   >= 0 ? (cols[dIdx]   ?? '').trim() : ''
+    const priceStr  = pIdx   >= 0 ? (cols[pIdx]   ?? '').trim() : ''
+
+    // Update current style # if this row has one
+    if (styleNum && /^\d{4,6}$/.test(styleNum)) {
+      currentVendorId = styleNum
+      if (!desc) continue   // row was just setting the style #, no description yet
     }
 
-    if (vendorCell && /^\d{4,6}$/.test(vendorCell)) {
-      currentVendor = vendorCell
-      if (!styleCell) continue
-    }
+    if (!desc) continue
+    if (!currentVendorId) continue
 
-    if (!styleCell) continue
-    if (hasVendorCol && !currentVendor) continue
-
-    const price = parseFloat(priceCell)
-    if (priceCell === '0' || price === 0) continue
+    const price = parseFloat(priceStr)
+    if (priceStr === '0' || price === 0) continue
 
     rows.push({
-      vendorId: currentVendor,
-      style: styleCell,
+      vendorId: currentVendorId,
+      style: desc,
       price: isNaN(price) ? 0 : price,
     })
   }
@@ -80,7 +105,7 @@ function parsePaste(text: string): RawRow[] {
 
 // ── Step indicator ─────────────────────────────────────────────────────────
 function Steps({ current }: { current: number }) {
-  const steps = ['Paste', 'Endings', 'Colors & Qty', 'Output']
+  const steps = ['Paste', 'Columns', 'Endings', 'Colors & Qty', 'Output']
   return (
     <div style={{ display: 'flex', gap: 0, alignItems: 'center', marginBottom: 24 }}>
       {steps.map((s, i) => {
@@ -124,16 +149,20 @@ export default function HairAccPage() {
 
   // Step 0 — paste
   const [paste, setPaste] = useState('')
+  const [previewGrid, setPreviewGrid] = useState<string[][]>([])
 
-  // Step 1 — endings per unique style name
+  // Step 1 — column mapping
+  const [colMapping, setColMapping] = useState<ColMapping>({})
+
+  // Step 2 — endings per unique style name
   const [rawRows, setRawRows] = useState<RawRow[]>([])
   const [abbrevMap, setAbbrevMap] = useState<Record<string, string>>({})   // style → ending
   const [uniqueStyles, setUniqueStyles] = useState<string[]>([])
 
-  // Step 2 — colors & qty per unique style name
+  // Step 3 — colors & qty per unique style name
   const [colorMap, setColorMap] = useState<Record<string, ColorEntry[]>>({})
 
-  // Step 3 — output
+  // Step 4 — output
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -143,40 +172,51 @@ export default function HairAccPage() {
   }, [router])
 
   // ── Step 0 → 1 ────────────────────────────────────────────────────────
-  function handleParse() {
-    const rows = parsePaste(paste)
+  function handlePaste() {
+    if (!paste.trim()) return
+    const grid = splitGrid(paste)
+    setPreviewGrid(grid)
+    // Load saved mapping or guess
+    const saved = loadSaved<ColMapping>(LS_COLMAP_KEY, {})
+    const n = maxCols(grid)
+    const hasSaved = Object.keys(saved).length > 0 && parseInt(Object.keys(saved).sort().pop()!) < n
+    setColMapping(hasSaved ? saved : guessColRoles(grid))
+    setStep(1)
+  }
+
+  // ── Step 1 → 2 ────────────────────────────────────────────────────────
+  function handleColMapping() {
+    saveTo(LS_COLMAP_KEY, colMapping)
+    const rows = parsePaste(paste, colMapping)
     if (rows.length === 0) return
     setRawRows(rows)
 
     const styles = Array.from(new Set(rows.map(r => r.style)))
     setUniqueStyles(styles)
 
-    // Load saved abbreviations, fill blanks with empty string
     const saved = loadSaved<Record<string, string>>(LS_ABBREV_KEY, {})
     const merged: Record<string, string> = {}
     for (const s of styles) merged[s] = saved[s] ?? ''
     setAbbrevMap(merged)
 
-    // Load saved colors
     const savedColors = loadSaved<Record<string, ColorEntry[]>>(LS_COLORS_KEY, {})
     const mergedColors: Record<string, ColorEntry[]> = {}
     for (const s of styles) mergedColors[s] = savedColors[s] ?? [{ code: '', name: '', qty: '' }]
     setColorMap(mergedColors)
 
-    setStep(1)
-  }
-
-  // ── Step 1 → 2 ────────────────────────────────────────────────────────
-  function handleSaveAbbrevs() {
-    // Persist abbrev map
-    saveTo(LS_ABBREV_KEY, abbrevMap)
     setStep(2)
   }
 
   // ── Step 2 → 3 ────────────────────────────────────────────────────────
+  function handleSaveAbbrevs() {
+    saveTo(LS_ABBREV_KEY, abbrevMap)
+    setStep(3)
+  }
+
+  // ── Step 3 → 4 ────────────────────────────────────────────────────────
   function handleSaveColors() {
     saveTo(LS_COLORS_KEY, colorMap)
-    setStep(3)
+    setStep(4)
   }
 
   // ── Build output rows ──────────────────────────────────────────────────
@@ -256,7 +296,7 @@ export default function HairAccPage() {
 
   if (!user) return null
 
-  const outRows = step === 3 ? buildOutput() : []
+  const outRows = step === 4 ? buildOutput() : []
 
   return (
     <div style={{ minHeight: '100vh', background: '#f5f3ff', fontFamily: 'Inter, sans-serif' }}>
@@ -275,7 +315,7 @@ export default function HairAccPage() {
           <div style={{ fontSize: 16, fontWeight: 900, color: purpleD }}>Hair Accessories</div>
           <div style={{ fontSize: 11, color: gray, marginTop: 1 }}>Style code generator</div>
         </div>
-        {step === 3 && (
+        {step === 4 && (
           <button onClick={copyOutput} style={{
             background: copied ? '#d1fae5' : `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`,
             color: copied ? '#065f46' : '#fff',
@@ -320,7 +360,7 @@ export default function HairAccPage() {
               }}
             />
             <button
-              onClick={handleParse}
+              onClick={handlePaste}
               disabled={!paste.trim()}
               style={{
                 marginTop: 14,
@@ -331,12 +371,111 @@ export default function HairAccPage() {
                 cursor: paste.trim() ? 'pointer' : 'not-allowed',
                 boxShadow: paste.trim() ? '0 2px 10px rgba(124,58,237,0.3)' : 'none',
               }}
-            >Next: Set Endings →</button>
+            >Next: Map Columns →</button>
           </div>
         )}
 
-        {/* ── STEP 1: Endings ──────────────────────────────────────────── */}
-        {step === 1 && (
+        {/* ── STEP 1: Column mapping ───────────────────────────────────── */}
+        {step === 1 && (() => {
+          const grid = previewGrid
+          const numCols = maxCols(grid)
+          const previewRows = grid.filter(r => r.some(c => c)).slice(0, 8)
+          const roleLabels: Record<ColRole, string> = {
+            styleNum: 'Style #',
+            description: 'Description',
+            price: 'Price',
+            ignore: 'Ignore',
+          }
+          const roleColors: Record<ColRole, { bg: string; color: string }> = {
+            styleNum:    { bg: '#ede9fe', color: purpleD },
+            description: { bg: '#dbeafe', color: '#1e40af' },
+            price:       { bg: '#d1fae5', color: '#065f46' },
+            ignore:      { bg: '#f3f4f6', color: '#9ca3af' },
+          }
+          return (
+            <div style={{
+              background: '#fff', border: '1.5px solid #e5e7eb',
+              borderRadius: 14, padding: 20,
+              boxShadow: '0 2px 12px rgba(124,58,237,0.07)',
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Which column is which?</div>
+              <div style={{ fontSize: 12, color: gray, marginBottom: 18 }}>
+                Tag each column so the parser knows what's the style number, what's the description, and what's the price.
+              </div>
+
+              {/* Column role pickers */}
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                {Array.from({ length: numCols }, (_, i) => {
+                  const role = colMapping[i] ?? 'ignore'
+                  const { bg, color } = roleColors[role]
+                  return (
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Col {i + 1}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {(['styleNum', 'description', 'price', 'ignore'] as ColRole[]).map(r => (
+                          <button key={r} onClick={() => setColMapping(prev => ({ ...prev, [i]: r }))}
+                            style={{
+                              background: role === r ? bg : '#f9fafb',
+                              color: role === r ? color : '#9ca3af',
+                              border: `1.5px solid ${role === r ? (roleColors[r].bg) : '#e5e7eb'}`,
+                              borderRadius: 6, padding: '4px 10px',
+                              fontSize: 11, fontWeight: role === r ? 700 : 500,
+                              cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}
+                          >{roleLabels[r]}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Preview table */}
+              <div style={{ overflowX: 'auto', marginBottom: 20 }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                  <thead>
+                    <tr>
+                      {Array.from({ length: numCols }, (_, i) => {
+                        const role = colMapping[i] ?? 'ignore'
+                        const { bg, color } = roleColors[role]
+                        return (
+                          <th key={i} style={{
+                            background: bg, color, padding: '5px 10px',
+                            border: '1px solid #e5e7eb', fontWeight: 700,
+                            fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em',
+                          }}>{roleLabels[role]}</th>
+                        )
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewRows.map((row, ri) => (
+                      <tr key={ri} style={{ background: ri % 2 === 0 ? '#fff' : '#fafbff' }}>
+                        {Array.from({ length: numCols }, (_, ci) => (
+                          <td key={ci} style={{
+                            padding: '5px 10px', border: '1px solid #f0f0f0',
+                            color: '#374151', maxWidth: 180,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>{row[ci] ?? ''}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <button onClick={handleColMapping} style={{
+                background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`,
+                color: '#fff', border: 'none', borderRadius: 8,
+                padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                boxShadow: '0 2px 10px rgba(124,58,237,0.3)',
+              }}>Next: Set Endings →</button>
+            </div>
+          )
+        })()}
+
+        {/* ── STEP 2: Endings ──────────────────────────────────────────── */}
+        {step === 2 && (
           <div>
             <div style={{
               background: '#fff', border: '1.5px solid #e5e7eb',
@@ -385,8 +524,8 @@ export default function HairAccPage() {
           </div>
         )}
 
-        {/* ── STEP 2: Colors & Qty ─────────────────────────────────────── */}
-        {step === 2 && (
+        {/* ── STEP 3: Colors & Qty ─────────────────────────────────────── */}
+        {step === 3 && (
           <div>
             <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
               Enter colors as <strong>code name</strong> (e.g. <code>001 Black</code>) — the table will show <strong>#001 Black</strong>. Leave blank to skip. Qty is optional.
@@ -500,8 +639,8 @@ export default function HairAccPage() {
           </div>
         )}
 
-        {/* ── STEP 3: Output ───────────────────────────────────────────── */}
-        {step === 3 && (
+        {/* ── STEP 4: Output ───────────────────────────────────────────── */}
+        {step === 4 && (
           <div>
             <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
               Table is formatted like your original paste — copy it and paste straight into your sheet.
@@ -562,7 +701,7 @@ export default function HairAccPage() {
               }}>
                 {copied ? '✓ Copied to clipboard!' : 'Copy Table (TSV)'}
               </button>
-              <button onClick={() => setStep(2)} style={{
+              <button onClick={() => setStep(3)} style={{
                 background: '#f0ebff', border: 'none', borderRadius: 8,
                 padding: '10px 16px', fontSize: 12, fontWeight: 700,
                 color: purple, cursor: 'pointer',
