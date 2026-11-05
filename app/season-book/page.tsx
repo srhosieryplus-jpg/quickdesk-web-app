@@ -747,7 +747,9 @@ export default function SeasonBookPage() {
           ) : brandsInSeason.length === 0 ? (
             <p style={{ padding: 16, fontSize: 12, color: gray, textAlign: 'center' }}>No brands logged for {season} yet.</p>
           ) : filteredBrands.map(b => {
-            const bRows = rows.filter(r => r.brand === b)
+            const bRows = activeDropName
+              ? rows.filter(r => r.brand === b && r.drop_name === activeDropName)
+              : rows.filter(r => r.brand === b)
             const totalBal = bRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
             const hasOwing = totalBal > 0.001
             return (
@@ -784,12 +786,16 @@ export default function SeasonBookPage() {
             </div>
           ) : (
             <>
-              {/* Season summary — Grand Total row first, then one row per store */}
+              {/* Season summary — scoped to active drop name filter if set */}
               {(() => {
-                const storeIds = STORES.filter(s => rows.some(r => r.store === s))
+                // Scope base rows to the active drop filter
+                const baseRows = activeDropName
+                  ? rows.filter(r => r.drop_name === activeDropName)
+                  : rows
+                const storeIds = STORES.filter(s => baseRows.some(r => r.store === s))
                 const dataRows = ['Grand Total', ...storeIds]
                 const statsFor = (storeFilter: string | null) => {
-                  const r = storeFilter ? rows.filter(x => x.store === storeFilter) : rows
+                  const r = storeFilter ? baseRows.filter(x => x.store === storeFilter) : baseRows
                   return {
                     units: r.reduce((s, x) => s + (x.units ?? 0), 0),
                     init:  r.reduce((s, x) => s + (x.initial_total ?? 0), 0),
@@ -805,12 +811,16 @@ export default function SeasonBookPage() {
                   { label: 'Duties',         key: 'dut'   as const, fmt: (v: number) => fmt$(v) },
                   { label: 'Balance Due',    key: 'bal'   as const, fmt: (v: number) => fmt$(v) },
                 ]
+                const tableLabel = activeDropName ? activeDropName : season
                 return (
                   <div style={{ marginBottom: 20, background: '#fff', border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
                         <tr style={{ background: purpleD }}>
-                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', whiteSpace: 'nowrap', minWidth: 100 }}>{season}</th>
+                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', whiteSpace: 'nowrap', minWidth: 100 }}>
+                            {tableLabel}
+                            {activeDropName && <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.75, marginLeft: 6 }}>({season})</span>}
+                          </th>
                           {metrics.map(m => (
                             <th key={m.key} style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', borderLeft: `1px solid rgba(255,255,255,0.15)`, whiteSpace: 'nowrap' }}>
                               {m.label}
@@ -846,11 +856,16 @@ export default function SeasonBookPage() {
                 )
               })()}
 
-              {/* All brands — compact cards */}
-              {[...brandsInSeason].sort((a, b) => a.localeCompare(b))
+              {/* All brands — compact cards (filtered by drop name if active) */}
+              {filteredBrands
                 .filter(b => !activeBrand || b === activeBrand)
                 .map(brand => {
-                  const bRows = rows.filter(r => r.brand === brand)
+                  // Scope rows to active drop name filter
+                  const allBRows = rows.filter(r => r.brand === brand)
+                  const bRows = activeDropName
+                    ? allBRows.filter(r => r.drop_name === activeDropName)
+                    : allBRows
+                  if (bRows.length === 0) return null
                   const bDrops = Array.from(new Set(bRows.map(r => r.drop_num))).sort((a, b) => a - b)
                   const totBal = bRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
                   const totInit = bRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
@@ -861,25 +876,20 @@ export default function SeasonBookPage() {
                     <div key={brand} id={`brand-${brand}`}
                       style={{ marginBottom: 16, border: `2px solid ${isHighlighted ? purple : border}`, borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
 
-                      {/* Brand header — double-click to open both stores side by side */}
+                      {/* Brand header — single-click to open full invoice view */}
                       <div
-                        onDoubleClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(null); setModal('invoice') }}
-                        title="Double-click to open full invoice view"
+                        onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(null); setModal('invoice') }}
+                        title="Click to open invoice view"
                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#f5f3ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap', cursor: 'pointer' }}>
                         <span style={{ fontSize: 15, fontWeight: 900, color: purpleD }}>{brand}</span>
                         <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
                         <span style={{ fontSize: 11, color: gray }}>{bDrops.length} drop{bDrops.length !== 1 ? 's' : ''}</span>
-                        {totBal > 0.001 && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 7px' }}>
-                            Total Owed {fmt$(totBal)}
-                          </span>
-                        )}
                         {totBal <= 0.001 && totInit > 0 && (
                           <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '1px 7px' }}>
                             ✓ Paid
                           </span>
                         )}
-                        <span style={{ fontSize: 10, color: gray, marginLeft: 'auto' }}>double-click to open invoice</span>
+                        <span style={{ fontSize: 10, color: gray, marginLeft: 'auto' }}>click to open invoice</span>
                       </div>
 
                       {/* Per-store summary rows — click to open single-store invoice */}
@@ -930,6 +940,20 @@ export default function SeasonBookPage() {
                             )
                           })}
                         </tbody>
+                        {/* Total Owed footer — aligns under Balance Due */}
+                        {storesPresent.length > 1 && (
+                          <tfoot>
+                            <tr style={{ background: totBal > 0.001 ? '#fef2f2' : '#f0fdf4', borderTop: `2px solid ${border}` }}>
+                              <td colSpan={5} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
+                                Total Owed
+                              </td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 13, fontWeight: 900, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>
+                                {fmt$(totBal)}
+                              </td>
+                              <td style={{ padding: '6px 10px' }} />
+                            </tr>
+                          </tfoot>
+                        )}
                       </table>
                     </div>
                   )
