@@ -100,7 +100,7 @@ interface StoreEntry {
 }
 
 function blankEntry(store: string): StoreEntry {
-  return { store, units: '', initial_total: '', deposit: '', duties: '', payment_date: today(), comment: '', currency: 'USD' }
+  return { store, units: '', initial_total: '', deposit: '', duties: '', payment_date: '', comment: '', currency: 'USD' }
 }
 function today() {
   const d = new Date()
@@ -662,28 +662,59 @@ export default function SeasonBookPage() {
             </div>
           ) : (
             <>
-              {/* Season summary bar */}
+              {/* Season summary — per store + grand total */}
               {(() => {
-                const totInit  = rows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
-                const totDep   = rows.reduce((s, r) => s + (r.deposit ?? 0), 0)
-                const totDut   = rows.reduce((s, r) => s + (r.duties ?? 0), 0)
-                const totBal   = rows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
-                const totUnits = rows.reduce((s, r) => s + (r.units ?? 0), 0)
+                const storeIds = STORES.filter(s => rows.some(r => r.store === s))
+                const cols = [...storeIds, 'Total']
+                const statsFor = (storeFilter: string | null) => {
+                  const r = storeFilter ? rows.filter(r => r.store === storeFilter) : rows
+                  return {
+                    units: r.reduce((s, x) => s + (x.units ?? 0), 0),
+                    init:  r.reduce((s, x) => s + (x.initial_total ?? 0), 0),
+                    dep:   r.reduce((s, x) => s + (x.deposit ?? 0), 0),
+                    dut:   r.reduce((s, x) => s + (x.duties ?? 0), 0),
+                    bal:   r.reduce((s, x) => s + (x.balance_due ?? 0), 0),
+                  }
+                }
                 return (
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-                    {[
-                      { label: 'Brands', val: brandsInSeason.length, color: purpleD },
-                      { label: 'Total Units', val: totUnits || '—', color: purpleD },
-                      { label: 'Initial Total', val: fmt$(totInit), color: '#1e40af' },
-                      { label: 'Deposits Paid', val: fmt$(totDep), color: '#166534' },
-                      { label: 'Duties', val: fmt$(totDut), color: '#92400e' },
-                      { label: 'Balance Due', val: fmt$(totBal), color: totBal > 0.001 ? '#dc2626' : '#166534' },
-                    ].map(({ label, val, color }) => (
-                      <div key={label} style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 8, padding: '7px 12px', flex: '1 1 90px', minWidth: 90 }}>
-                        <div style={{ fontSize: 10, color: gray, fontWeight: 600, marginBottom: 2 }}>{label}</div>
-                        <div style={{ fontSize: 14, fontWeight: 800, color }}>{val}</div>
-                      </div>
-                    ))}
+                  <div style={{ marginBottom: 20, background: '#fff', border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: purpleD }}>
+                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', width: 100 }}></th>
+                          {cols.map(c => (
+                            <th key={c} style={{ padding: '7px 12px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: c === 'Total' ? '#fde68a' : '#fff', borderLeft: `1px solid rgba(255,255,255,0.15)` }}>
+                              {c}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { label: 'Units',         key: 'units' as const, color: purpleD,    fmt: (v: number) => v || '—' },
+                          { label: 'Initial Total',  key: 'init'  as const, color: '#1e40af',  fmt: (v: number) => fmt$(v) },
+                          { label: 'Deposits Paid',  key: 'dep'   as const, color: '#166534',  fmt: (v: number) => fmt$(v) },
+                          { label: 'Duties',         key: 'dut'   as const, color: '#92400e',  fmt: (v: number) => fmt$(v) },
+                          { label: 'Balance Due',    key: 'bal'   as const, color: null,       fmt: (v: number) => fmt$(v) },
+                        ].map(({ label, key, color, fmt: fmtVal }, ri) => (
+                          <tr key={label} style={{ background: ri % 2 === 0 ? '#faf9ff' : '#fff' }}>
+                            <td style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>{label}</td>
+                            {cols.map(c => {
+                              const stats = statsFor(c === 'Total' ? null : c)
+                              const v = stats[key]
+                              const isTotal = c === 'Total'
+                              const isBal = key === 'bal'
+                              const balColor = isBal ? (v > 0.001 ? '#dc2626' : '#166534') : (color ?? gray)
+                              return (
+                                <td key={c} style={{ padding: '6px 12px', textAlign: 'right', fontWeight: isTotal ? 800 : 600, fontSize: isTotal ? 13 : 12, color: balColor, borderLeft: `1px solid ${border}`, borderBottom: `1px solid ${border}`, background: isTotal ? '#f5f3ff' : undefined }}>
+                                  {fmtVal(v)}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )
               })()}
@@ -869,9 +900,9 @@ export default function SeasonBookPage() {
                       <span style={{ background: purple, color: '#fff', borderRadius: 6, padding: '2px 8px', fontSize: 12 }}>{entry.store}</span>
                       <select value={entry.currency}
                         onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, currency: e.target.value as Currency } : p))}
-                        style={{ fontSize: 11, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 5, padding: '2px 6px', background: '#f5f3ff', color: purpleD, cursor: 'pointer' }}>
-                        <option value="USD">USD ($)</option>
-                        <option value="EUR">EUR (€)</option>
+                        style={{ fontSize: 11, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 5, padding: '2px 4px', background: '#f5f3ff', color: purpleD, cursor: 'pointer', width: 44 }}>
+                        <option value="USD">$</option>
+                        <option value="EUR">€</option>
                       </select>
                     </div>
                     <div className="form-grid">
@@ -975,9 +1006,9 @@ export default function SeasonBookPage() {
                         <label style={lbl}>Currency</label>
                         <select value={entry.currency}
                           onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, currency: e.target.value as Currency } : p))}
-                          style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 5, padding: '4px 8px', background: '#f5f3ff', color: purpleD, cursor: 'pointer' }}>
-                          <option value="USD">USD ($)</option>
-                          <option value="EUR">EUR (€)</option>
+                          style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 5, padding: '4px 6px', background: '#f5f3ff', color: purpleD, cursor: 'pointer', width: 46 }}>
+                          <option value="USD">$</option>
+                          <option value="EUR">€</option>
                         </select>
                       </div>
                       <div className="form-grid">
