@@ -146,6 +146,12 @@ export default function SeasonBookPage() {
   const [quickPayAmt, setQuickPayAmt] = useState('')
   const [quickPayDate, setQuickPayDate] = useState(today())
 
+  // Brand search inside new-entry modal
+  const [modalBrandQ, setModalBrandQ] = useState('')
+  const [modalBrandSuggs, setModalBrandSuggs] = useState<string[]>([])
+  const [showModalBrandDrop, setShowModalBrandDrop] = useState(false)
+  const modalBrandRef = useRef<HTMLDivElement>(null)
+
   // Form state: drop number + per-store entries (TTC + TTP simultaneously)
   const [formDrop, setFormDrop] = useState(1)
   const [formStores, setFormStores] = useState<StoreEntry[]>(STORES.map(blankEntry))
@@ -188,6 +194,15 @@ export default function SeasonBookPage() {
     setBrandSuggestions(all.filter(b => b.toLowerCase().includes(q)).slice(0, 10))
   }, [brandQ, rows])
 
+  // Modal brand autocomplete
+  useEffect(() => {
+    if (!modalBrandQ.trim()) { setModalBrandSuggs([]); return }
+    const q = modalBrandQ.toLowerCase()
+    const inSeason = Array.from(new Set(rows.map(r => r.brand)))
+    const all = Array.from(new Set([...BRAND_LIST, ...inSeason]))
+    setModalBrandSuggs(all.filter(b => b.toLowerCase().includes(q)).slice(0, 10))
+  }, [modalBrandQ, rows])
+
   // Close brand dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -196,6 +211,9 @@ export default function SeasonBookPage() {
       }
       if (headerSearchRef.current && !headerSearchRef.current.contains(e.target as Node)) {
         setShowHeaderDrop(false)
+      }
+      if (modalBrandRef.current && !modalBrandRef.current.contains(e.target as Node)) {
+        setShowModalBrandDrop(false)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -223,10 +241,20 @@ export default function SeasonBookPage() {
   // ── Open new entry modal ───────────────────────────────────────────────────
   function openNewEntry(brand: string) {
     setActiveBrand(brand)
+    setModalBrandQ('')
+    setShowModalBrandDrop(false)
     // Determine next drop number for this brand
     const existing = rows.filter(r => r.brand === brand)
     const maxDrop = existing.length > 0 ? Math.max(...existing.map(r => r.drop_num)) : 0
     setFormDrop(maxDrop + 1)
+    setFormStores(STORES.map(blankEntry))
+    setModal('new-entry')
+  }
+
+  function openNewEntryBlank() {
+    setModalBrandQ('')
+    setShowModalBrandDrop(false)
+    setFormDrop(1)
     setFormStores(STORES.map(blankEntry))
     setModal('new-entry')
   }
@@ -380,7 +408,7 @@ export default function SeasonBookPage() {
       <style>{`
         * { box-sizing: border-box; }
         .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: relative; z-index: 100; }
-        .sb-subbar { padding: 8px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; }
+        .sb-subbar { padding: 8px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .sb-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
         .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; }
         .sb-main { flex: 1; overflow-y: auto; padding: 16px; }
@@ -484,10 +512,7 @@ export default function SeasonBookPage() {
 
         {/* Right: action buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
-          <button onClick={() => {
-            if (activeBrand) { openNewEntry(activeBrand) }
-            else { showToast('⚠️ Search and select a brand below first', 'err') }
-          }}
+          <button onClick={() => activeBrand ? openNewEntry(activeBrand) : openNewEntryBlank()}
             style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             + New
           </button>
@@ -743,12 +768,65 @@ export default function SeasonBookPage() {
           <div className="modal-box">
             <div className="modal-head">
               <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>{activeBrand}</div>
-                <div style={{ fontSize: 12, color: gray }}>New Drop — {season}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>
+                  {activeBrand ?? 'New Drop'}
+                </div>
+                <div style={{ fontSize: 12, color: gray }}>{activeBrand ? `New Drop — ${season}` : `Select a brand for ${season}`}</div>
               </div>
               <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
             </div>
             <div className="modal-body">
+
+              {/* Brand picker — shown when no brand selected yet */}
+              {!activeBrand && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={lbl}>Brand</label>
+                  <div ref={modalBrandRef} style={{ position: 'relative' }}>
+                    <input
+                      value={modalBrandQ}
+                      onChange={e => { setModalBrandQ(e.target.value); setShowModalBrandDrop(true) }}
+                      onFocus={() => setShowModalBrandDrop(true)}
+                      placeholder="Search or type a brand name…"
+                      autoFocus
+                      style={{ ...inp, fontSize: 13 }}
+                    />
+                    {showModalBrandDrop && modalBrandQ.trim() && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 50, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+                        {modalBrandSuggs.length > 0 ? modalBrandSuggs.map(b => (
+                          <div key={b}
+                            onClick={() => {
+                              const existing = rows.filter(r => r.brand === b)
+                              const maxDrop = existing.length > 0 ? Math.max(...existing.map(r => r.drop_num)) : 0
+                              setActiveBrand(b); setFormDrop(maxDrop + 1)
+                              setModalBrandQ(''); setShowModalBrandDrop(false)
+                            }}
+                            style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
+                            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                            <span>{b}</span>
+                            {brandsInSeason.includes(b) && (
+                              <span style={{ fontSize: 10, color: purpleD, fontWeight: 700, background: '#ede9fe', borderRadius: 6, padding: '1px 6px' }}>in {season}</span>
+                            )}
+                          </div>
+                        )) : (
+                          <div style={{ padding: '8px 12px' }}>
+                            <div style={{ fontSize: 11, color: gray, marginBottom: 6 }}>No match — create new?</div>
+                            <button
+                              onClick={() => { setActiveBrand(modalBrandQ.trim()); setFormDrop(1); setModalBrandQ(''); setShowModalBrandDrop(false) }}
+                              style={{ background: purple, color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                              + &ldquo;{modalBrandQ.trim()}&rdquo;
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Only show form once brand is chosen */}
+              {activeBrand && <>
+
               {/* Drop number */}
               <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <label style={lbl}>Drop #</label>
@@ -835,6 +913,7 @@ export default function SeasonBookPage() {
                   {saving ? 'Saving…' : 'Save Drop'}
                 </button>
               </div>
+              </>}
             </div>
           </div>
         </div>
