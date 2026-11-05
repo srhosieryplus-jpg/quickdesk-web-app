@@ -628,7 +628,15 @@ export default function SeasonBookPage() {
             const hasOwing = totalBal > 0.001
             return (
               <div key={b} className={`sb-brand-row${activeBrand === b ? ' active' : ''}`}
-                onClick={() => setActiveBrand(b)}>
+                onClick={() => {
+                  const next = activeBrand === b ? '' : b
+                  setActiveBrand(next)
+                  if (next) {
+                    setTimeout(() => {
+                      document.getElementById(`brand-${next}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }, 50)
+                  }
+                }}>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
                 {hasOwing && (
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 5px', flexShrink: 0 }}>
@@ -642,121 +650,147 @@ export default function SeasonBookPage() {
 
         {/* Main panel */}
         <div className="sb-main">
-          {!activeBrand ? (
+          {loading ? (
+            <div style={{ textAlign: 'center', paddingTop: 60, color: gray, fontSize: 13 }}>Loading…</div>
+          ) : brandsInSeason.length === 0 ? (
             <div style={{ textAlign: 'center', paddingTop: 60, color: gray }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📒</div>
               <div style={{ fontSize: 15, fontWeight: 700, color: purpleD, marginBottom: 6 }}>{season} Season Book</div>
-              <div style={{ fontSize: 13, color: gray }}>
-                {brandsInSeason.length > 0
-                  ? `${brandsInSeason.length} brand${brandsInSeason.length !== 1 ? 's' : ''} logged — select one from the sidebar`
-                  : 'Search for a brand above to get started'}
-              </div>
+              <div style={{ fontSize: 13, color: gray }}>No entries yet — click &ldquo;+ New&rdquo; to log a brand drop</div>
             </div>
           ) : (
             <>
-              {/* Brand header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 18, fontWeight: 900, color: purpleD }}>{activeBrand}</span>
-                <span style={{ fontSize: 12, color: gray, background: '#ede9fe', borderRadius: 10, padding: '2px 8px', fontWeight: 600 }}>{season}</span>
-                <div style={{ flex: 1 }} />
-                <button onClick={() => openNewEntry(activeBrand)}
-                  style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  + Log Drop
-                </button>
-              </div>
-
-              {/* Summary row */}
-              {brandRows.length > 0 && (() => {
-                const totInit  = brandRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
-                const totDep   = brandRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
-                const totDut   = brandRows.reduce((s, r) => s + (r.duties ?? 0), 0)
-                const totBal   = brandRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
-                const totUnits = brandRows.reduce((s, r) => s + (r.units ?? 0), 0)
+              {/* Season summary bar */}
+              {(() => {
+                const totInit  = rows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
+                const totDep   = rows.reduce((s, r) => s + (r.deposit ?? 0), 0)
+                const totDut   = rows.reduce((s, r) => s + (r.duties ?? 0), 0)
+                const totBal   = rows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                const totUnits = rows.reduce((s, r) => s + (r.units ?? 0), 0)
                 return (
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
                     {[
+                      { label: 'Brands', val: brandsInSeason.length, color: purpleD },
                       { label: 'Total Units', val: totUnits || '—', color: purpleD },
                       { label: 'Initial Total', val: fmt$(totInit), color: '#1e40af' },
                       { label: 'Deposits Paid', val: fmt$(totDep), color: '#166534' },
                       { label: 'Duties', val: fmt$(totDut), color: '#92400e' },
                       { label: 'Balance Due', val: fmt$(totBal), color: totBal > 0.001 ? '#dc2626' : '#166534' },
                     ].map(({ label, val, color }) => (
-                      <div key={label} style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 8, padding: '8px 14px', flex: '1 1 100px', minWidth: 100 }}>
+                      <div key={label} style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 8, padding: '7px 12px', flex: '1 1 90px', minWidth: 90 }}>
                         <div style={{ fontSize: 10, color: gray, fontWeight: 600, marginBottom: 2 }}>{label}</div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color }}>{val}</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color }}>{val}</div>
                       </div>
                     ))}
                   </div>
                 )
               })()}
 
-              {/* Drops */}
-              {brandRows.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 32, color: gray, fontSize: 13 }}>
-                  No entries yet for {activeBrand} in {season}. Click &ldquo;+ Log Drop&rdquo; to start.
-                </div>
-              ) : drops.map(dropNum => {
-                const dropRows = brandRows.filter(r => r.drop_num === dropNum)
-                return (
-                  <div key={dropNum} className="drop-card">
-                    <div className="drop-head">
-                      <span style={{ fontSize: 13, fontWeight: 800, color: purpleD }}>Drop {dropNum}</span>
-                      <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>
-                        {dropRows.map(r => r.store).join(' · ')}
-                      </span>
+              {/* All brands — alphabetical */}
+              {[...brandsInSeason].sort((a, b) => a.localeCompare(b))
+                .filter(b => !activeBrand || b === activeBrand)
+                .map(brand => {
+                  const bRows = rows.filter(r => r.brand === brand)
+                  const bDrops = Array.from(new Set(bRows.map(r => r.drop_num))).sort((a, b) => a - b)
+                  const totBal = bRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                  const isHighlighted = activeBrand === brand
+                  return (
+                    <div key={brand} id={`brand-${brand}`}
+                      style={{ marginBottom: 24, border: `2px solid ${isHighlighted ? purple : border}`, borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
+                      {/* Brand header */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#faf9ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 15, fontWeight: 900, color: purpleD }}>{brand}</span>
+                        <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
+                        {totBal > 0.001 && (
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 7px' }}>
+                            Owes {fmt$(totBal)}
+                          </span>
+                        )}
+                        <div style={{ flex: 1 }} />
+                        <button onClick={() => openNewEntry(brand)}
+                          style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                          + Log Drop
+                        </button>
+                      </div>
+
+                      {/* Drops for this brand */}
+                      {bDrops.map(dropNum => {
+                        const dropRows = bRows.filter(r => r.drop_num === dropNum)
+                        return (
+                          <div key={dropNum} className="drop-card" style={{ margin: '10px 10px 0', borderRadius: 8 }}>
+                            <div className="drop-head">
+                              <span style={{ fontSize: 13, fontWeight: 800, color: purpleD }}>Drop {dropNum}</span>
+                              <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>
+                                {dropRows.map(r => r.store).join(' · ')}
+                              </span>
+                            </div>
+                            <table className="store-table">
+                              <thead>
+                                <tr>
+                                  <th>Store</th>
+                                  <th>Cur</th>
+                                  <th>Units</th>
+                                  <th>Initial Total</th>
+                                  <th>Deposits</th>
+                                  <th>Duties</th>
+                                  <th>Balance Due</th>
+                                  <th>Payment Date</th>
+                                  <th>Comment</th>
+                                  <th></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {dropRows.map(r => {
+                                  const bal = r.balance_due ?? 0
+                                  return (
+                                    <tr key={r.id}>
+                                      <td style={{ fontWeight: 700, color: purpleD }}>{r.store}</td>
+                                      <td>
+                                        <span style={{ fontSize: 10, fontWeight: 700, background: r.currency === 'EUR' ? '#fef3c7' : '#eff6ff', color: r.currency === 'EUR' ? '#92400e' : '#1e40af', border: `1px solid ${r.currency === 'EUR' ? '#fcd34d' : '#93c5fd'}`, borderRadius: 4, padding: '1px 4px' }}>
+                                          {r.currency ?? 'USD'}
+                                        </span>
+                                      </td>
+                                      <td>{r.units ?? '—'}</td>
+                                      <td>{fmt$(r.initial_total, r.currency)}</td>
+                                      <td>
+                                        <div>{fmt$(r.deposit, r.currency)}</div>
+                                        <PaymentRow row={r} />
+                                      </td>
+                                      <td>{fmt$(r.duties, r.currency)}</td>
+                                      <td className={bal > 0.001 ? 'bal-red' : bal < -0.001 ? 'bal-green' : ''}>
+                                        {fmt$(r.balance_due, r.currency)}
+                                      </td>
+                                      <td style={{ fontSize: 11, color: gray }}>{fmtDate(r.payment_date)}</td>
+                                      <td style={{ fontSize: 11, color: gray, maxWidth: 160 }}>{r.comment || '—'}</td>
+                                      <td>
+                                        <button onClick={() => openEdit(r)}
+                                          style={{ background: '#ede9fe', color: purpleD, border: 'none', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                                          Edit
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      })}
+                      <div style={{ height: 10 }} />
                     </div>
-                    <table className="store-table">
-                      <thead>
-                        <tr>
-                          <th>Store</th>
-                          <th>Cur</th>
-                          <th>Units</th>
-                          <th>Initial Total</th>
-                          <th>Deposits</th>
-                          <th>Duties</th>
-                          <th>Balance Due</th>
-                          <th>Payment Date</th>
-                          <th>Comment</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dropRows.map(r => {
-                          const bal = r.balance_due ?? 0
-                          return (
-                            <tr key={r.id}>
-                              <td style={{ fontWeight: 700, color: purpleD }}>{r.store}</td>
-                              <td>
-                                <span style={{ fontSize: 10, fontWeight: 700, background: r.currency === 'EUR' ? '#fef3c7' : '#eff6ff', color: r.currency === 'EUR' ? '#92400e' : '#1e40af', border: `1px solid ${r.currency === 'EUR' ? '#fcd34d' : '#93c5fd'}`, borderRadius: 4, padding: '1px 4px' }}>
-                                  {r.currency ?? 'USD'}
-                                </span>
-                              </td>
-                              <td>{r.units ?? '—'}</td>
-                              <td>{fmt$(r.initial_total, r.currency)}</td>
-                              <td>
-                                <div>{fmt$(r.deposit, r.currency)}</div>
-                                <PaymentRow row={r} />
-                              </td>
-                              <td>{fmt$(r.duties, r.currency)}</td>
-                              <td className={bal > 0.001 ? 'bal-red' : bal < -0.001 ? 'bal-green' : ''}>
-                                {fmt$(r.balance_due, r.currency)}
-                              </td>
-                              <td style={{ fontSize: 11, color: gray }}>{fmtDate(r.payment_date)}</td>
-                              <td style={{ fontSize: 11, color: gray, maxWidth: 160 }}>{r.comment || '—'}</td>
-                              <td>
-                                <button onClick={() => openEdit(r)}
-                                  style={{ background: '#ede9fe', color: purpleD, border: 'none', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                                  Edit
-                                </button>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )
-              })}
+                  )
+                })
+              }
+
+              {/* Show "clear filter" hint when a brand is selected */}
+              {activeBrand && (
+                <div style={{ textAlign: 'center', paddingBottom: 20 }}>
+                  <button onClick={() => setActiveBrand('')}
+                    style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 7, padding: '6px 16px', fontSize: 12, color: gray, cursor: 'pointer' }}>
+                    ✕ Clear filter — show all brands
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
