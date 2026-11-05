@@ -12,6 +12,7 @@ import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
 import { BRAND_LIST } from '@/lib/brands'
+import { VENDOR_DATA } from '@/lib/vendors'
 
 // ── Data model ────────────────────────────────────────────────────────────────
 // season_ledger table columns:
@@ -40,6 +41,7 @@ interface LedgerRow {
   order_num: string | null
   drop_name: string | null
   is_cancelled: boolean | null
+  vendor_id: string | null
   logged_by: string
   created_at: string
   updated_at: string
@@ -163,6 +165,7 @@ export default function SeasonBookPage() {
   // Form state: drop number + per-store entries (TTC + TTP simultaneously)
   const [formDrop, setFormDrop] = useState(1)
   const [formStores, setFormStores] = useState<StoreEntry[]>(STORES.map(blankEntry))
+  const [formVendorId, setFormVendorId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Filter/view
@@ -173,11 +176,38 @@ export default function SeasonBookPage() {
   const [showDropNameMgr, setShowDropNameMgr] = useState(false)
   const [newDropNameInput, setNewDropNameInput] = useState('')
 
+  // Vendor filter
+  const [activeVendorId, setActiveVendorId] = useState<string | null>(null)
+
+  // Vendor picker modal (when brand maps to multiple vendors)
+  const [vendorPickerBrand, setVendorPickerBrand] = useState<string | null>(null)
+  const [vendorPickerCandidates, setVendorPickerCandidates] = useState<string[]>([])
+  const [vendorPickerOnSelect, setVendorPickerOnSelect] = useState<((vid: string) => void) | null>(null)
+
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type); setTimeout(() => setToast(''), 3000)
   }
 
   const isAdmin = user?.store === 'ALL'
+
+  // ── Vendor lookup map: brand → vendor_id[] ───────────────────────────────
+  const brandToVendors = (() => {
+    const map = new Map<string, string[]>()
+    for (const v of VENDOR_DATA) {
+      const existing = map.get(v.brand) ?? []
+      if (!existing.includes(v.vendor_id)) {
+        map.set(v.brand, [...existing, v.vendor_id])
+      }
+    }
+    return map
+  })()
+
+  // Helper: get vendor_id for a brand (returns null if 0 or 2+ vendors)
+  function getUniqueVendorId(brand: string): string | null {
+    const vids = brandToVendors.get(brand)
+    if (!vids || vids.length !== 1) return null
+    return vids[0]
+  }
 
   // ── Fetch rows for current season ─────────────────────────────────────────
   const fetchRows = useCallback(async (s: string, u: User) => {
@@ -236,13 +266,23 @@ export default function SeasonBookPage() {
     if (activeDropName) {
       list = list.filter(b => rows.some(r => r.brand === b && r.drop_name === activeDropName))
     }
+    // Filter by active vendor_id
+    if (activeVendorId) {
+      const vendorBrands = new Set(VENDOR_DATA.filter(v => v.vendor_id === activeVendorId).map(v => v.brand))
+      list = list.filter(b => vendorBrands.has(b))
+    }
     return list
   })()
 
-  // Header search: brand name OR invoice # match
+  // Header search: brand name OR invoice # OR vendor_id match
   const allBrandOptions = Array.from(new Set([...BRAND_LIST, ...brandsInSeason]))
-  const headerSearchResults: Array<{ type: 'brand' | 'invoice'; label: string; brand: string; invoiceNum?: string }> = headerSearch.trim()
+  const headerSearchResults: Array<{ type: 'brand' | 'invoice' | 'vendor'; label: string; brand: string; invoiceNum?: string; vendorId?: string }> = headerSearch.trim()
     ? [
+        // Vendor ID matches — show at top if the search looks like a vendor ID
+        ...Array.from(new Set(VENDOR_DATA.map(v => v.vendor_id)))
+          .filter(vid => vid.toLowerCase().includes(headerSearch.toLowerCase()))
+          .slice(0, 4)
+          .map(vid => ({ type: 'vendor' as const, label: vid, brand: '', vendorId: vid })),
         // Brand name matches
         ...allBrandOptions
           .filter(b => b.toLowerCase().includes(headerSearch.toLowerCase()))
@@ -268,6 +308,22 @@ export default function SeasonBookPage() {
   // Group by drop for active brand
   const drops = Array.from(new Set(brandRows.map(r => r.drop_num))).sort((a,b) => a-b)
 
+  // ── Vendor picker helper ──────────────────────────────────────────────────
+  function maybePickVendor(brand: string, onConfirm: (vid: string | null) => void) {
+    const vids = brandToVendors.get(brand)
+    if (!vids || vids.length <= 1) {
+      onConfirm(vids?.[0] ?? null)
+      return
+    }
+    // Multiple vendors — show picker
+    setVendorPickerBrand(brand)
+    setVendorPickerCandidates(vids)
+    setVendorPickerOnSelect(() => (vid: string) => {
+      setVendorPickerBrand(null)
+      onConfirm(vid)
+    })
+  }
+
   // ── Open new entry modal ───────────────────────────────────────────────────
   function openNewEntry(brand: string) {
     setActiveBrand(brand)
@@ -278,6 +334,19 @@ export default function SeasonBookPage() {
     const maxDrop = existing.length > 0 ? Math.max(...existing.map(r => r.drop_num)) : 0
     setFormDrop(maxDrop + 1)
     setFormStores(STORES.map(blankEntry))
+    // Auto-set vendor or prompt picker
+    const vids = brandToVendors.get(brand)
+    if (vids && vids.length > 1) {
+      setVendorPickerBrand(brand)
+      setVendorPickerCandidates(vids)
+      setVendorPickerOnSelect(() => (vid: string) => {
+        setFormVendorId(vid)
+        setVendorPickerBrand(null)
+      })
+      setFormVendorId(null)
+    } else {
+      setFormVendorId(vids?.[0] ?? null)
+    }
     setModal('new-entry')
   }
 
@@ -286,6 +355,7 @@ export default function SeasonBookPage() {
     setShowModalBrandDrop(false)
     setFormDrop(1)
     setFormStores(STORES.map(blankEntry))
+    setFormVendorId(null)
     setModal('new-entry')
   }
 
@@ -329,6 +399,7 @@ export default function SeasonBookPage() {
           invoice_num: e.invoice_num || null,
           order_num: e.order_num || null,
           drop_name: (e.drop_name && e.drop_name !== '\0') ? e.drop_name : null,
+          vendor_id: formVendorId ?? null,
           logged_by: user.userid,
         }
       })
@@ -605,22 +676,37 @@ export default function SeasonBookPage() {
             <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 8, zIndex: 300, maxHeight: 300, overflowY: 'auto', boxShadow: '0 6px 24px rgba(0,0,0,0.14)' }}>
               {headerSearchResults.map((item, i) => (
                 <div key={i}
-                  onClick={() => { setActiveBrand(item.brand); setHeaderSearch(''); setShowHeaderDrop(false) }}
+                  onClick={() => {
+                    if (item.type === 'vendor') {
+                      setActiveVendorId(item.vendorId!)
+                      setActiveBrand(null)
+                    } else {
+                      setActiveBrand(item.brand)
+                    }
+                    setHeaderSearch(''); setShowHeaderDrop(false)
+                  }}
                   style={{ padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
                   onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.type === 'invoice' ? (
                       <><span style={{ color: gray, fontWeight: 400, marginRight: 4 }}>INV</span>{item.brand}</>
+                    ) : item.type === 'vendor' ? (
+                      <><span style={{ color: '#065f46', fontWeight: 800, marginRight: 4 }}>VID</span>{item.label}</>
                     ) : item.label}
                   </span>
                   <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    {item.type === 'vendor' && (
+                      <span style={{ fontSize: 10, color: '#065f46', fontWeight: 700, background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 4, padding: '1px 5px' }}>
+                        Vendor ID
+                      </span>
+                    )}
                     {item.type === 'invoice' && (
                       <span style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px' }}>
                         INV {item.invoiceNum}
                       </span>
                     )}
-                    {brandsInSeason.includes(item.brand) && (
+                    {item.type === 'brand' && brandsInSeason.includes(item.brand) && (
                       <span style={{ fontSize: 10, color: purpleD, fontWeight: 700, background: '#ede9fe', borderRadius: 6, padding: '1px 6px' }}>in {season}</span>
                     )}
                   </div>
@@ -635,6 +721,14 @@ export default function SeasonBookPage() {
             {activeBrand}
             <button onClick={() => setActiveBrand(null)}
               style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 }}>✕</button>
+          </div>
+        )}
+        {activeVendorId && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 20, padding: '3px 10px' }}>
+            <span style={{ fontWeight: 400, color: '#374151' }}>Vendor:</span>
+            {activeVendorId}
+            <button onClick={() => setActiveVendorId(null)}
+              style={{ background: 'none', border: 'none', color: '#065f46', cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 }}>✕</button>
           </div>
         )}
       </div>
@@ -724,6 +818,20 @@ export default function SeasonBookPage() {
                   }
                 }}>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
+                {(() => {
+                  const vids = brandToVendors.get(b)
+                  if (!vids || vids.length === 0) return null
+                  if (vids.length === 1) return (
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
+                      {vids[0]}
+                    </span>
+                  )
+                  return (
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
+                      {vids.length} vendors
+                    </span>
+                  )
+                })()}
                 {hasOwing && (
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 5px', flexShrink: 0 }}>
                     {fmt$(totalBal)}
@@ -748,10 +856,14 @@ export default function SeasonBookPage() {
             <>
               {/* Season summary — scoped to active drop name filter if set */}
               {(() => {
-                // Scope base rows to the active drop filter
-                const baseRows = activeDropName
+                // Scope base rows to active drop + vendor filters
+                let baseRows = activeDropName
                   ? rows.filter(r => r.drop_name === activeDropName)
                   : rows
+                if (activeVendorId) {
+                  const vendorBrands = new Set(VENDOR_DATA.filter(v => v.vendor_id === activeVendorId).map(v => v.brand))
+                  baseRows = baseRows.filter(r => vendorBrands.has(r.brand))
+                }
                 const storeIds = STORES.filter(s => baseRows.some(r => r.store === s))
                 const dataRows = ['Grand Total', ...storeIds]
                 const statsFor = (storeFilter: string | null) => {
@@ -771,7 +883,7 @@ export default function SeasonBookPage() {
                   { label: 'Duties',         key: 'dut'   as const, fmt: (v: number) => fmt$(v) },
                   { label: 'Balance Due',    key: 'bal'   as const, fmt: (v: number) => fmt$(v) },
                 ]
-                const tableLabel = activeDropName ? activeDropName : season
+                const tableLabel = activeVendorId ? `Vendor: ${activeVendorId}` : activeDropName ? activeDropName : season
                 return (
                   <div style={{ marginBottom: 20, background: '#fff', border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -844,6 +956,26 @@ export default function SeasonBookPage() {
                         <span style={{ fontSize: 15, fontWeight: 900, color: purpleD }}>{brand}</span>
                         <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
                         <span style={{ fontSize: 11, color: gray }}>{bDrops.length} drop{bDrops.length !== 1 ? 's' : ''}</span>
+                        {(() => {
+                          const vids = brandToVendors.get(brand)
+                          if (!vids || vids.length === 0) return null
+                          if (vids.length === 1) return (
+                            <span
+                              onClick={e => { e.stopPropagation(); setActiveVendorId(activeVendorId === vids[0] ? null : vids[0]) }}
+                              title={`Filter by vendor ${vids[0]}`}
+                              style={{ fontSize: 10, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 6, padding: '1px 7px', cursor: 'pointer' }}>
+                              {vids[0]}
+                            </span>
+                          )
+                          return vids.map(vid => (
+                            <span key={vid}
+                              onClick={e => { e.stopPropagation(); setActiveVendorId(activeVendorId === vid ? null : vid) }}
+                              title={`Filter by vendor ${vid}`}
+                              style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 6, padding: '1px 7px', cursor: 'pointer' }}>
+                              {vid}
+                            </span>
+                          ))
+                        })()}
                         {totBal <= 0.001 && totInit > 0 && (
                           <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '1px 7px' }}>
                             ✓ Paid
@@ -945,8 +1077,15 @@ export default function SeasonBookPage() {
           <div className="modal-box">
             <div className="modal-head">
               <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>
-                  {activeBrand ?? 'New Drop'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>
+                    {activeBrand ?? 'New Drop'}
+                  </span>
+                  {activeBrand && formVendorId && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 20, padding: '2px 8px' }}>
+                      {formVendorId}
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 12, color: gray }}>{activeBrand ? `New Drop — ${season}` : `Select a brand for ${season}`}</div>
               </div>
@@ -976,6 +1115,16 @@ export default function SeasonBookPage() {
                               const maxDrop = existing.length > 0 ? Math.max(...existing.map(r => r.drop_num)) : 0
                               setActiveBrand(b); setFormDrop(maxDrop + 1)
                               setModalBrandQ(''); setShowModalBrandDrop(false)
+                              // Auto-set vendor or prompt picker
+                              const vids = brandToVendors.get(b)
+                              if (vids && vids.length > 1) {
+                                setVendorPickerBrand(b)
+                                setVendorPickerCandidates(vids)
+                                setVendorPickerOnSelect(() => (vid: string) => { setFormVendorId(vid); setVendorPickerBrand(null) })
+                                setFormVendorId(null)
+                              } else {
+                                setFormVendorId(vids?.[0] ?? null)
+                              }
                             }}
                             style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                             onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
@@ -989,7 +1138,16 @@ export default function SeasonBookPage() {
                           <div style={{ padding: '8px 12px' }}>
                             <div style={{ fontSize: 11, color: gray, marginBottom: 6 }}>No match — create new?</div>
                             <button
-                              onClick={() => { setActiveBrand(modalBrandQ.trim()); setFormDrop(1); setModalBrandQ(''); setShowModalBrandDrop(false) }}
+                              onClick={() => {
+                                const b = modalBrandQ.trim()
+                                setActiveBrand(b); setFormDrop(1); setModalBrandQ(''); setShowModalBrandDrop(false)
+                                const vids = brandToVendors.get(b)
+                                if (vids && vids.length > 1) {
+                                  setVendorPickerBrand(b); setVendorPickerCandidates(vids)
+                                  setVendorPickerOnSelect(() => (vid: string) => { setFormVendorId(vid); setVendorPickerBrand(null) })
+                                  setFormVendorId(null)
+                                } else { setFormVendorId(vids?.[0] ?? null) }
+                              }}
                               style={{ background: purple, color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                               + &ldquo;{modalBrandQ.trim()}&rdquo;
                             </button>
@@ -1700,6 +1858,34 @@ export default function SeasonBookPage() {
           </div>
         )
       })()}
+
+      {/* ── Vendor Picker Modal ──────────────────────────────────────────────── */}
+      {vendorPickerBrand && vendorPickerCandidates.length > 0 && (
+        <div className="modal-bg" style={{ zIndex: 1100 }}>
+          <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 360, boxShadow: '0 8px 48px rgba(0,0,0,0.22)', padding: '20px 22px' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 4 }}>{vendorPickerBrand}</div>
+            <div style={{ fontSize: 12, color: gray, marginBottom: 16 }}>
+              This brand maps to multiple vendors. Which one is this order from?
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {vendorPickerCandidates.map(vid => (
+                <button key={vid}
+                  onClick={() => vendorPickerOnSelect?.(vid)}
+                  style={{ background: '#f5f3ff', border: `2px solid ${border}`, borderRadius: 8, padding: '10px 14px', fontSize: 14, fontWeight: 700, color: purpleD, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = purple; (e.currentTarget as HTMLButtonElement).style.background = '#ede9fe' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = border; (e.currentTarget as HTMLButtonElement).style.background = '#f5f3ff' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 6, padding: '2px 8px' }}>{vid}</span>
+                  Vendor {vid}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => { setVendorPickerBrand(null); setVendorPickerOnSelect(null) }}
+              style={{ marginTop: 14, background: 'none', border: 'none', color: gray, fontSize: 12, cursor: 'pointer', width: '100%', textAlign: 'center' }}>
+              Skip / Not sure
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
