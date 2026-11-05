@@ -145,6 +145,8 @@ export default function SeasonBookPage() {
   const [quickPayBrand, setQuickPayBrand] = useState<string | null>(null)
   const [quickPayAmt, setQuickPayAmt] = useState('')
   const [quickPayDate, setQuickPayDate] = useState(today())
+  // Which rows are selected for payment (by id); null = all with balance
+  const [paySelectedIds, setPaySelectedIds] = useState<Set<string>>(new Set())
 
   // Brand search inside new-entry modal
   const [modalBrandQ, setModalBrandQ] = useState('')
@@ -519,11 +521,13 @@ export default function SeasonBookPage() {
             + New
           </button>
           <button onClick={() => {
-            if (!activeBrand) { showToast('⚠️ Select a brand first', 'err'); return }
-            setQuickPayBrand(activeBrand); setQuickPayAmt(''); setQuickPayDate(today()); setModal('quick-pay')
+            setQuickPayBrand(activeBrand ?? null)
+            setQuickPayAmt(''); setQuickPayDate(today())
+            setPaySelectedIds(new Set())
+            setModal('quick-pay')
           }}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-            Payment
+            💳 Payment
           </button>
         </div>
       </div>
@@ -662,12 +666,12 @@ export default function SeasonBookPage() {
             </div>
           ) : (
             <>
-              {/* Season summary — per store + grand total */}
+              {/* Season summary — Grand Total row first, then one row per store */}
               {(() => {
                 const storeIds = STORES.filter(s => rows.some(r => r.store === s))
-                const cols = [...storeIds, 'Total']
+                const dataRows = ['Grand Total', ...storeIds]
                 const statsFor = (storeFilter: string | null) => {
-                  const r = storeFilter ? rows.filter(r => r.store === storeFilter) : rows
+                  const r = storeFilter ? rows.filter(x => x.store === storeFilter) : rows
                   return {
                     units: r.reduce((s, x) => s + (x.units ?? 0), 0),
                     init:  r.reduce((s, x) => s + (x.initial_total ?? 0), 0),
@@ -676,43 +680,48 @@ export default function SeasonBookPage() {
                     bal:   r.reduce((s, x) => s + (x.balance_due ?? 0), 0),
                   }
                 }
+                const metrics = [
+                  { label: 'Units',         key: 'units' as const, fmt: (v: number) => String(v || '—') },
+                  { label: 'Initial Total',  key: 'init'  as const, fmt: (v: number) => fmt$(v) },
+                  { label: 'Deposits Paid',  key: 'dep'   as const, fmt: (v: number) => fmt$(v) },
+                  { label: 'Duties',         key: 'dut'   as const, fmt: (v: number) => fmt$(v) },
+                  { label: 'Balance Due',    key: 'bal'   as const, fmt: (v: number) => fmt$(v) },
+                ]
                 return (
                   <div style={{ marginBottom: 20, background: '#fff', border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
                         <tr style={{ background: purpleD }}>
-                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', width: 100 }}></th>
-                          {cols.map(c => (
-                            <th key={c} style={{ padding: '7px 12px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: c === 'Total' ? '#fde68a' : '#fff', borderLeft: `1px solid rgba(255,255,255,0.15)` }}>
-                              {c}
+                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', whiteSpace: 'nowrap' }}>{season}</th>
+                          {metrics.map(m => (
+                            <th key={m.key} style={{ padding: '7px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#e9d5ff', borderLeft: `1px solid rgba(255,255,255,0.15)`, whiteSpace: 'nowrap' }}>
+                              {m.label}
                             </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {[
-                          { label: 'Units',         key: 'units' as const, color: purpleD,    fmt: (v: number) => v || '—' },
-                          { label: 'Initial Total',  key: 'init'  as const, color: '#1e40af',  fmt: (v: number) => fmt$(v) },
-                          { label: 'Deposits Paid',  key: 'dep'   as const, color: '#166534',  fmt: (v: number) => fmt$(v) },
-                          { label: 'Duties',         key: 'dut'   as const, color: '#92400e',  fmt: (v: number) => fmt$(v) },
-                          { label: 'Balance Due',    key: 'bal'   as const, color: null,       fmt: (v: number) => fmt$(v) },
-                        ].map(({ label, key, color, fmt: fmtVal }, ri) => (
-                          <tr key={label} style={{ background: ri % 2 === 0 ? '#faf9ff' : '#fff' }}>
-                            <td style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>{label}</td>
-                            {cols.map(c => {
-                              const stats = statsFor(c === 'Total' ? null : c)
-                              const v = stats[key]
-                              const isTotal = c === 'Total'
-                              const isBal = key === 'bal'
-                              const balColor = isBal ? (v > 0.001 ? '#dc2626' : '#166534') : (color ?? gray)
-                              return (
-                                <td key={c} style={{ padding: '6px 12px', textAlign: 'right', fontWeight: isTotal ? 800 : 600, fontSize: isTotal ? 13 : 12, color: balColor, borderLeft: `1px solid ${border}`, borderBottom: `1px solid ${border}`, background: isTotal ? '#f5f3ff' : undefined }}>
-                                  {fmtVal(v)}
-                                </td>
-                              )
-                            })}
-                          </tr>
-                        ))}
+                        {dataRows.map((rowLabel, ri) => {
+                          const isTotal = rowLabel === 'Grand Total'
+                          const stats = statsFor(isTotal ? null : rowLabel)
+                          return (
+                            <tr key={rowLabel} style={{ background: isTotal ? '#f5f3ff' : ri % 2 === 0 ? '#fff' : '#faf9ff' }}>
+                              <td style={{ padding: '6px 12px', fontSize: 12, fontWeight: isTotal ? 800 : 700, color: isTotal ? purpleD : gray, borderBottom: `1px solid ${border}`, whiteSpace: 'nowrap' }}>
+                                {rowLabel}
+                              </td>
+                              {metrics.map(m => {
+                                const v = stats[m.key]
+                                const isBal = m.key === 'bal'
+                                const color = isBal ? (v > 0.001 ? '#dc2626' : '#166534') : (isTotal ? purpleD : '#374151')
+                                return (
+                                  <td key={m.key} style={{ padding: '6px 12px', textAlign: 'right', fontWeight: isTotal ? 800 : 600, fontSize: isTotal ? 13 : 12, color, borderLeft: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
+                                    {m.fmt(v)}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -749,9 +758,6 @@ export default function SeasonBookPage() {
                           <div key={dropNum} className="drop-card" style={{ margin: '10px 10px 0', borderRadius: 8 }}>
                             <div className="drop-head">
                               <span style={{ fontSize: 13, fontWeight: 800, color: purpleD }}>Drop {dropNum}</span>
-                              <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>
-                                {dropRows.map(r => r.store).join(' · ')}
-                              </span>
                             </div>
                             <table className="store-table">
                               <thead>
@@ -1114,36 +1120,98 @@ export default function SeasonBookPage() {
       })()}
 
       {/* ── Quick Payment Modal ──────────────────────────────────────────────── */}
-      {modal === 'quick-pay' && quickPayBrand && (() => {
-        const brandRowsForPay = rows.filter(r => r.brand === quickPayBrand && (r.balance_due ?? 0) > 0.001)
+      {modal === 'quick-pay' && (() => {
+        // All rows with a balance — optionally filtered to pre-selected brand
+        const allBalanceRows = rows.filter(r => (r.balance_due ?? 0) > 0.001)
+        const filteredRows = quickPayBrand
+          ? allBalanceRows.filter(r => r.brand === quickPayBrand)
+          : allBalanceRows
+
+        // Group by brand → drop for display
+        const brandGroups = Array.from(new Set(filteredRows.map(r => r.brand))).sort()
+
+        const selectedRows = filteredRows.filter(r => paySelectedIds.has(r.id))
+        const allChecked = filteredRows.length > 0 && filteredRows.every(r => paySelectedIds.has(r.id))
+        const toggleAll = () => {
+          if (allChecked) setPaySelectedIds(new Set())
+          else setPaySelectedIds(new Set(filteredRows.map(r => r.id)))
+        }
+        const toggleRow = (id: string) => {
+          const next = new Set(paySelectedIds)
+          if (next.has(id)) next.delete(id); else next.add(id)
+          setPaySelectedIds(next)
+        }
+
         return (
           <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
-            <div className="modal-box" style={{ maxWidth: 460 }}>
+            <div className="modal-box" style={{ maxWidth: 520 }}>
               <div className="modal-head">
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>💳 Payment — {quickPayBrand}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>💳 Log Payment</div>
                   <div style={{ fontSize: 12, color: gray }}>{season}</div>
                 </div>
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
               </div>
               <div className="modal-body">
-                {brandRowsForPay.length === 0 ? (
-                  <p style={{ fontSize: 13, color: gray, textAlign: 'center', padding: '12px 0' }}>No outstanding balance for {quickPayBrand} in {season}.</p>
+
+                {/* Brand filter chips */}
+                <div style={{ marginBottom: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: gray, fontWeight: 600 }}>Brand:</span>
+                  <button onClick={() => { setQuickPayBrand(null); setPaySelectedIds(new Set()) }}
+                    style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${quickPayBrand === null ? purpleD : border}`, background: quickPayBrand === null ? purpleD : '#fff', color: quickPayBrand === null ? '#fff' : gray, cursor: 'pointer' }}>
+                    All
+                  </button>
+                  {Array.from(new Set(allBalanceRows.map(r => r.brand))).sort().map(b => (
+                    <button key={b} onClick={() => { setQuickPayBrand(b); setPaySelectedIds(new Set()) }}
+                      style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${quickPayBrand === b ? purpleD : border}`, background: quickPayBrand === b ? purpleD : '#fff', color: quickPayBrand === b ? '#fff' : gray, cursor: 'pointer' }}>
+                      {b}
+                    </button>
+                  ))}
+                </div>
+
+                {filteredRows.length === 0 ? (
+                  <p style={{ fontSize: 13, color: gray, textAlign: 'center', padding: '12px 0' }}>No outstanding balances{quickPayBrand ? ` for ${quickPayBrand}` : ''} in {season}.</p>
                 ) : (
                   <>
-                    <div style={{ marginBottom: 12, fontSize: 12, color: gray }}>
-                      Rows with balance due:
+                    {/* Select-all header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '4px 10px', background: '#f5f3ff', borderRadius: 6 }}>
+                      <input type="checkbox" checked={allChecked} onChange={toggleAll} style={{ accentColor: purpleD, width: 14, height: 14 }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>Select All</span>
+                      {selectedRows.length > 0 && (
+                        <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>
+                          {selectedRows.length} row{selectedRows.length > 1 ? 's' : ''} selected
+                        </span>
+                      )}
                     </div>
-                    {brandRowsForPay.map(r => (
-                      <div key={r.id} style={{ background: '#faf5ff', border: `1px solid ${border}`, borderRadius: 7, padding: '8px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                        <div>
-                          <span style={{ fontWeight: 700, color: purpleD, fontSize: 13 }}>{r.store}</span>
-                          <span style={{ fontSize: 11, color: gray, marginLeft: 8 }}>Drop {r.drop_num}</span>
-                        </div>
-                        <span style={{ fontWeight: 800, color: '#dc2626', fontSize: 13 }}>{fmt$(r.balance_due, r.currency)} due</span>
-                      </div>
-                    ))}
-                    <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+
+                    {/* Rows grouped by brand */}
+                    <div style={{ maxHeight: 240, overflowY: 'auto', marginBottom: 12 }}>
+                      {brandGroups.map(brand => {
+                        const brandRows = filteredRows.filter(r => r.brand === brand)
+                        return (
+                          <div key={brand} style={{ marginBottom: 8 }}>
+                            {!quickPayBrand && (
+                              <div style={{ fontSize: 10, fontWeight: 800, color: purpleD, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4, paddingLeft: 2 }}>{brand}</div>
+                            )}
+                            {brandRows.map(r => (
+                              <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: paySelectedIds.has(r.id) ? '#f5f3ff' : '#fafafa', border: `1px solid ${paySelectedIds.has(r.id) ? purpleD : border}`, borderRadius: 7, padding: '7px 12px', marginBottom: 5, cursor: 'pointer' }}>
+                                <input type="checkbox" checked={paySelectedIds.has(r.id)} onChange={() => toggleRow(r.id)}
+                                  style={{ accentColor: purpleD, width: 14, height: 14, flexShrink: 0 }} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <span style={{ fontWeight: 700, color: purpleD, fontSize: 13 }}>{r.store}</span>
+                                  <span style={{ fontSize: 11, color: gray, marginLeft: 6 }}>Drop {r.drop_num}</span>
+                                  {!quickPayBrand && <span style={{ fontSize: 11, color: gray, marginLeft: 6 }}>· {r.brand}</span>}
+                                </div>
+                                <span style={{ fontWeight: 800, color: '#dc2626', fontSize: 13, flexShrink: 0 }}>{fmt$(r.balance_due, r.currency)} due</span>
+                              </label>
+                            ))}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Amount + date */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 6 }}>
                       <div>
                         <label style={lbl}>Amount</label>
                         <input type="number" value={quickPayAmt} onChange={e => setQuickPayAmt(e.target.value)}
@@ -1154,21 +1222,26 @@ export default function SeasonBookPage() {
                         <input type="date" value={quickPayDate} onChange={e => setQuickPayDate(e.target.value)} style={inp} />
                       </div>
                     </div>
-                    <div style={{ marginTop: 6, fontSize: 11, color: gray }}>Payment will be applied to all rows with an outstanding balance.</div>
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+
+                    {selectedRows.length === 0 && (
+                      <div style={{ fontSize: 11, color: '#b45309', marginBottom: 8 }}>⚠ Select at least one row to apply payment to.</div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
                       <button onClick={() => setModal('none')}
                         style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                         Cancel
                       </button>
-                      <button onClick={async () => {
-                        if (!quickPayAmt || !user) return
-                        for (const r of brandRowsForPay) {
-                          await addPayment(r, quickPayAmt, quickPayDate)
-                        }
-                        setModal('none')
-                      }}
-                        style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                        Apply Payment
+                      <button disabled={selectedRows.length === 0 || !quickPayAmt || !user}
+                        onClick={async () => {
+                          if (!quickPayAmt || !user || selectedRows.length === 0) return
+                          for (const r of selectedRows) {
+                            await addPayment(r, quickPayAmt, quickPayDate)
+                          }
+                          setModal('none')
+                        }}
+                        style={{ background: selectedRows.length === 0 || !quickPayAmt ? '#c4b5fd' : purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: selectedRows.length === 0 || !quickPayAmt ? 'not-allowed' : 'pointer' }}>
+                        Apply to {selectedRows.length > 0 ? `${selectedRows.length} Row${selectedRows.length > 1 ? 's' : ''}` : 'Selected'}
                       </button>
                     </div>
                   </>
