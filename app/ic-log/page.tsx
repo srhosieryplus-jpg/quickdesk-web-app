@@ -69,16 +69,18 @@ export default function ICLogPage() {
     setTimeout(() => setToast(''), 3000)
   }
 
-  const fetchEntries = useCallback(async (user?: User) => {
+  const fetchEntries = useCallback(async (user?: User): Promise<ICEntry[]> => {
     const u = user || currentUser
-    if (!u) return
+    if (!u) return []
     setLoading(true)
     let query = supabase.from('ic_log').select('*').order('saved_at', { ascending: false })
     if (u.store && u.store !== 'ALL') query = query.eq('store', u.store)
     const { data, error } = await query
-    if (error) { showToast('❌ Could not load entries', 'err') }
-    else setEntries((data || []) as ICEntry[])
+    if (error) { showToast('❌ Could not load entries', 'err'); setLoading(false); return [] }
+    const result = (data || []) as ICEntry[]
+    setEntries(result)
     setLoading(false)
+    return result
   }, [currentUser])
 
   // Auto-match: check autocsv_log for any pending entries
@@ -155,24 +157,40 @@ export default function ICLogPage() {
     })
   }, [router])
 
-  // ── return to selector after screen lock / idle ───────────────────────────
+  // ── return to selector after idle; re-check matches on tab focus ─────────
   useEffect(() => {
     let hiddenAt: number | null = null
     const IDLE_MS = 5 * 60 * 1000
     function onVisibilityChange() {
-      if (document.visibilityState === 'hidden') { hiddenAt = Date.now() }
-      else if (document.visibilityState === 'visible') {
-        if (hiddenAt !== null && Date.now() - hiddenAt >= IDLE_MS) router.push('/selector')
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now()
+      } else if (document.visibilityState === 'visible') {
+        if (hiddenAt !== null && Date.now() - hiddenAt >= IDLE_MS) {
+          router.push('/selector')
+        } else {
+          // Tab came back — re-fetch and re-run auto-match so any
+          // pushes that happened while away are picked up immediately
+          fetchEntries().then(refreshed => {
+            if (refreshed && refreshed.length) autoMatch(refreshed)
+          })
+        }
         hiddenAt = null
       }
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
-  }, [router])
+  }, [router, fetchEntries, autoMatch])
 
+  // Run auto-match whenever the entries list itself changes (not just its length)
+  const prevEntriesRef = useRef<string>('')
   useEffect(() => {
-    if (entries.length) autoMatch(entries)
-  }, [entries.length])
+    const key = entries.map(e => e.id + e.status).join(',')
+    if (key !== prevEntriesRef.current) {
+      prevEntriesRef.current = key
+      const pending = entries.filter(e => e.status === 'Pending')
+      if (pending.length) autoMatch(entries)
+    }
+  }, [entries])
 
   async function addEntry(e: React.FormEvent) {
     e.preventDefault()
@@ -202,7 +220,8 @@ export default function ICLogPage() {
 
   async function refresh() {
     setSaving(true)
-    await fetchEntries()
+    const refreshed = await fetchEntries()
+    if (refreshed.length) await autoMatch(refreshed)
     setSaving(false)
     showToast('🔄 Refreshed')
   }
