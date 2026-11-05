@@ -420,6 +420,8 @@ export default function SeasonBookPage() {
         .store-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .store-table th { padding: 5px 10px; text-align: left; font-size: 11px; font-weight: 700; color: #1e3a8a; background: #dbeafe; border-bottom: 1.5px solid #93c5fd; white-space: nowrap; }
         .store-table td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+        .store-table tbody tr { cursor: pointer; transition: background 0.1s; }
+        .store-table tbody tr:hover { background: #f5f3ff; }
         .store-table tr:last-child td { border-bottom: none; }
         .bal-green { color: #15803d; font-weight: 700; }
         .bal-red   { color: #dc2626; font-weight: 700; }
@@ -706,11 +708,7 @@ export default function SeasonBookPage() {
                             Owes {fmt$(totBal)}
                           </span>
                         )}
-                        <div style={{ flex: 1 }} />
-                        <button onClick={() => openNewEntry(brand)}
-                          style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                          + Log Drop
-                        </button>
+                        <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>double-click a row to edit</span>
                       </div>
 
                       {/* Drops for this brand */}
@@ -736,14 +734,13 @@ export default function SeasonBookPage() {
                                   <th>Balance Due</th>
                                   <th>Payment Date</th>
                                   <th>Comment</th>
-                                  <th></th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {dropRows.map(r => {
                                   const bal = r.balance_due ?? 0
                                   return (
-                                    <tr key={r.id}>
+                                    <tr key={r.id} onDoubleClick={() => openEdit(r)} title="Double-click to edit">
                                       <td style={{ fontWeight: 700, color: purpleD }}>{r.store}</td>
                                       <td>
                                         <span style={{ fontSize: 10, fontWeight: 700, background: r.currency === 'EUR' ? '#fef3c7' : '#eff6ff', color: r.currency === 'EUR' ? '#92400e' : '#1e40af', border: `1px solid ${r.currency === 'EUR' ? '#fcd34d' : '#93c5fd'}`, borderRadius: 4, padding: '1px 4px' }}>
@@ -762,12 +759,6 @@ export default function SeasonBookPage() {
                                       </td>
                                       <td style={{ fontSize: 11, color: gray }}>{fmtDate(r.payment_date)}</td>
                                       <td style={{ fontSize: 11, color: gray, maxWidth: 160 }}>{r.comment || '—'}</td>
-                                      <td>
-                                        <button onClick={() => openEdit(r)}
-                                          style={{ background: '#ede9fe', color: purpleD, border: 'none', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                                          Edit
-                                        </button>
-                                      </td>
                                     </tr>
                                   )
                                 })}
@@ -954,97 +945,142 @@ export default function SeasonBookPage() {
       )}
 
       {/* ── Edit Entry Modal ─────────────────────────────────────────────────── */}
-      {modal === 'edit-entry' && editRow && (
-        <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
-          <div className="modal-box">
-            <div className="modal-head">
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>{editRow.brand} — {editRow.store}</div>
-                <div style={{ fontSize: 12, color: gray }}>Drop {editRow.drop_num} · {season}</div>
+      {modal === 'edit-entry' && editRow && (() => {
+        // Figure out which store is missing for this drop (sibling store)
+        const siblingStore = STORES.find(s => s !== editRow.store)
+        const siblingExists = siblingStore
+          ? rows.some(r => r.brand === editRow.brand && r.drop_num === editRow.drop_num && r.store === siblingStore)
+          : true
+        // Next drop number for this brand
+        const existingDrops = rows.filter(r => r.brand === editRow.brand)
+        const maxDrop = existingDrops.length > 0 ? Math.max(...existingDrops.map(r => r.drop_num)) : 0
+
+        return (
+          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
+            <div className="modal-box">
+              <div className="modal-head">
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>{editRow.brand} — {editRow.store}</div>
+                  <div style={{ fontSize: 12, color: gray }}>Drop {editRow.drop_num} · {season}</div>
+                </div>
+                <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
               </div>
-              <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
-            </div>
-            <div className="modal-body">
-              {formStores.slice(0,1).map((entry, idx) => {
-                const sym = CURRENCY_SYMBOLS[entry.currency]
-                return (
-                  <div key={entry.store}>
-                    {/* Currency picker */}
-                    <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <label style={lbl}>Currency</label>
-                      <select value={entry.currency}
-                        onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, currency: e.target.value as Currency } : p))}
-                        style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 5, padding: '4px 8px', background: '#f5f3ff', color: purpleD, cursor: 'pointer' }}>
-                        <option value="USD">USD ($)</option>
-                        <option value="EUR">EUR (€)</option>
-                      </select>
-                    </div>
-                    <div className="form-grid">
-                      <div>
-                        <label style={lbl}>Units</label>
-                        <input type="number" value={entry.units}
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, units: e.target.value } : p))}
-                          style={inp} />
+              <div className="modal-body">
+                {formStores.slice(0,1).map((entry, idx) => {
+                  const sym = CURRENCY_SYMBOLS[entry.currency]
+                  return (
+                    <div key={entry.store}>
+                      {/* Currency picker */}
+                      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label style={lbl}>Currency</label>
+                        <select value={entry.currency}
+                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, currency: e.target.value as Currency } : p))}
+                          style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 5, padding: '4px 8px', background: '#f5f3ff', color: purpleD, cursor: 'pointer' }}>
+                          <option value="USD">USD ($)</option>
+                          <option value="EUR">EUR (€)</option>
+                        </select>
                       </div>
-                      <div>
-                        <label style={lbl}>Initial Total ({sym})</label>
-                        <input type="number" value={entry.initial_total} step="0.01"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, initial_total: e.target.value } : p))}
-                          style={inp} />
-                      </div>
-                      <div>
-                        <label style={lbl}>Deposit ({sym})</label>
-                        <input type="number" value={entry.deposit} step="0.01"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, deposit: e.target.value } : p))}
-                          style={inp} />
-                      </div>
-                      <div>
-                        <label style={lbl}>Duties ({sym})</label>
-                        <input type="number" value={entry.duties} step="0.01"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, duties: e.target.value } : p))}
-                          style={inp} />
-                      </div>
-                      <div>
-                        <label style={lbl}>Payment Date</label>
-                        <input type="date" value={entry.payment_date}
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, payment_date: e.target.value } : p))}
-                          style={inp} />
-                      </div>
-                      <div>
-                        <label style={lbl}>Comment</label>
-                        <input value={entry.comment}
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, comment: e.target.value } : p))}
-                          style={inp} />
-                      </div>
-                    </div>
-                    {(entry.initial_total || entry.deposit || entry.duties) && (() => {
-                      const init = parseFloat(entry.initial_total) || 0
-                      const dep  = parseFloat(entry.deposit) || 0
-                      const dut  = parseFloat(entry.duties) || 0
-                      const bal  = init - dep - dut
-                      return (
-                        <div style={{ marginTop: 10, fontSize: 13, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
-                          Balance Due: {sym}{bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <div className="form-grid">
+                        <div>
+                          <label style={lbl}>Units</label>
+                          <input type="number" value={entry.units}
+                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, units: e.target.value } : p))}
+                            style={inp} />
                         </div>
-                      )
-                    })()}
+                        <div>
+                          <label style={lbl}>Initial Total ({sym})</label>
+                          <input type="number" value={entry.initial_total} step="0.01"
+                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, initial_total: e.target.value } : p))}
+                            style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Deposit ({sym})</label>
+                          <input type="number" value={entry.deposit} step="0.01"
+                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, deposit: e.target.value } : p))}
+                            style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Duties ({sym})</label>
+                          <input type="number" value={entry.duties} step="0.01"
+                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, duties: e.target.value } : p))}
+                            style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Payment Date</label>
+                          <input type="date" value={entry.payment_date}
+                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, payment_date: e.target.value } : p))}
+                            style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Comment</label>
+                          <input value={entry.comment}
+                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, comment: e.target.value } : p))}
+                            style={inp} />
+                        </div>
+                      </div>
+                      {(entry.initial_total || entry.deposit || entry.duties) && (() => {
+                        const init = parseFloat(entry.initial_total) || 0
+                        const dep  = parseFloat(entry.deposit) || 0
+                        const dut  = parseFloat(entry.duties) || 0
+                        const bal  = init - dep - dut
+                        return (
+                          <div style={{ marginTop: 10, fontSize: 13, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
+                            Balance Due: {sym}{bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )
+                })}
+
+                {/* Action buttons row */}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap' }}>
+                  {/* Left side: quick-add buttons */}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {/* Add missing sibling store for same drop */}
+                    {!siblingExists && siblingStore && (
+                      <button
+                        onClick={() => {
+                          setModal('none')
+                          setActiveBrand(editRow.brand)
+                          setFormDrop(editRow.drop_num)
+                          setFormStores([blankEntry(siblingStore)])
+                          setModal('new-entry')
+                        }}
+                        style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        + Log {siblingStore} (Drop {editRow.drop_num})
+                      </button>
+                    )}
+                    {/* Log a new drop for this brand */}
+                    <button
+                      onClick={() => {
+                        setModal('none')
+                        setActiveBrand(editRow.brand)
+                        setFormDrop(maxDrop + 1)
+                        setFormStores(STORES.map(blankEntry))
+                        setModal('new-entry')
+                      }}
+                      style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      + Log Drop {maxDrop + 1}
+                    </button>
                   </div>
-                )
-              })}
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-                <button onClick={() => setModal('none')} disabled={saving}
-                  style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  Cancel
-                </button>
-                <button onClick={saveEdit} disabled={saving}
-                  style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  {saving ? 'Saving…' : 'Save Changes'}
-                </button>
+                  {/* Right side: cancel / save */}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setModal('none')} disabled={saving}
+                      style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                    <button onClick={saveEdit} disabled={saving}
+                      style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                      {saving ? 'Saving…' : 'Save Changes'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Quick Payment Modal ──────────────────────────────────────────────── */}
       {modal === 'quick-pay' && quickPayBrand && (() => {
