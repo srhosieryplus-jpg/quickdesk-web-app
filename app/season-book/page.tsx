@@ -468,7 +468,7 @@ export default function SeasonBookPage() {
         .sb-subbar { padding: 8px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; justify-content: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
         .sb-dropbar { padding: 6px 16px; background: #fff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: sticky; top: 100px; z-index: 98; min-height: 38px; }
         .sb-layout { display: flex; flex: 1; position: relative; }
-        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: ${dropNamesInSeason.length > 0 ? '138px' : '100px'}; height: calc(100vh - ${dropNamesInSeason.length > 0 ? '138px' : '100px'}); }
+        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: 138px; height: calc(100vh - 138px); }
         .sb-main { flex: 1; padding: 16px; }
         .sb-brand-row { padding: 8px 14px; cursor: pointer; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; color: #374151; transition: background 0.1s; }
         .sb-brand-row:hover, .sb-brand-row.active { background: #ede9fe; color: ${purpleD}; }
@@ -644,9 +644,8 @@ export default function SeasonBookPage() {
         )}
       </div>
 
-      {/* Drop Name Filter Bar */}
-      {dropNamesInSeason.length > 0 && (
-        <div className="sb-dropbar">
+      {/* Drop Name Filter Bar — always visible so new names can be added */}
+      <div className="sb-dropbar">
           <span style={{ fontSize: 11, fontWeight: 700, color: gray, flexShrink: 0 }}>Drop:</span>
           <button
             onClick={() => setActiveDropName(null)}
@@ -692,7 +691,6 @@ export default function SeasonBookPage() {
             </button>
           )}
         </div>
-      )}
 
       {/* Body */}
       <div className="sb-layout">
