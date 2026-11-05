@@ -1,26 +1,55 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { loginUser, setSession } from '@/lib/auth'
+import { loginUser, lookupUser, setSession } from '@/lib/auth'
 
 export default function LoginPage() {
   const router = useRouter()
   const [userid, setUserid] = useState('')
+  const [password, setPassword] = useState('')
+  const [needsPassword, setNeedsPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [checking, setChecking] = useState(false)
   const [err, setErr] = useState('')
+  const pwRef = useRef<HTMLInputElement>(null)
+
+  // When needsPassword flips on, focus the password field
+  useEffect(() => {
+    if (needsPassword) pwRef.current?.focus()
+  }, [needsPassword])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     if (!userid.trim()) return
-    setLoading(true)
-    setErr('')
-    const user = await loginUser(userid)
-    if (!user) {
-      setErr('User ID not found.')
-      setLoading(false)
+
+    // Step 1: if we don't yet know if this is admin, look them up first
+    if (!needsPassword) {
+      setChecking(true)
+      setErr('')
+      const user = await lookupUser(userid)
+      setChecking(false)
+      if (!user) { setErr('User ID not found.'); return }
+      if (user.store === 'ALL') {
+        // Admin — ask for password before proceeding
+        setNeedsPassword(true)
+        return
+      }
+      // Non-admin — proceed straight to login
+      const result = await loginUser(userid)
+      if (!result || result === 'wrong-password') { setErr('Sign-in failed.'); return }
+      setSession(result)
+      router.push('/selector')
       return
     }
-    setSession(user)
+
+    // Step 2: admin password check
+    setLoading(true)
+    setErr('')
+    const result = await loginUser(userid, password)
+    setLoading(false)
+    if (!result) { setErr('User not found.'); setNeedsPassword(false); setPassword(''); return }
+    if (result === 'wrong-password') { setErr('Incorrect password.'); setPassword(''); pwRef.current?.focus(); return }
+    setSession(result)
     router.push('/selector')
   }
 
@@ -128,7 +157,9 @@ export default function LoginPage() {
         <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: '0.1em', color: '#5b21b6', marginBottom: 3 }}>
           QUICKDESK
         </h1>
-        <p style={{ color: '#9b8ec4', fontSize: 12, marginBottom: 22 }}>Enter your User ID to continue</p>
+        <p style={{ color: '#9b8ec4', fontSize: 12, marginBottom: 22 }}>
+          {needsPassword ? 'Enter your admin password' : 'Enter your User ID to continue'}
+        </p>
 
         <form onSubmit={handleLogin} style={{
           background: 'rgba(255,255,255,0.88)',
@@ -142,35 +173,67 @@ export default function LoginPage() {
           textAlign: 'left',
           backdropFilter: 'blur(8px)',
         }}>
+          {/* User ID field — locked once we're at password step */}
           <div>
             <label style={{ fontSize: 10, color: '#9b8ec4', display: 'block', marginBottom: 5, fontWeight: 700, letterSpacing: '0.08em' }}>
               USER ID
             </label>
             <input
-              autoFocus
+              autoFocus={!needsPassword}
               type="password"
               value={userid}
-              onChange={e => setUserid(e.target.value)}
-              onBlur={() => { if (window.visualViewport) { (document.documentElement.style as any).zoom = '1' } }}
+              onChange={e => { setUserid(e.target.value); setNeedsPassword(false); setPassword(''); setErr('') }}
+              readOnly={needsPassword}
               style={{
                 textTransform: 'uppercase',
-                background: '#f5f3ff',
-                border: '1.5px solid #c4b5fd',
+                background: needsPassword ? '#f0f0f8' : '#f5f3ff',
+                border: `1.5px solid ${needsPassword ? '#d4c8f0' : '#c4b5fd'}`,
                 borderRadius: 7,
                 padding: '8px 12px',
                 fontSize: 16,
-                color: '#3b1f8c',
+                color: needsPassword ? '#9b8ec4' : '#3b1f8c',
                 fontWeight: 700,
                 width: '100%',
                 outline: 'none',
                 letterSpacing: '0.12em',
+                cursor: needsPassword ? 'default' : 'text',
               }}
             />
           </div>
+
+          {/* Password field — only shown for admin accounts */}
+          {needsPassword && (
+            <div>
+              <label style={{ fontSize: 10, color: '#9b8ec4', display: 'block', marginBottom: 5, fontWeight: 700, letterSpacing: '0.08em' }}>
+                PASSWORD
+              </label>
+              <input
+                ref={pwRef}
+                type="password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setErr('') }}
+                placeholder="Admin password"
+                style={{
+                  background: '#f5f3ff',
+                  border: '1.5px solid #c4b5fd',
+                  borderRadius: 7,
+                  padding: '8px 12px',
+                  fontSize: 15,
+                  color: '#3b1f8c',
+                  fontWeight: 700,
+                  width: '100%',
+                  outline: 'none',
+                  letterSpacing: '0.08em',
+                }}
+              />
+            </div>
+          )}
+
           {err && <p style={{ color: '#dc2626', fontSize: 11, margin: 0 }}>{err}</p>}
+
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || checking}
             style={{
               background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
               color: '#fff',
@@ -179,15 +242,24 @@ export default function LoginPage() {
               padding: '10px 0',
               fontSize: 13,
               fontWeight: 700,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1,
+              cursor: (loading || checking) ? 'not-allowed' : 'pointer',
+              opacity: (loading || checking) ? 0.7 : 1,
               width: '100%',
               letterSpacing: '0.04em',
               boxShadow: '0 2px 10px rgba(124,58,237,0.3)',
             }}
           >
-            {loading ? 'Signing in…' : 'Sign In →'}
+            {checking ? 'Checking…' : loading ? 'Signing in…' : needsPassword ? 'Continue →' : 'Sign In →'}
           </button>
+
+          {/* Back link when at password step */}
+          {needsPassword && (
+            <button type="button"
+              onClick={() => { setNeedsPassword(false); setPassword(''); setErr('') }}
+              style={{ background: 'none', border: 'none', color: '#9b8ec4', fontSize: 11, cursor: 'pointer', textAlign: 'center' }}>
+              ← Use a different ID
+            </button>
+          )}
         </form>
 
         <p style={{ fontSize: 11, color: '#c4b5fd', marginTop: 16 }}>
