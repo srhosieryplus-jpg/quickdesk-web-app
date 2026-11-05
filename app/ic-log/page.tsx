@@ -100,7 +100,7 @@ export default function ICLogPage() {
     const matchedEntryIds = new Set<string>()
 
     for (const match of invoiceMatches || []) {
-      const entry = pending.find(e => e.order_num === match.invoice_num && e.store === match.store)
+      const entry = pending.find(e => e.order_num === match.invoice_num)
       if (!entry) continue
       await supabase.from('ic_log').update({
         status: 'Pushed In',
@@ -130,7 +130,7 @@ export default function ICLogPage() {
         .lte('exported_at', monthEnd)
 
       for (const match of poMatches || []) {
-        const entry = stillPending.find(e => e.order_num === match.po_num && e.store === match.store)
+        const entry = stillPending.find(e => e.order_num === match.po_num)
         if (!entry) continue
         await supabase.from('ic_log').update({
           status: 'Pushed In',
@@ -152,8 +152,8 @@ export default function ICLogPage() {
     if (!u) { router.push('/'); return }
     setCurrentUser(u)
     setNewStore(u.store !== 'ALL' ? u.store : 'PO')
-    fetchEntries(u).then(() => {
-      // run auto-match after load
+    fetchEntries(u).then(loaded => {
+      if (loaded && loaded.length) autoMatch(loaded)
     })
   }, [router])
 
