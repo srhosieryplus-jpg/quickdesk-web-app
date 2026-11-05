@@ -36,6 +36,8 @@ interface LedgerRow {
   payment_date: string | null
   comment: string | null
   currency: Currency
+  invoice_num: string | null
+  order_num: string | null
   logged_by: string
   created_at: string
   updated_at: string
@@ -97,10 +99,12 @@ interface StoreEntry {
   payment_date: string
   comment: string
   currency: Currency
+  invoice_num: string
+  order_num: string
 }
 
 function blankEntry(store: string): StoreEntry {
-  return { store, units: '', initial_total: '', deposit: '', duties: '', payment_date: '', comment: '', currency: 'USD' }
+  return { store, units: '', initial_total: '', deposit: '', duties: '', payment_date: '', comment: '', currency: 'USD', invoice_num: '', order_num: '' }
 }
 function today() {
   const d = new Date()
@@ -140,13 +144,16 @@ export default function SeasonBookPage() {
   const [activeBrand, setActiveBrand] = useState<string | null>(null)
 
   // Modal: new log entry
-  const [modal, setModal] = useState<'none'|'new-entry'|'edit-entry'|'add-payment'|'quick-pay'>('none')
+  const [modal, setModal] = useState<'none'|'new-entry'|'edit-entry'|'add-payment'|'quick-pay'|'invoice'>('none')
   const [editRow, setEditRow] = useState<LedgerRow | null>(null)
   const [quickPayBrand, setQuickPayBrand] = useState<string | null>(null)
   const [quickPayAmt, setQuickPayAmt] = useState('')
   const [quickPayDate, setQuickPayDate] = useState(today())
   // Which rows are selected for payment (by id); null = all with balance
   const [paySelectedIds, setPaySelectedIds] = useState<Set<string>>(new Set())
+  // Invoice modal
+  const [invoiceBrand, setInvoiceBrand] = useState<string | null>(null)
+  const [invoiceStoreFilter, setInvoiceStoreFilter] = useState<string | null>(null) // null = both stores
 
   // Brand search inside new-entry modal
   const [modalBrandQ, setModalBrandQ] = useState('')
@@ -273,6 +280,8 @@ export default function SeasonBookPage() {
       payment_date: row.payment_date ?? '',
       comment: row.comment ?? '',
       currency: (row.currency as Currency) ?? 'USD',
+      invoice_num: row.invoice_num ?? '',
+      order_num: row.order_num ?? '',
     }])
     setModal('edit-entry')
   }
@@ -295,6 +304,8 @@ export default function SeasonBookPage() {
           payment_date: (e.deposit && e.payment_date) ? e.payment_date : null,
           comment: e.comment || null,
           currency: e.currency,
+          invoice_num: e.invoice_num || null,
+          order_num: e.order_num || null,
           logged_by: user.userid,
         }
       })
@@ -329,6 +340,8 @@ export default function SeasonBookPage() {
       payment_date: (dep && e.payment_date) ? e.payment_date : null,
       comment: e.comment || null,
       currency: e.currency,
+      invoice_num: e.invoice_num || null,
+      order_num: e.order_num || null,
       updated_at: new Date().toISOString(),
     }).eq('id', editRow.id)
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
@@ -728,83 +741,81 @@ export default function SeasonBookPage() {
                 )
               })()}
 
-              {/* All brands — alphabetical */}
+              {/* All brands — compact cards */}
               {[...brandsInSeason].sort((a, b) => a.localeCompare(b))
                 .filter(b => !activeBrand || b === activeBrand)
                 .map(brand => {
                   const bRows = rows.filter(r => r.brand === brand)
                   const bDrops = Array.from(new Set(bRows.map(r => r.drop_num))).sort((a, b) => a - b)
                   const totBal = bRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                  const totInit = bRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
                   const isHighlighted = activeBrand === brand
+                  const storesPresent = STORES.filter(s => bRows.some(r => r.store === s))
+
                   return (
                     <div key={brand} id={`brand-${brand}`}
-                      style={{ marginBottom: 24, border: `2px solid ${isHighlighted ? purple : border}`, borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
-                      {/* Brand header */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#faf9ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap' }}>
+                      style={{ marginBottom: 16, border: `2px solid ${isHighlighted ? purple : border}`, borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
+
+                      {/* Brand header — double-click to open both stores side by side */}
+                      <div
+                        onDoubleClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(null); setModal('invoice') }}
+                        title="Double-click to open full invoice view"
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#f5f3ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap', cursor: 'pointer' }}>
                         <span style={{ fontSize: 15, fontWeight: 900, color: purpleD }}>{brand}</span>
                         <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
+                        <span style={{ fontSize: 11, color: gray }}>{bDrops.length} drop{bDrops.length !== 1 ? 's' : ''}</span>
                         {totBal > 0.001 && (
                           <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 7px' }}>
                             Owes {fmt$(totBal)}
                           </span>
                         )}
-                        <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>double-click a row to edit</span>
+                        {totBal <= 0.001 && totInit > 0 && (
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '1px 7px' }}>
+                            ✓ Paid
+                          </span>
+                        )}
+                        <span style={{ fontSize: 10, color: gray, marginLeft: 'auto' }}>double-click to open invoice</span>
                       </div>
 
-                      {/* Drops for this brand */}
-                      {bDrops.map(dropNum => {
-                        const dropRows = bRows.filter(r => r.drop_num === dropNum)
-                        return (
-                          <div key={dropNum} className="drop-card" style={{ margin: '10px 10px 0', borderRadius: 8 }}>
-                            <div className="drop-head">
-                              <span style={{ fontSize: 13, fontWeight: 800, color: purpleD }}>Drop {dropNum}</span>
-                            </div>
-                            <table className="store-table">
-                              <thead>
-                                <tr>
-                                  <th>Store</th>
-                                  <th>Cur</th>
-                                  <th>Units</th>
-                                  <th>Initial Total</th>
-                                  <th>Deposits</th>
-                                  <th>Duties</th>
-                                  <th>Balance Due</th>
-                                  <th>Payment Date</th>
-                                  <th>Comment</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {dropRows.map(r => {
-                                  const bal = r.balance_due ?? 0
-                                  return (
-                                    <tr key={r.id} onDoubleClick={() => openEdit(r)} title="Double-click to edit">
-                                      <td style={{ fontWeight: 700, color: purpleD }}>{r.store}</td>
-                                      <td>
-                                        <span style={{ fontSize: 10, fontWeight: 700, background: r.currency === 'EUR' ? '#fef3c7' : '#eff6ff', color: r.currency === 'EUR' ? '#92400e' : '#1e40af', border: `1px solid ${r.currency === 'EUR' ? '#fcd34d' : '#93c5fd'}`, borderRadius: 4, padding: '1px 4px' }}>
-                                          {r.currency ?? 'USD'}
-                                        </span>
-                                      </td>
-                                      <td>{r.units ?? '—'}</td>
-                                      <td>{fmt$(r.initial_total, r.currency)}</td>
-                                      <td>
-                                        <div>{fmt$(r.deposit, r.currency)}</div>
-                                        <PaymentRow row={r} />
-                                      </td>
-                                      <td>{fmt$(r.duties, r.currency)}</td>
-                                      <td className={bal > 0.001 ? 'bal-red' : bal < -0.001 ? 'bal-green' : ''}>
-                                        {fmt$(r.balance_due, r.currency)}
-                                      </td>
-                                      <td style={{ fontSize: 11, color: gray }}>{fmtDate(r.payment_date)}</td>
-                                      <td style={{ fontSize: 11, color: gray, maxWidth: 160 }}>{r.comment || '—'}</td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        )
-                      })}
-                      <div style={{ height: 10 }} />
+                      {/* Per-store summary rows — click to open single-store invoice */}
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: '#f8f7ff' }}>
+                            <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Units</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Total</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Deposits</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Balance Due</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {storesPresent.map(store => {
+                            const sRows = bRows.filter(r => r.store === store)
+                            const sUnits = sRows.reduce((s, r) => s + (r.units ?? 0), 0)
+                            const sInit  = sRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
+                            const sDep   = sRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
+                            const sBal   = sRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                            return (
+                              <tr key={store}
+                                onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
+                                title="Click to view store invoice"
+                                style={{ cursor: 'pointer', borderBottom: `1px solid #f3f4f6` }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                                <td style={{ padding: '8px 14px', fontWeight: 800, color: purpleD }}>{store}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{sUnits || '—'}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit)}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep)}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: sBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(sBal)}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                                  <span style={{ fontSize: 10, color: gray }}>view →</span>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )
                 })
@@ -948,6 +959,18 @@ export default function SeasonBookPage() {
                           onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, comment: e.target.value } : p))}
                           style={inp} />
                       </div>
+                      <div>
+                        <label style={lbl}>Invoice #</label>
+                        <input value={entry.invoice_num} placeholder="e.g. INV-001"
+                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, invoice_num: e.target.value } : p))}
+                          style={inp} />
+                      </div>
+                      <div>
+                        <label style={lbl}>Order #</label>
+                        <input value={entry.order_num} placeholder="e.g. ORD-2024-01"
+                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, order_num: e.target.value } : p))}
+                          style={inp} />
+                      </div>
                     </div>
                     {/* Live balance preview */}
                     {(entry.initial_total || entry.deposit || entry.duties) && (() => {
@@ -1054,6 +1077,18 @@ export default function SeasonBookPage() {
                             onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, comment: e.target.value } : p))}
                             style={inp} />
                         </div>
+                        <div>
+                          <label style={lbl}>Invoice #</label>
+                          <input value={entry.invoice_num} placeholder="e.g. INV-001"
+                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, invoice_num: e.target.value } : p))}
+                            style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Order #</label>
+                          <input value={entry.order_num} placeholder="e.g. ORD-2024-01"
+                            onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, order_num: e.target.value } : p))}
+                            style={inp} />
+                        </div>
                       </div>
                       {(entry.initial_total || entry.deposit || entry.duties) && (() => {
                         const init = parseFloat(entry.initial_total) || 0
@@ -1113,6 +1148,182 @@ export default function SeasonBookPage() {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Invoice Modal ───────────────────────────────────────────────────── */}
+      {modal === 'invoice' && invoiceBrand && (() => {
+        const iRows = rows.filter(r => r.brand === invoiceBrand)
+        const storesToShow = invoiceStoreFilter
+          ? [invoiceStoreFilter]
+          : STORES.filter(s => iRows.some(r => r.store === s))
+        const iDrops = Array.from(new Set(iRows.map(r => r.drop_num))).sort((a, b) => a - b)
+        const sideBySide = !invoiceStoreFilter && storesToShow.length > 1
+
+        return (
+          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
+            <div className="modal-box" style={{ maxWidth: sideBySide ? 860 : 560 }}>
+              <div className="modal-head">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: purpleD }}>📄 {invoiceBrand}</div>
+                  <div style={{ fontSize: 12, color: gray }}>{season}</div>
+                  {/* Store tabs */}
+                  <div style={{ display: 'flex', gap: 4, marginLeft: 4 }}>
+                    <button
+                      onClick={() => setInvoiceStoreFilter(null)}
+                      style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${invoiceStoreFilter === null ? purpleD : border}`, background: invoiceStoreFilter === null ? purpleD : '#fff', color: invoiceStoreFilter === null ? '#fff' : gray, cursor: 'pointer' }}>
+                      Both
+                    </button>
+                    {STORES.filter(s => iRows.some(r => r.store === s)).map(s => (
+                      <button key={s}
+                        onClick={() => setInvoiceStoreFilter(s)}
+                        style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${invoiceStoreFilter === s ? purpleD : border}`, background: invoiceStoreFilter === s ? purpleD : '#fff', color: invoiceStoreFilter === s ? '#fff' : gray, cursor: 'pointer' }}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button onClick={() => { setQuickPayBrand(invoiceBrand); setQuickPayAmt(''); setQuickPayDate(today()); setPaySelectedIds(new Set()); setModal('quick-pay') }}
+                    style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    💳 Pay
+                  </button>
+                  <button onClick={() => { setModal('none'); openNewEntry(invoiceBrand) }}
+                    style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    + Drop
+                  </button>
+                  <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
+                </div>
+              </div>
+              <div className="modal-body" style={{ padding: '12px 14px 18px' }}>
+
+                {/* Side-by-side or single store */}
+                <div style={{ display: 'grid', gridTemplateColumns: sideBySide ? '1fr 1fr' : '1fr', gap: 14 }}>
+                  {storesToShow.map(store => {
+                    const sRows = iRows.filter(r => r.store === store)
+                    const sDrops = Array.from(new Set(sRows.map(r => r.drop_num))).sort((a, b) => a - b)
+                    const storeTotInit  = sRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
+                    const storeDeposit = sRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
+                    const storeDuties  = sRows.reduce((s, r) => s + (r.duties ?? 0), 0)
+                    const storeBal     = sRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+
+                    return (
+                      <div key={store}>
+                        {/* Store header */}
+                        <div style={{ background: purpleD, color: '#fff', borderRadius: '8px 8px 0 0', padding: '7px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontWeight: 800, fontSize: 13 }}>{store}</span>
+                          <span style={{ fontSize: 11, opacity: 0.85 }}>{sDrops.length} drop{sDrops.length !== 1 ? 's' : ''}</span>
+                        </div>
+
+                        {/* Drops */}
+                        {sDrops.length === 0 ? (
+                          <div style={{ padding: '20px 12px', textAlign: 'center', color: gray, fontSize: 12, background: '#fafafa', border: `1px solid ${border}`, borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                            No drops logged for {store}
+                          </div>
+                        ) : (
+                          <div style={{ border: `1px solid ${border}`, borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                            {sDrops.map((dropNum, di) => {
+                              const dRow = sRows.find(r => r.drop_num === dropNum)!
+                              const bal = dRow.balance_due ?? 0
+                              const isLast = di === sDrops.length - 1
+                              return (
+                                <div key={dropNum}
+                                  style={{ borderBottom: isLast ? 'none' : `1px solid #f3f4f6`, padding: '10px 12px' }}>
+                                  {/* Drop header row */}
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <span style={{ fontWeight: 800, fontSize: 12, color: purpleD }}>Drop {dropNum}</span>
+                                      {dRow.invoice_num && (
+                                        <span style={{ fontSize: 10, color: '#1e40af', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>
+                                          INV {dRow.invoice_num}
+                                        </span>
+                                      )}
+                                      {dRow.order_num && (
+                                        <span style={{ fontSize: 10, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>
+                                          ORD {dRow.order_num}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={() => { setModal('none'); openEdit(dRow) }}
+                                      style={{ fontSize: 10, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', cursor: 'pointer', fontWeight: 600 }}>
+                                      Edit
+                                    </button>
+                                  </div>
+
+                                  {/* Drop detail grid */}
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 10px', fontSize: 11 }}>
+                                    {dRow.units != null && (
+                                      <div style={{ color: gray }}>Units: <span style={{ color: '#374151', fontWeight: 600 }}>{dRow.units}</span></div>
+                                    )}
+                                    <div style={{ color: gray }}>Total: <span style={{ color: '#374151', fontWeight: 600 }}>{fmt$(dRow.initial_total, dRow.currency)}</span></div>
+                                    <div style={{ color: gray }}>Deposits: <span style={{ color: '#166534', fontWeight: 600 }}>{fmt$(dRow.deposit, dRow.currency)}</span></div>
+                                    {(dRow.duties ?? 0) > 0 && (
+                                      <div style={{ color: gray }}>Duties: <span style={{ color: '#92400e', fontWeight: 600 }}>{fmt$(dRow.duties, dRow.currency)}</span></div>
+                                    )}
+                                    {dRow.payment_date && (
+                                      <div style={{ color: gray }}>Paid on: <span style={{ color: '#374151', fontWeight: 600 }}>{fmtDate(dRow.payment_date)}</span></div>
+                                    )}
+                                    {dRow.comment && (
+                                      <div style={{ color: gray, gridColumn: 'span 2' }}>Note: <span style={{ color: '#374151' }}>{dRow.comment}</span></div>
+                                    )}
+                                  </div>
+
+                                  {/* Balance chip */}
+                                  <div style={{ marginTop: 7, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 800, color: bal > 0.001 ? '#dc2626' : '#166534', background: bal > 0.001 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${bal > 0.001 ? '#fca5a5' : '#86efac'}`, borderRadius: 6, padding: '2px 8px' }}>
+                                      {bal > 0.001 ? `Balance: ${fmt$(bal, dRow.currency)}` : '✓ Paid'}
+                                    </span>
+                                    {bal > 0.001 && (
+                                      <button
+                                        onClick={() => { setQuickPayBrand(invoiceBrand); setPaySelectedIds(new Set([dRow.id])); setQuickPayAmt(''); setQuickPayDate(today()); setModal('quick-pay') }}
+                                        style={{ fontSize: 10, fontWeight: 700, color: purple, background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '3px 9px', cursor: 'pointer' }}>
+                                        💳 Pay Drop
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+
+                            {/* Store total footer */}
+                            <div style={{ background: '#f5f3ff', borderTop: `1.5px solid ${border}`, padding: '7px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                              <div style={{ fontSize: 11, color: gray, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                                <span>Total: <strong style={{ color: purpleD }}>{fmt$(storeTotInit)}</strong></span>
+                                <span>Dep: <strong style={{ color: '#166534' }}>{fmt$(storeDeposit)}</strong></span>
+                                {storeDuties > 0 && <span>Duties: <strong style={{ color: '#92400e' }}>{fmt$(storeDuties)}</strong></span>}
+                              </div>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: storeBal > 0.001 ? '#dc2626' : '#166534' }}>
+                                {storeBal > 0.001 ? `Owes ${fmt$(storeBal)}` : '✓ Clear'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Grand total footer when both stores shown */}
+                {sideBySide && (() => {
+                  const grandBal  = iRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                  const grandInit = iRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
+                  const grandDep  = iRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
+                  return (
+                    <div style={{ marginTop: 14, background: purpleD, borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ fontSize: 12, color: '#e9d5ff', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        <span>Grand Total: <strong style={{ color: '#fff' }}>{fmt$(grandInit)}</strong></span>
+                        <span>Deposits: <strong style={{ color: '#a7f3d0' }}>{fmt$(grandDep)}</strong></span>
+                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 900, color: grandBal > 0.001 ? '#fca5a5' : '#a7f3d0' }}>
+                        {grandBal > 0.001 ? `Balance: ${fmt$(grandBal)}` : '✓ Fully Paid'}
+                      </span>
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>
