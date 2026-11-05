@@ -39,6 +39,7 @@ interface LedgerRow {
   invoice_num: string | null
   order_num: string | null
   drop_name: string | null
+  is_cancelled: boolean | null
   logged_by: string
   created_at: string
   updated_at: string
@@ -136,12 +137,6 @@ export default function SeasonBookPage() {
   const [rows, setRows] = useState<LedgerRow[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Brand search / create
-  const [brandQ, setBrandQ] = useState('')
-  const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
-  const [showBrandDrop, setShowBrandDrop] = useState(false)
-  const brandRef = useRef<HTMLDivElement>(null)
-
   // Active brand being viewed/edited
   const [activeBrand, setActiveBrand] = useState<string | null>(null)
 
@@ -202,16 +197,6 @@ export default function SeasonBookPage() {
     fetchRows(season, u)
   }, [router, fetchRows, season])
 
-  // ── Brand autocomplete ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!brandQ.trim()) { setBrandSuggestions([]); return }
-    const q = brandQ.toLowerCase()
-    // Combine BRAND_LIST with brands already in this season's data
-    const inSeason = Array.from(new Set(rows.map(r => r.brand)))
-    const all = Array.from(new Set([...BRAND_LIST, ...inSeason]))
-    setBrandSuggestions(all.filter(b => b.toLowerCase().includes(q)).slice(0, 10))
-  }, [brandQ, rows])
-
   // Modal brand autocomplete
   useEffect(() => {
     if (!modalBrandQ.trim()) { setModalBrandSuggs([]); return }
@@ -221,12 +206,9 @@ export default function SeasonBookPage() {
     setModalBrandSuggs(all.filter(b => b.toLowerCase().includes(q)).slice(0, 10))
   }, [modalBrandQ, rows])
 
-  // Close brand dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (brandRef.current && !brandRef.current.contains(e.target as Node)) {
-        setShowBrandDrop(false)
-      }
       if (headerSearchRef.current && !headerSearchRef.current.contains(e.target as Node)) {
         setShowHeaderDrop(false)
       }
@@ -391,6 +373,19 @@ export default function SeasonBookPage() {
     setModal('none')
     fetchRows(season, user)
     setSaving(false)
+  }
+
+  // ── Toggle cancelled flag ─────────────────────────────────────────────────
+  async function toggleCancelled(row: LedgerRow) {
+    if (!user) return
+    const newVal = !row.is_cancelled
+    const { error } = await supabase.from('season_ledger').update({
+      is_cancelled: newVal,
+      updated_at: new Date().toISOString(),
+    }).eq('id', row.id)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    showToast(newVal ? '🚫 Marked as cancelled' : '✅ Cancellation removed')
+    fetchRows(season, user)
   }
 
   // ── Add payment to existing row ───────────────────────────────────────────
@@ -697,39 +692,6 @@ export default function SeasonBookPage() {
 
         {/* Sidebar — brand list */}
         <div className="sb-sidebar">
-          {/* Brand search / add */}
-          <div style={{ padding: '10px 12px', borderBottom: `1px solid ${border}`, position: 'relative' }} ref={brandRef}>
-            <input
-              value={brandQ}
-              onChange={e => { setBrandQ(e.target.value); setShowBrandDrop(true) }}
-              onFocus={() => setShowBrandDrop(true)}
-              placeholder="Search or add brand…"
-              style={{ ...inp, fontSize: 12 }}
-            />
-            {showBrandDrop && brandQ.trim() && (
-              <div style={{ position: 'absolute', top: '100%', left: 12, right: 12, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 50, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
-                {brandSuggestions.length > 0 ? brandSuggestions.map(b => (
-                  <div key={b}
-                    onClick={() => { setActiveBrand(b); setBrandQ(''); setShowBrandDrop(false) }}
-                    style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 500, borderBottom: '1px solid #f3f4f6' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
-                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                    {b}
-                  </div>
-                )) : (
-                  <div style={{ padding: '8px 12px' }}>
-                    <div style={{ fontSize: 11, color: gray, marginBottom: 6 }}>No match — create new?</div>
-                    <button
-                      onClick={() => { setActiveBrand(brandQ.trim()); setBrandQ(''); setShowBrandDrop(false) }}
-                      style={{ background: purple, color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      + &ldquo;{brandQ.trim()}&rdquo;
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Filter existing brands */}
           {brandsInSeason.length > 0 && (
             <div style={{ padding: '6px 12px', borderBottom: `1px solid ${border}` }}>
@@ -906,12 +868,14 @@ export default function SeasonBookPage() {
                         <tbody>
                           {storesPresent.map(store => {
                             const sRows = bRows.filter(r => r.store === store)
-                            const sUnits = sRows.reduce((s, r) => s + (r.units ?? 0), 0)
-                            const sInit  = sRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
-                            const sDep   = sRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
-                            const sBal   = sRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
-                            // Collect unique invoice #s for this store
-                            const invoiceNums = Array.from(new Set(sRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
+                            const activeRows = sRows.filter(r => !r.is_cancelled)
+                            const sUnits = activeRows.reduce((s, r) => s + (r.units ?? 0), 0)
+                            const sInit  = activeRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
+                            const sDep   = activeRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
+                            const sBal   = activeRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                            const hasCancelled = sRows.some(r => r.is_cancelled)
+                            // Collect unique invoice #s for this store (active only)
+                            const invoiceNums = Array.from(new Set(activeRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
                             return (
                               <tr key={store}
                                 onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
@@ -919,7 +883,10 @@ export default function SeasonBookPage() {
                                 style={{ cursor: 'pointer', borderBottom: `1px solid #f3f4f6` }}
                                 onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
                                 onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                                <td style={{ padding: '8px 14px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>{store}</td>
+                                <td style={{ padding: '8px 14px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>
+                                  {store}
+                                  {hasCancelled && <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', marginLeft: 4 }}>🚫</span>}
+                                </td>
                                 <td style={{ padding: '8px 10px', textAlign: 'left' }}>
                                   {invoiceNums.length > 0 ? invoiceNums.map(inv => (
                                     <span key={inv} style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>
@@ -1178,81 +1145,103 @@ export default function SeasonBookPage() {
 
       {/* ── Edit Entry Modal ─────────────────────────────────────────────────── */}
       {modal === 'edit-entry' && editRow && (() => {
-        // Figure out which store is missing for this drop (sibling store)
         const siblingStore = STORES.find(s => s !== editRow.store)
         const siblingExists = siblingStore
           ? rows.some(r => r.brand === editRow.brand && r.drop_num === editRow.drop_num && r.store === siblingStore)
           : true
-        // Next drop number for this brand
         const existingDrops = rows.filter(r => r.brand === editRow.brand)
         const maxDrop = existingDrops.length > 0 ? Math.max(...existingDrops.map(r => r.drop_num)) : 0
+        const entry = formStores[0]
+        const sym = CURRENCY_SYMBOLS[entry.currency]
+        const upd = (patch: Partial<StoreEntry>) =>
+          setFormStores(prev => prev.map((p, i) => i === 0 ? { ...p, ...patch } : p))
+        const init = parseFloat(entry.initial_total) || 0
+        const dep  = parseFloat(entry.deposit) || 0
+        const dut  = parseFloat(entry.duties) || 0
+        const liveBal = init - dep - dut
+        const isCancelled = editRow.is_cancelled ?? false
 
         return (
-          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}
-            style={{ alignItems: 'center' }}>
-            <div className="modal-box" style={{ maxWidth: 500 }}>
-              <div className="modal-head">
+          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
+            <div className="modal-box" style={{ maxWidth: 560 }}>
+
+              {/* Header */}
+              <div className="modal-head" style={{ background: isCancelled ? '#fef2f2' : '#fff' }}>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>{editRow.brand} — {editRow.store}</div>
-                  <div style={{ fontSize: 12, color: gray }}>Drop {editRow.drop_num}{editRow.drop_name ? ` · ${editRow.drop_name}` : ''} · {season}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: isCancelled ? '#dc2626' : purpleD }}>
+                      {editRow.brand}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: purpleD, borderRadius: 20, padding: '2px 8px' }}>{editRow.store}</span>
+                    {isCancelled && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 20, padding: '2px 8px' }}>🚫 Cancelled</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: gray, marginTop: 2 }}>
+                    Drop {editRow.drop_num}{editRow.drop_name ? ` · ${editRow.drop_name}` : ''} · {season}
+                  </div>
                 </div>
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
               </div>
-              <div className="modal-body">
-                {formStores.slice(0,1).map((entry, idx) => {
-                  const sym = CURRENCY_SYMBOLS[entry.currency]
-                  const upd = (patch: Partial<StoreEntry>) =>
-                    setFormStores(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p))
-                  return (
-                    <div key={entry.store} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-                      {/* Row 1: Invoice # + Order # + Drop Name */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                        <div>
-                          <label style={lbl}>Invoice #</label>
-                          <input value={entry.invoice_num} placeholder="e.g. INV-001"
-                            onChange={e => upd({ invoice_num: e.target.value })} style={inp} />
+              <div className="modal-body" style={{ opacity: isCancelled ? 0.7 : 1 }}>
+
+                {/* Section 1: Reference fields */}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: gray, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Reference</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <div>
+                      <label style={lbl}>Invoice #</label>
+                      <input value={entry.invoice_num} placeholder="INV-001"
+                        onChange={e => upd({ invoice_num: e.target.value })} style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Order #</label>
+                      <input value={entry.order_num} placeholder="ORD-001"
+                        onChange={e => upd({ order_num: e.target.value })} style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Drop Name</label>
+                      {(entry.drop_name && entry.drop_name !== '\0' && !dropNamesInSeason.includes(entry.drop_name)) ? (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <input value={entry.drop_name}
+                            onChange={e => upd({ drop_name: e.target.value })} style={{ ...inp, flex: 1 }} />
+                          <button type="button" title="Pick from list" onClick={() => upd({ drop_name: '' })}
+                            style={{ background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '0 7px', cursor: 'pointer', fontSize: 11, color: purpleD, fontWeight: 700 }}>↩</button>
                         </div>
-                        <div>
-                          <label style={lbl}>Order #</label>
-                          <input value={entry.order_num} placeholder="e.g. ORD-001"
-                            onChange={e => upd({ order_num: e.target.value })} style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>Drop Name</label>
-                          {/* Show text input directly if current value isn't in the list (custom) */}
-                          {(entry.drop_name && !dropNamesInSeason.includes(entry.drop_name)) ? (
-                            <div style={{ display: 'flex', gap: 4 }}>
-                              <input value={entry.drop_name}
-                                onChange={e => upd({ drop_name: e.target.value })} style={{ ...inp, flex: 1 }} />
-                              <button type="button" title="Pick from list"
-                                onClick={() => upd({ drop_name: '' })}
-                                style={{ background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '0 7px', cursor: 'pointer', fontSize: 11, color: purpleD, fontWeight: 700 }}>↩</button>
-                            </div>
-                          ) : (
-                            <>
-                              <select value={entry.drop_name}
-                                onChange={e => {
-                                  if (e.target.value === '__new__') upd({ drop_name: '\0' })
-                                  else upd({ drop_name: e.target.value })
-                                }}
-                                style={{ ...inp, cursor: 'pointer' }}>
-                                <option value="">— None —</option>
-                                {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
-                                <option value="__new__">+ New name…</option>
-                              </select>
-                              {entry.drop_name === '\0' && (
-                                <input autoFocus placeholder="Type new drop name…"
-                                  onChange={e => upd({ drop_name: e.target.value })}
-                                  style={{ ...inp, marginTop: 4 }} />
-                              )}
-                            </>
+                      ) : (
+                        <>
+                          <select value={entry.drop_name}
+                            onChange={e => {
+                              if (e.target.value === '__new__') upd({ drop_name: '\0' })
+                              else upd({ drop_name: e.target.value })
+                            }}
+                            style={{ ...inp, cursor: 'pointer' }}>
+                            <option value="">— None —</option>
+                            {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
+                            <option value="__new__">+ New name…</option>
+                          </select>
+                          {entry.drop_name === '\0' && (
+                            <input autoFocus placeholder="Type new drop name…"
+                              onChange={e => upd({ drop_name: e.target.value })}
+                              style={{ ...inp, marginTop: 4 }} />
                           )}
-                        </div>
-                      </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                      {/* Row 2: Currency + Units + Initial Total */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 1fr', gap: 8, alignItems: 'end' }}>
+                {/* Divider */}
+                <div style={{ height: 1, background: border, marginBottom: 14 }} />
+
+                {/* Section 2: Financials — 2 column layout */}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: gray, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Financials</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {/* Left column */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 6 }}>
                         <div>
                           <label style={lbl}>Cur</label>
                           <select value={entry.currency} onChange={e => upd({ currency: e.target.value as Currency })}
@@ -1266,60 +1255,58 @@ export default function SeasonBookPage() {
                           <input type="number" value={entry.units} placeholder="0"
                             onChange={e => upd({ units: e.target.value })} style={inp} />
                         </div>
-                        <div>
-                          <label style={lbl}>Initial Total ({sym})</label>
-                          <input type="number" value={entry.initial_total} step="0.01" placeholder="0.00"
-                            onChange={e => upd({ initial_total: e.target.value })} style={inp} />
-                        </div>
                       </div>
-
-                      {/* Row 3: Duties + Deposit + Payment Date */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                        <div>
-                          <label style={lbl}>Duties ({sym})</label>
-                          <input type="number" value={entry.duties} step="0.01" placeholder="0.00"
-                            onChange={e => upd({ duties: e.target.value })} style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>Deposit ({sym})</label>
-                          <input type="number" value={entry.deposit} step="0.01" placeholder="0.00"
-                            onChange={e => upd({ deposit: e.target.value })} style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>Payment Date</label>
-                          <input type="date" value={entry.payment_date}
-                            onChange={e => upd({ payment_date: e.target.value })} style={inp} />
-                        </div>
-                      </div>
-
-                      {/* Row 4: Comment (full width) */}
                       <div>
-                        <label style={lbl}>Comment</label>
-                        <input value={entry.comment} placeholder="Optional note"
-                          onChange={e => upd({ comment: e.target.value })} style={inp} />
+                        <label style={lbl}>Initial Total ({sym})</label>
+                        <input type="number" value={entry.initial_total} step="0.01" placeholder="0.00"
+                          onChange={e => upd({ initial_total: e.target.value })} style={inp} />
                       </div>
-
-                      {/* Live balance */}
-                      {(entry.initial_total || entry.deposit || entry.duties) && (() => {
-                        const init = parseFloat(entry.initial_total) || 0
-                        const dep  = parseFloat(entry.deposit) || 0
-                        const dut  = parseFloat(entry.duties) || 0
-                        const bal  = init - dep - dut
-                        return (
-                          <div style={{ fontSize: 13, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
-                            Balance Due: {sym}{bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                        )
-                      })()}
+                      <div>
+                        <label style={lbl}>Deposit ({sym})</label>
+                        <input type="number" value={entry.deposit} step="0.01" placeholder="0.00"
+                          onChange={e => upd({ deposit: e.target.value })} style={inp} />
+                      </div>
                     </div>
-                  )
-                })}
+                    {/* Right column */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div>
+                        <label style={lbl}>Duties ({sym})</label>
+                        <input type="number" value={entry.duties} step="0.01" placeholder="0.00"
+                          onChange={e => upd({ duties: e.target.value })} style={inp} />
+                      </div>
+                      <div>
+                        <label style={lbl}>Payment Date</label>
+                        <input type="date" value={entry.payment_date}
+                          onChange={e => upd({ payment_date: e.target.value })} style={inp} />
+                      </div>
+                      {/* Live balance — right column bottom */}
+                      <div style={{ marginTop: 'auto', paddingTop: 4 }}>
+                        <label style={{ ...lbl, color: liveBal > 0.001 ? '#dc2626' : '#166534' }}>Balance Due</label>
+                        <div style={{
+                          background: liveBal > 0.001 ? '#fef2f2' : '#f0fdf4',
+                          border: `1.5px solid ${liveBal > 0.001 ? '#fca5a5' : '#86efac'}`,
+                          borderRadius: 7, padding: '7px 10px',
+                          fontSize: 15, fontWeight: 900,
+                          color: liveBal > 0.001 ? '#dc2626' : '#166534',
+                        }}>
+                          {sym}{liveBal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                {/* Action buttons row */}
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap' }}>
-                  {/* Left side: quick-add buttons */}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {/* Add missing sibling store for same drop */}
+                {/* Comment — full width */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={lbl}>Comment</label>
+                  <input value={entry.comment} placeholder="Optional note"
+                    onChange={e => upd({ comment: e.target.value })} style={inp} />
+                </div>
+
+                {/* Action bar */}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                  {/* Left: quick-add + cancel-drop */}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     {!siblingExists && siblingStore && (
                       <button
                         onClick={() => {
@@ -1329,11 +1316,10 @@ export default function SeasonBookPage() {
                           setFormStores([blankEntry(siblingStore)])
                           setModal('new-entry')
                         }}
-                        style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                        + Log {siblingStore} (Drop {editRow.drop_num})
+                        style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                        + Log {siblingStore}
                       </button>
                     )}
-                    {/* Log a new drop for this brand */}
                     <button
                       onClick={() => {
                         setModal('none')
@@ -1342,15 +1328,26 @@ export default function SeasonBookPage() {
                         setFormStores(STORES.map(blankEntry))
                         setModal('new-entry')
                       }}
-                      style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      + Log Drop {maxDrop + 1}
+                      style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                      + Drop {maxDrop + 1}
+                    </button>
+                    {/* Cancel/uncancel toggle */}
+                    <button
+                      onClick={async () => { await toggleCancelled(editRow); setModal('none') }}
+                      style={{
+                        background: isCancelled ? '#f0fdf4' : '#fff5f5',
+                        color: isCancelled ? '#166534' : '#dc2626',
+                        border: `1.5px solid ${isCancelled ? '#86efac' : '#fca5a5'}`,
+                        borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                      }}>
+                      {isCancelled ? '✓ Uncancel' : '🚫 Cancel Drop'}
                     </button>
                   </div>
-                  {/* Right side: cancel / save */}
+                  {/* Right: dismiss / save */}
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => setModal('none')} disabled={saving}
                       style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                      Cancel
+                      Dismiss
                     </button>
                     <button onClick={saveEdit} disabled={saving}
                       style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
@@ -1439,13 +1436,17 @@ export default function SeasonBookPage() {
                               const dRow = sRows.find(r => r.drop_num === dropNum)!
                               const bal = dRow.balance_due ?? 0
                               const isLast = di === sDrops.length - 1
+                              const isRowCancelled = dRow.is_cancelled ?? false
                               return (
                                 <div key={dropNum}
-                                  style={{ borderBottom: isLast ? 'none' : `1px solid #f3f4f6`, padding: '10px 12px' }}>
+                                  style={{ borderBottom: isLast ? 'none' : `1px solid #f3f4f6`, padding: '10px 12px', background: isRowCancelled ? '#fafafa' : undefined, opacity: isRowCancelled ? 0.7 : 1 }}>
                                   {/* Drop header row */}
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <span style={{ fontWeight: 800, fontSize: 12, color: purpleD }}>Drop {dropNum}{dRow.drop_name ? ` · ${dRow.drop_name}` : ''}</span>
+                                      <span style={{ fontWeight: 800, fontSize: 12, color: isRowCancelled ? gray : purpleD, textDecoration: isRowCancelled ? 'line-through' : undefined }}>Drop {dropNum}{dRow.drop_name ? ` · ${dRow.drop_name}` : ''}</span>
+                                      {isRowCancelled && (
+                                        <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 4, padding: '1px 5px' }}>Cancelled</span>
+                                      )}
                                       {dRow.invoice_num && (
                                         <span style={{ fontSize: 10, color: '#1e40af', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>
                                           INV {dRow.invoice_num}
