@@ -817,7 +817,6 @@ export default function SeasonBookPage() {
                     }, 50)
                   }
                 }}>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
                 {(() => {
                   const vids = brandToVendors.get(b)
                   if (!vids || vids.length === 0) return null
@@ -828,10 +827,11 @@ export default function SeasonBookPage() {
                   )
                   return (
                     <span style={{ fontSize: 9, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
-                      {vids.length} vendors
+                      {vids.length}+
                     </span>
                   )
                 })()}
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
                 {hasOwing && (
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 5px', flexShrink: 0 }}>
                     {fmt$(totalBal)}
@@ -953,9 +953,6 @@ export default function SeasonBookPage() {
                         onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(null); setModal('invoice') }}
                         title="Click to open invoice view"
                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#f5f3ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap', cursor: 'pointer' }}>
-                        <span style={{ fontSize: 15, fontWeight: 900, color: purpleD }}>{brand}</span>
-                        <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
-                        <span style={{ fontSize: 11, color: gray }}>{bDrops.length} drop{bDrops.length !== 1 ? 's' : ''}</span>
                         {(() => {
                           const vids = brandToVendors.get(brand)
                           if (!vids || vids.length === 0) return null
@@ -976,6 +973,9 @@ export default function SeasonBookPage() {
                             </span>
                           ))
                         })()}
+                        <span style={{ fontSize: 15, fontWeight: 900, color: purpleD }}>{brand}</span>
+                        <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
+                        <span style={{ fontSize: 11, color: gray }}>{bDrops.length} drop{bDrops.length !== 1 ? 's' : ''}</span>
                         {totBal <= 0.001 && totInit > 0 && (
                           <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '1px 7px' }}>
                             ✓ Paid
