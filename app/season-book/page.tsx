@@ -38,6 +38,7 @@ interface LedgerRow {
   currency: Currency
   invoice_num: string | null
   order_num: string | null
+  drop_name: string | null
   logged_by: string
   created_at: string
   updated_at: string
@@ -101,10 +102,11 @@ interface StoreEntry {
   currency: Currency
   invoice_num: string
   order_num: string
+  drop_name: string
 }
 
 function blankEntry(store: string): StoreEntry {
-  return { store, units: '', initial_total: '', deposit: '', duties: '', payment_date: '', comment: '', currency: 'USD', invoice_num: '', order_num: '' }
+  return { store, units: '', initial_total: '', deposit: '', duties: '', payment_date: '', comment: '', currency: 'USD', invoice_num: '', order_num: '', drop_name: '' }
 }
 function today() {
   const d = new Date()
@@ -151,6 +153,8 @@ export default function SeasonBookPage() {
   const [quickPayDate, setQuickPayDate] = useState(today())
   // Which rows are selected for payment (by id); null = all with balance
   const [paySelectedIds, setPaySelectedIds] = useState<Set<string>>(new Set())
+  // Payment modal brand search
+  const [payBrandSearch, setPayBrandSearch] = useState('')
   // Invoice modal
   const [invoiceBrand, setInvoiceBrand] = useState<string | null>(null)
   const [invoiceStoreFilter, setInvoiceStoreFilter] = useState<string | null>(null) // null = both stores
@@ -282,6 +286,7 @@ export default function SeasonBookPage() {
       currency: (row.currency as Currency) ?? 'USD',
       invoice_num: row.invoice_num ?? '',
       order_num: row.order_num ?? '',
+      drop_name: row.drop_name ?? '',
     }])
     setModal('edit-entry')
   }
@@ -306,6 +311,7 @@ export default function SeasonBookPage() {
           currency: e.currency,
           invoice_num: e.invoice_num || null,
           order_num: e.order_num || null,
+          drop_name: e.drop_name || null,
           logged_by: user.userid,
         }
       })
@@ -342,6 +348,7 @@ export default function SeasonBookPage() {
       currency: e.currency,
       invoice_num: e.invoice_num || null,
       order_num: e.order_num || null,
+      drop_name: e.drop_name || null,
       updated_at: new Date().toISOString(),
     }).eq('id', editRow.id)
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
@@ -537,6 +544,7 @@ export default function SeasonBookPage() {
             setQuickPayBrand(activeBrand ?? null)
             setQuickPayAmt(''); setQuickPayDate(today())
             setPaySelectedIds(new Set())
+            setPayBrandSearch('')
             setModal('quick-pay')
           }}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
@@ -547,7 +555,7 @@ export default function SeasonBookPage() {
 
       {/* Sub-bar: search */}
       <div className="sb-subbar">
-        <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+        <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 700 }}>
           <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
             <span style={{ padding: '0 8px', color: gray, fontSize: 14 }}>🔍</span>
             <input
@@ -705,7 +713,7 @@ export default function SeasonBookPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
                         <tr style={{ background: purpleD }}>
-                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', whiteSpace: 'nowrap' }}>{season}</th>
+                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', whiteSpace: 'nowrap', minWidth: 100 }}>{season}</th>
                           {metrics.map(m => (
                             <th key={m.key} style={{ padding: '7px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#e9d5ff', borderLeft: `1px solid rgba(255,255,255,0.15)`, whiteSpace: 'nowrap' }}>
                               {m.label}
@@ -719,7 +727,7 @@ export default function SeasonBookPage() {
                           const stats = statsFor(isTotal ? null : rowLabel)
                           return (
                             <tr key={rowLabel} style={{ background: isTotal ? '#f5f3ff' : ri % 2 === 0 ? '#fff' : '#faf9ff' }}>
-                              <td style={{ padding: '6px 12px', fontSize: 12, fontWeight: isTotal ? 800 : 700, color: isTotal ? purpleD : gray, borderBottom: `1px solid ${border}`, whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '6px 12px', fontSize: 12, fontWeight: isTotal ? 800 : 700, color: isTotal ? purpleD : gray, borderBottom: `1px solid ${border}`, whiteSpace: 'nowrap', textAlign: 'left' }}>
                                 {rowLabel}
                               </td>
                               {metrics.map(m => {
@@ -803,7 +811,7 @@ export default function SeasonBookPage() {
                                 style={{ cursor: 'pointer', borderBottom: `1px solid #f3f4f6` }}
                                 onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
                                 onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                                <td style={{ padding: '8px 14px', fontWeight: 800, color: purpleD }}>{store}</td>
+                                <td style={{ padding: '8px 14px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>{store}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{sUnits || '—'}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit)}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep)}</td>
@@ -911,79 +919,88 @@ export default function SeasonBookPage() {
               {/* Per-store blocks */}
               {formStores.map((entry, idx) => {
                 const sym = CURRENCY_SYMBOLS[entry.currency]
+                const upd = (patch: Partial<StoreEntry>) =>
+                  setFormStores(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p))
                 return (
-                  <div key={entry.store} className="store-block">
-                    <div className="store-block-head">
-                      <span style={{ background: purple, color: '#fff', borderRadius: 6, padding: '2px 8px', fontSize: 12 }}>{entry.store}</span>
-                      <select value={entry.currency}
-                        onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, currency: e.target.value as Currency } : p))}
-                        style={{ fontSize: 11, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 5, padding: '2px 4px', background: '#f5f3ff', color: purpleD, cursor: 'pointer', width: 44 }}>
-                        <option value="USD">$</option>
-                        <option value="EUR">€</option>
+                  <div key={entry.store} style={{ border: `2px solid ${border}`, borderRadius: 10, marginBottom: 12, overflow: 'hidden' }}>
+                    {/* Store header bar */}
+                    <div style={{ background: `linear-gradient(90deg, ${purpleD} 0%, ${purple} 100%)`, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: 900, fontSize: 13, color: '#fff', letterSpacing: '0.08em' }}>{entry.store}</span>
+                      <select value={entry.currency} onChange={e => upd({ currency: e.target.value as Currency })}
+                        style={{ fontSize: 11, fontWeight: 800, border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '3px 6px', background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', width: 58 }}>
+                        <option value="USD" style={{ color: purpleD, background: '#fff' }}>USD</option>
+                        <option value="EUR" style={{ color: purpleD, background: '#fff' }}>EUR</option>
                       </select>
                     </div>
-                    <div className="form-grid">
-                      <div>
-                        <label style={lbl}>Units</label>
-                        <input type="number" value={entry.units} placeholder="0"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, units: e.target.value } : p))}
-                          style={inp} />
+                    <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {/* Row 1: Invoice # + Order # + Drop Name */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={lbl}>Invoice #</label>
+                          <input value={entry.invoice_num} placeholder="INV-001"
+                            onChange={e => upd({ invoice_num: e.target.value })} style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Order #</label>
+                          <input value={entry.order_num} placeholder="ORD-001"
+                            onChange={e => upd({ order_num: e.target.value })} style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Drop Name</label>
+                          <input value={entry.drop_name} placeholder="e.g. FW Drop 1"
+                            onChange={e => upd({ drop_name: e.target.value })} style={inp} />
+                        </div>
                       </div>
-                      <div>
-                        <label style={lbl}>Initial Total ({sym})</label>
-                        <input type="number" value={entry.initial_total} placeholder="0.00" step="0.01"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, initial_total: e.target.value } : p))}
-                          style={inp} />
+                      {/* Row 2: Units + Initial Total */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={lbl}>Units</label>
+                          <input type="number" value={entry.units} placeholder="0"
+                            onChange={e => upd({ units: e.target.value })} style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Initial Total ({sym})</label>
+                          <input type="number" value={entry.initial_total} placeholder="0.00" step="0.01"
+                            onChange={e => upd({ initial_total: e.target.value })} style={inp} />
+                        </div>
                       </div>
-                      <div>
-                        <label style={lbl}>Deposit ({sym})</label>
-                        <input type="number" value={entry.deposit} placeholder="0.00" step="0.01"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, deposit: e.target.value } : p))}
-                          style={inp} />
+                      {/* Row 3: Deposit + Duties + Payment Date */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={lbl}>Deposit ({sym})</label>
+                          <input type="number" value={entry.deposit} placeholder="0.00" step="0.01"
+                            onChange={e => upd({ deposit: e.target.value })} style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Duties ({sym})</label>
+                          <input type="number" value={entry.duties} placeholder="0.00" step="0.01"
+                            onChange={e => upd({ duties: e.target.value })} style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Payment Date</label>
+                          <input type="date" value={entry.payment_date}
+                            onChange={e => upd({ payment_date: e.target.value })} style={inp} />
+                        </div>
                       </div>
-                      <div>
-                        <label style={lbl}>Duties ({sym})</label>
-                        <input type="number" value={entry.duties} placeholder="0.00" step="0.01"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, duties: e.target.value } : p))}
-                          style={inp} />
-                      </div>
-                      <div>
-                        <label style={lbl}>Payment Date</label>
-                        <input type="date" value={entry.payment_date}
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, payment_date: e.target.value } : p))}
-                          style={inp} />
-                      </div>
+                      {/* Row 4: Comment */}
                       <div>
                         <label style={lbl}>Comment</label>
                         <input value={entry.comment} placeholder="Optional note"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, comment: e.target.value } : p))}
-                          style={inp} />
+                          onChange={e => upd({ comment: e.target.value })} style={inp} />
                       </div>
-                      <div>
-                        <label style={lbl}>Invoice #</label>
-                        <input value={entry.invoice_num} placeholder="e.g. INV-001"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, invoice_num: e.target.value } : p))}
-                          style={inp} />
-                      </div>
-                      <div>
-                        <label style={lbl}>Order #</label>
-                        <input value={entry.order_num} placeholder="e.g. ORD-2024-01"
-                          onChange={e => setFormStores(prev => prev.map((p,i) => i===idx ? { ...p, order_num: e.target.value } : p))}
-                          style={inp} />
-                      </div>
+                      {/* Live balance preview */}
+                      {(entry.initial_total || entry.deposit || entry.duties) && (() => {
+                        const init = parseFloat(entry.initial_total) || 0
+                        const dep  = parseFloat(entry.deposit) || 0
+                        const dut  = parseFloat(entry.duties) || 0
+                        const bal  = init - dep - dut
+                        return (
+                          <div style={{ background: bal > 0.001 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${bal > 0.001 ? '#fca5a5' : '#86efac'}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
+                            Balance Due: {sym}{bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        )
+                      })()}
                     </div>
-                    {/* Live balance preview */}
-                    {(entry.initial_total || entry.deposit || entry.duties) && (() => {
-                      const init = parseFloat(entry.initial_total) || 0
-                      const dep  = parseFloat(entry.deposit) || 0
-                      const dut  = parseFloat(entry.duties) || 0
-                      const bal  = init - dep - dut
-                      return (
-                        <div style={{ marginTop: 8, fontSize: 12, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
-                          Balance Due: {sym}{bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                      )
-                    })()}
                   </div>
                 )
               })}
@@ -1022,7 +1039,7 @@ export default function SeasonBookPage() {
               <div className="modal-head">
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>{editRow.brand} — {editRow.store}</div>
-                  <div style={{ fontSize: 12, color: gray }}>Drop {editRow.drop_num} · {season}</div>
+                  <div style={{ fontSize: 12, color: gray }}>Drop {editRow.drop_num}{editRow.drop_name ? ` · ${editRow.drop_name}` : ''} · {season}</div>
                 </div>
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
               </div>
@@ -1034,8 +1051,8 @@ export default function SeasonBookPage() {
                   return (
                     <div key={entry.store} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-                      {/* Row 1: Invoice # and Order # */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      {/* Row 1: Invoice # + Order # + Drop Name */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                         <div>
                           <label style={lbl}>Invoice #</label>
                           <input value={entry.invoice_num} placeholder="e.g. INV-001"
@@ -1046,6 +1063,11 @@ export default function SeasonBookPage() {
                           <input value={entry.order_num} placeholder="e.g. ORD-001"
                             onChange={e => upd({ order_num: e.target.value })} style={inp} />
                         </div>
+                        <div>
+                          <label style={lbl}>Drop Name</label>
+                          <input value={entry.drop_name} placeholder="e.g. FW Drop 1"
+                            onChange={e => upd({ drop_name: e.target.value })} style={inp} />
+                        </div>
                       </div>
 
                       {/* Row 2: Currency + Units + Initial Total */}
@@ -1054,8 +1076,8 @@ export default function SeasonBookPage() {
                           <label style={lbl}>Cur</label>
                           <select value={entry.currency} onChange={e => upd({ currency: e.target.value as Currency })}
                             style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 6, padding: '5px 4px', background: '#f5f3ff', color: purpleD, cursor: 'pointer', width: '100%' }}>
-                            <option value="USD">$</option>
-                            <option value="EUR">€</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
                           </select>
                         </div>
                         <div>
@@ -1172,7 +1194,7 @@ export default function SeasonBookPage() {
 
         return (
           <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
-            <div className="modal-box" style={{ maxWidth: sideBySide ? 860 : 560 }}>
+            <div className="modal-box" style={{ maxWidth: sideBySide ? 860 : 520 }}>
               <div className="modal-head">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color: purpleD }}>📄 {invoiceBrand}</div>
@@ -1242,7 +1264,7 @@ export default function SeasonBookPage() {
                                   {/* Drop header row */}
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <span style={{ fontWeight: 800, fontSize: 12, color: purpleD }}>Drop {dropNum}</span>
+                                      <span style={{ fontWeight: 800, fontSize: 12, color: purpleD }}>Drop {dropNum}{dRow.drop_name ? ` · ${dRow.drop_name}` : ''}</span>
                                       {dRow.invoice_num && (
                                         <span style={{ fontSize: 10, color: '#1e40af', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>
                                           INV {dRow.invoice_num}
@@ -1372,20 +1394,54 @@ export default function SeasonBookPage() {
               </div>
               <div className="modal-body">
 
-                {/* Brand filter chips */}
-                <div style={{ marginBottom: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, color: gray, fontWeight: 600 }}>Brand:</span>
-                  <button onClick={() => { setQuickPayBrand(null); setPaySelectedIds(new Set()) }}
-                    style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${quickPayBrand === null ? purpleD : border}`, background: quickPayBrand === null ? purpleD : '#fff', color: quickPayBrand === null ? '#fff' : gray, cursor: 'pointer' }}>
-                    All
-                  </button>
-                  {Array.from(new Set(allBalanceRows.map(r => r.brand))).sort().map(b => (
-                    <button key={b} onClick={() => { setQuickPayBrand(b); setPaySelectedIds(new Set()) }}
-                      style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${quickPayBrand === b ? purpleD : border}`, background: quickPayBrand === b ? purpleD : '#fff', color: quickPayBrand === b ? '#fff' : gray, cursor: 'pointer' }}>
-                      {b}
-                    </button>
-                  ))}
-                </div>
+                {/* Brand filter — typeahead search */}
+                {(() => {
+                  const allBrandsWithBal = Array.from(new Set(allBalanceRows.map(r => r.brand))).sort()
+                  const searchResults = payBrandSearch.trim()
+                    ? allBrandsWithBal.filter(b => b.toLowerCase().includes(payBrandSearch.toLowerCase()))
+                    : allBrandsWithBal
+                  return (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
+                          <span style={{ padding: '0 8px', color: gray, fontSize: 13 }}>🔍</span>
+                          <input
+                            value={payBrandSearch}
+                            onChange={e => setPayBrandSearch(e.target.value)}
+                            placeholder="Search brand…"
+                            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#111', fontSize: 12, fontWeight: 500, padding: '6px 8px 6px 0', flex: 1 }}
+                          />
+                          {payBrandSearch && (
+                            <button onClick={() => setPayBrandSearch('')}
+                              style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', padding: '0 8px', fontSize: 13 }}>✕</button>
+                          )}
+                        </div>
+                        {quickPayBrand && (
+                          <button onClick={() => { setQuickPayBrand(null); setPaySelectedIds(new Set()); setPayBrandSearch('') }}
+                            style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 7, border: `1.5px solid ${border}`, background: '#f5f3ff', color: gray, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            Clear filter
+                          </button>
+                        )}
+                      </div>
+                      {/* Show brand results as compact chips when searching */}
+                      {payBrandSearch.trim() && searchResults.length > 0 && (
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', maxHeight: 80, overflowY: 'auto', padding: '4px 2px' }}>
+                          {searchResults.map(b => (
+                            <button key={b} onClick={() => { setQuickPayBrand(b); setPaySelectedIds(new Set()); setPayBrandSearch('') }}
+                              style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${quickPayBrand === b ? purpleD : border}`, background: quickPayBrand === b ? purpleD : '#fff', color: quickPayBrand === b ? '#fff' : gray, cursor: 'pointer' }}>
+                              {b}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {quickPayBrand && (
+                        <div style={{ fontSize: 11, color: purpleD, fontWeight: 700, padding: '2px 4px' }}>
+                          Filtering: <span style={{ background: '#ede9fe', borderRadius: 6, padding: '1px 7px' }}>{quickPayBrand}</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {filteredRows.length === 0 ? (
                   <p style={{ fontSize: 13, color: gray, textAlign: 'center', padding: '12px 0' }}>No outstanding balances{quickPayBrand ? ` for ${quickPayBrand}` : ''} in {season}.</p>
