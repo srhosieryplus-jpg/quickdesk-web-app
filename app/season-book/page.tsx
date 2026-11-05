@@ -172,6 +172,11 @@ export default function SeasonBookPage() {
 
   // Filter/view
   const [viewFilter, setViewFilter] = useState('')
+  // Drop name filter
+  const [activeDropName, setActiveDropName] = useState<string | null>(null)
+  // Drop name management (new name input)
+  const [showDropNameMgr, setShowDropNameMgr] = useState(false)
+  const [newDropNameInput, setNewDropNameInput] = useState('')
 
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type); setTimeout(() => setToast(''), 3000)
@@ -235,14 +240,44 @@ export default function SeasonBookPage() {
 
   // ── Computed: brands in this season ───────────────────────────────────────
   const brandsInSeason = Array.from(new Set(rows.map(r => r.brand))).sort()
-  const filteredBrands = viewFilter
-    ? brandsInSeason.filter(b => b.toLowerCase().includes(viewFilter.toLowerCase()))
-    : brandsInSeason
 
-  // Header search: searches across all brands (from BRAND_LIST + in-season)
+  // All distinct drop names used in this season's rows (from the DB)
+  const dropNamesInSeason = Array.from(new Set(
+    rows.map(r => r.drop_name).filter((n): n is string => !!n)
+  )).sort()
+
+  const filteredBrands = (() => {
+    let list = viewFilter
+      ? brandsInSeason.filter(b => b.toLowerCase().includes(viewFilter.toLowerCase()))
+      : brandsInSeason
+    // Filter by active drop name
+    if (activeDropName) {
+      list = list.filter(b => rows.some(r => r.brand === b && r.drop_name === activeDropName))
+    }
+    return list
+  })()
+
+  // Header search: brand name OR invoice # match
   const allBrandOptions = Array.from(new Set([...BRAND_LIST, ...brandsInSeason]))
-  const headerSearchResults = headerSearch.trim()
-    ? allBrandOptions.filter(b => b.toLowerCase().includes(headerSearch.toLowerCase())).slice(0, 10)
+  const headerSearchResults: Array<{ type: 'brand' | 'invoice'; label: string; brand: string; invoiceNum?: string }> = headerSearch.trim()
+    ? [
+        // Brand name matches
+        ...allBrandOptions
+          .filter(b => b.toLowerCase().includes(headerSearch.toLowerCase()))
+          .slice(0, 6)
+          .map(b => ({ type: 'brand' as const, label: b, brand: b })),
+        // Invoice # matches — dedupe by brand+invoice
+        ...rows
+          .filter(r => r.invoice_num && r.invoice_num.toLowerCase().includes(headerSearch.toLowerCase()))
+          .reduce<Array<{ type: 'invoice'; label: string; brand: string; invoiceNum: string }>>((acc, r) => {
+            const key = r.brand + '|' + r.invoice_num
+            if (!acc.find(x => x.brand + '|' + x.invoiceNum === key)) {
+              acc.push({ type: 'invoice', label: `${r.brand} — INV ${r.invoice_num}`, brand: r.brand, invoiceNum: r.invoice_num! })
+            }
+            return acc
+          }, [])
+          .slice(0, 6),
+      ]
     : []
 
   // Rows for active brand
@@ -311,7 +346,7 @@ export default function SeasonBookPage() {
           currency: e.currency,
           invoice_num: e.invoice_num || null,
           order_num: e.order_num || null,
-          drop_name: e.drop_name || null,
+          drop_name: (e.drop_name && e.drop_name !== '\0') ? e.drop_name : null,
           logged_by: user.userid,
         }
       })
@@ -348,7 +383,7 @@ export default function SeasonBookPage() {
       currency: e.currency,
       invoice_num: e.invoice_num || null,
       order_num: e.order_num || null,
-      drop_name: e.drop_name || null,
+      drop_name: (e.drop_name && e.drop_name !== '\0') ? e.drop_name : null,
       updated_at: new Date().toISOString(),
     }).eq('id', editRow.id)
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
@@ -431,8 +466,9 @@ export default function SeasonBookPage() {
         * { box-sizing: border-box; }
         .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: sticky; top: 0; z-index: 100; }
         .sb-subbar { padding: 8px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; justify-content: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
+        .sb-dropbar { padding: 6px 16px; background: #fff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: sticky; top: 100px; z-index: 98; min-height: 38px; }
         .sb-layout { display: flex; flex: 1; position: relative; }
-        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: 100px; height: calc(100vh - 100px); }
+        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: ${dropNamesInSeason.length > 0 ? '138px' : '100px'}; height: calc(100vh - ${dropNamesInSeason.length > 0 ? '138px' : '100px'}); }
         .sb-main { flex: 1; padding: 16px; }
         .sb-brand-row { padding: 8px 14px; cursor: pointer; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; color: #374151; transition: background 0.1s; }
         .sb-brand-row:hover, .sb-brand-row.active { background: #ede9fe; color: ${purpleD}; }
@@ -483,7 +519,7 @@ export default function SeasonBookPage() {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {allSeasons.map(s => (
             <div key={s} className={`sp-season-row${season === s ? ' active' : ''}`}
-              onClick={() => { setSeason(s); setActiveBrand(null); setShowSeasonPanel(false) }}>
+              onClick={() => { setSeason(s); setActiveBrand(null); setActiveDropName(null); setShowSeasonPanel(false) }}>
               {s}
             </div>
           ))}
@@ -571,17 +607,28 @@ export default function SeasonBookPage() {
             )}
           </div>
           {showHeaderDrop && headerSearchResults.length > 0 && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 8, zIndex: 300, maxHeight: 240, overflowY: 'auto', boxShadow: '0 6px 24px rgba(0,0,0,0.14)' }}>
-              {headerSearchResults.map(b => (
-                <div key={b}
-                  onClick={() => { setActiveBrand(b); setHeaderSearch(''); setShowHeaderDrop(false) }}
-                  style={{ padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+            <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 8, zIndex: 300, maxHeight: 300, overflowY: 'auto', boxShadow: '0 6px 24px rgba(0,0,0,0.14)' }}>
+              {headerSearchResults.map((item, i) => (
+                <div key={i}
+                  onClick={() => { setActiveBrand(item.brand); setHeaderSearch(''); setShowHeaderDrop(false) }}
+                  style={{ padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
                   onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                  <span>{b}</span>
-                  {brandsInSeason.includes(b) && (
-                    <span style={{ fontSize: 10, color: purpleD, fontWeight: 700, background: '#ede9fe', borderRadius: 6, padding: '1px 6px' }}>in {season}</span>
-                  )}
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.type === 'invoice' ? (
+                      <><span style={{ color: gray, fontWeight: 400, marginRight: 4 }}>INV</span>{item.brand}</>
+                    ) : item.label}
+                  </span>
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    {item.type === 'invoice' && (
+                      <span style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px' }}>
+                        INV {item.invoiceNum}
+                      </span>
+                    )}
+                    {brandsInSeason.includes(item.brand) && (
+                      <span style={{ fontSize: 10, color: purpleD, fontWeight: 700, background: '#ede9fe', borderRadius: 6, padding: '1px 6px' }}>in {season}</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -596,6 +643,56 @@ export default function SeasonBookPage() {
           </div>
         )}
       </div>
+
+      {/* Drop Name Filter Bar */}
+      {dropNamesInSeason.length > 0 && (
+        <div className="sb-dropbar">
+          <span style={{ fontSize: 11, fontWeight: 700, color: gray, flexShrink: 0 }}>Drop:</span>
+          <button
+            onClick={() => setActiveDropName(null)}
+            style={{
+              fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '3px 10px', cursor: 'pointer', border: 'none',
+              background: activeDropName === null ? purpleD : '#e5e7eb',
+              color: activeDropName === null ? '#fff' : '#374151',
+            }}>All</button>
+          {dropNamesInSeason.map(dn => (
+            <button key={dn}
+              onClick={() => setActiveDropName(activeDropName === dn ? null : dn)}
+              style={{
+                fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '3px 10px', cursor: 'pointer', border: 'none',
+                background: activeDropName === dn ? purpleD : '#ede9fe',
+                color: activeDropName === dn ? '#fff' : purpleD,
+              }}>{dn}</button>
+          ))}
+          {/* Add new drop name */}
+          {showDropNameMgr ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input autoFocus value={newDropNameInput} onChange={e => setNewDropNameInput(e.target.value)}
+                placeholder="New name…" maxLength={40}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newDropNameInput.trim()) {
+                    setActiveDropName(newDropNameInput.trim())
+                    setNewDropNameInput('')
+                    setShowDropNameMgr(false)
+                  }
+                  if (e.key === 'Escape') { setShowDropNameMgr(false); setNewDropNameInput('') }
+                }}
+                style={{ fontSize: 11, border: `1.5px solid ${border}`, borderRadius: 6, padding: '3px 8px', outline: 'none', width: 110 }} />
+              <button onClick={() => {
+                if (newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput('') }
+                setShowDropNameMgr(false)
+              }} style={{ fontSize: 11, background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✓</button>
+              <button onClick={() => { setShowDropNameMgr(false); setNewDropNameInput('') }}
+                style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowDropNameMgr(true)}
+              style={{ fontSize: 11, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 20, padding: '3px 10px', cursor: 'pointer', color: gray }}>
+              + New
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Body */}
       <div className="sb-layout">
@@ -790,6 +887,7 @@ export default function SeasonBookPage() {
                         <thead>
                           <tr style={{ background: '#f8f7ff' }}>
                             <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Units</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Total</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Deposits</th>
@@ -804,6 +902,8 @@ export default function SeasonBookPage() {
                             const sInit  = sRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
                             const sDep   = sRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
                             const sBal   = sRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                            // Collect unique invoice #s for this store
+                            const invoiceNums = Array.from(new Set(sRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
                             return (
                               <tr key={store}
                                 onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
@@ -812,6 +912,13 @@ export default function SeasonBookPage() {
                                 onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
                                 onMouseLeave={e => (e.currentTarget.style.background = '')}>
                                 <td style={{ padding: '8px 14px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>{store}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'left' }}>
+                                  {invoiceNums.length > 0 ? invoiceNums.map(inv => (
+                                    <span key={inv} style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>
+                                      {inv}
+                                    </span>
+                                  )) : <span style={{ color: gray }}>—</span>}
+                                </td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{sUnits || '—'}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit)}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep)}</td>
@@ -947,8 +1054,34 @@ export default function SeasonBookPage() {
                         </div>
                         <div>
                           <label style={lbl}>Drop Name</label>
-                          <input value={entry.drop_name} placeholder="e.g. FW Drop 1"
-                            onChange={e => upd({ drop_name: e.target.value })} style={inp} />
+                          {(entry.drop_name && !dropNamesInSeason.includes(entry.drop_name)) ? (
+                            /* Custom (typed) value — show text input + back-to-list button */
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <input value={entry.drop_name}
+                                onChange={e => upd({ drop_name: e.target.value })} style={{ ...inp, flex: 1 }} />
+                              <button type="button" title="Pick from list"
+                                onClick={() => upd({ drop_name: '' })}
+                                style={{ background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '0 7px', cursor: 'pointer', fontSize: 11, color: purpleD, fontWeight: 700 }}>↩</button>
+                            </div>
+                          ) : (
+                            <>
+                              <select value={entry.drop_name}
+                                onChange={e => {
+                                  if (e.target.value === '__new__') upd({ drop_name: '\0' })
+                                  else upd({ drop_name: e.target.value })
+                                }}
+                                style={{ ...inp, cursor: 'pointer' }}>
+                                <option value="">— None —</option>
+                                {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
+                                <option value="__new__">+ New name…</option>
+                              </select>
+                              {entry.drop_name === '\0' && (
+                                <input autoFocus placeholder="Type new drop name…"
+                                  onChange={e => upd({ drop_name: e.target.value })}
+                                  style={{ ...inp, marginTop: 4 }} />
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
                       {/* Row 2: Units + Initial Total */}
@@ -1065,8 +1198,34 @@ export default function SeasonBookPage() {
                         </div>
                         <div>
                           <label style={lbl}>Drop Name</label>
-                          <input value={entry.drop_name} placeholder="e.g. FW Drop 1"
-                            onChange={e => upd({ drop_name: e.target.value })} style={inp} />
+                          {/* Show text input directly if current value isn't in the list (custom) */}
+                          {(entry.drop_name && !dropNamesInSeason.includes(entry.drop_name)) ? (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <input value={entry.drop_name}
+                                onChange={e => upd({ drop_name: e.target.value })} style={{ ...inp, flex: 1 }} />
+                              <button type="button" title="Pick from list"
+                                onClick={() => upd({ drop_name: '' })}
+                                style={{ background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '0 7px', cursor: 'pointer', fontSize: 11, color: purpleD, fontWeight: 700 }}>↩</button>
+                            </div>
+                          ) : (
+                            <>
+                              <select value={entry.drop_name}
+                                onChange={e => {
+                                  if (e.target.value === '__new__') upd({ drop_name: '\0' })
+                                  else upd({ drop_name: e.target.value })
+                                }}
+                                style={{ ...inp, cursor: 'pointer' }}>
+                                <option value="">— None —</option>
+                                {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
+                                <option value="__new__">+ New name…</option>
+                              </select>
+                              {entry.drop_name === '\0' && (
+                                <input autoFocus placeholder="Type new drop name…"
+                                  onChange={e => upd({ drop_name: e.target.value })}
+                                  style={{ ...inp, marginTop: 4 }} />
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
 
