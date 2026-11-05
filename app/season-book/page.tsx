@@ -426,14 +426,14 @@ export default function SeasonBookPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif' }}>
       <style>{`
         * { box-sizing: border-box; }
-        .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: relative; z-index: 100; }
-        .sb-subbar { padding: 8px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .sb-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
-        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; }
-        .sb-main { flex: 1; overflow-y: auto; padding: 16px; }
+        .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: sticky; top: 0; z-index: 100; }
+        .sb-subbar { padding: 8px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; justify-content: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
+        .sb-layout { display: flex; flex: 1; position: relative; }
+        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: 100px; height: calc(100vh - 100px); }
+        .sb-main { flex: 1; padding: 16px; }
         .sb-brand-row { padding: 8px 14px; cursor: pointer; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; color: #374151; transition: background 0.1s; }
         .sb-brand-row:hover, .sb-brand-row.active { background: #ede9fe; color: ${purpleD}; }
         .sb-brand-row.active { font-weight: 800; }
@@ -555,7 +555,7 @@ export default function SeasonBookPage() {
 
       {/* Sub-bar: search */}
       <div className="sb-subbar">
-        <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 700 }}>
+        <div ref={headerSearchRef} style={{ position: 'relative', flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
             <span style={{ padding: '0 8px', color: gray, fontSize: 14 }}>🔍</span>
             <input
@@ -715,7 +715,7 @@ export default function SeasonBookPage() {
                         <tr style={{ background: purpleD }}>
                           <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', whiteSpace: 'nowrap', minWidth: 100 }}>{season}</th>
                           {metrics.map(m => (
-                            <th key={m.key} style={{ padding: '7px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#e9d5ff', borderLeft: `1px solid rgba(255,255,255,0.15)`, whiteSpace: 'nowrap' }}>
+                            <th key={m.key} style={{ padding: '7px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#e9d5ff', borderLeft: `1px solid rgba(255,255,255,0.15)`, whiteSpace: 'nowrap' }}>
                               {m.label}
                             </th>
                           ))}
@@ -735,7 +735,7 @@ export default function SeasonBookPage() {
                                 const isBal = m.key === 'bal'
                                 const color = isBal ? (v > 0.001 ? '#dc2626' : '#166534') : (isTotal ? purpleD : '#374151')
                                 return (
-                                  <td key={m.key} style={{ padding: '6px 12px', textAlign: 'right', fontWeight: isTotal ? 800 : 600, fontSize: isTotal ? 13 : 12, color, borderLeft: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
+                                  <td key={m.key} style={{ padding: '6px 12px', textAlign: 'left', fontWeight: isTotal ? 800 : 600, fontSize: isTotal ? 13 : 12, color, borderLeft: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
                                     {m.fmt(v)}
                                   </td>
                                 )
@@ -774,7 +774,7 @@ export default function SeasonBookPage() {
                         <span style={{ fontSize: 11, color: gray }}>{bDrops.length} drop{bDrops.length !== 1 ? 's' : ''}</span>
                         {totBal > 0.001 && (
                           <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 7px' }}>
-                            Owes {fmt$(totBal)}
+                            Total Owed {fmt$(totBal)}
                           </span>
                         )}
                         {totBal <= 0.001 && totInit > 0 && (
@@ -1302,17 +1302,10 @@ export default function SeasonBookPage() {
                                   </div>
 
                                   {/* Balance chip */}
-                                  <div style={{ marginTop: 7, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                  <div style={{ marginTop: 7 }}>
                                     <span style={{ fontSize: 12, fontWeight: 800, color: bal > 0.001 ? '#dc2626' : '#166534', background: bal > 0.001 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${bal > 0.001 ? '#fca5a5' : '#86efac'}`, borderRadius: 6, padding: '2px 8px' }}>
                                       {bal > 0.001 ? `Balance: ${fmt$(bal, dRow.currency)}` : '✓ Paid'}
                                     </span>
-                                    {bal > 0.001 && (
-                                      <button
-                                        onClick={() => { setQuickPayBrand(invoiceBrand); setPaySelectedIds(new Set([dRow.id])); setQuickPayAmt(''); setQuickPayDate(today()); setModal('quick-pay') }}
-                                        style={{ fontSize: 10, fontWeight: 700, color: purple, background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '3px 9px', cursor: 'pointer' }}>
-                                        💳 Pay Drop
-                                      </button>
-                                    )}
                                   </div>
                                 </div>
                               )
@@ -1322,11 +1315,11 @@ export default function SeasonBookPage() {
                             <div style={{ background: '#f5f3ff', borderTop: `1.5px solid ${border}`, padding: '7px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                               <div style={{ fontSize: 11, color: gray, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                                 <span>Total: <strong style={{ color: purpleD }}>{fmt$(storeTotInit)}</strong></span>
-                                <span>Dep: <strong style={{ color: '#166534' }}>{fmt$(storeDeposit)}</strong></span>
+                                <span>Deposit: <strong style={{ color: '#166534' }}>{fmt$(storeDeposit)}</strong></span>
                                 {storeDuties > 0 && <span>Duties: <strong style={{ color: '#92400e' }}>{fmt$(storeDuties)}</strong></span>}
                               </div>
                               <span style={{ fontSize: 13, fontWeight: 800, color: storeBal > 0.001 ? '#dc2626' : '#166534' }}>
-                                {storeBal > 0.001 ? `Owes ${fmt$(storeBal)}` : '✓ Clear'}
+                                {storeBal > 0.001 ? `Owe ${fmt$(storeBal)}` : '✓ Clear'}
                               </span>
                             </div>
                           </div>
