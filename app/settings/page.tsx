@@ -22,6 +22,7 @@ const ALL_MODULES = [
   { id: 'ic',          label: 'Infinity Classics' },
   { id: 'po_tracker',  label: 'PO Tracker' },
   { id: 'tasks',       label: 'Tasks' },
+  { id: 'hair_acc',    label: 'Hair Acc' },
   { id: 'settings',    label: 'Settings' },
 ]
 
