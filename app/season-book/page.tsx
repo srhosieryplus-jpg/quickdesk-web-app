@@ -195,6 +195,43 @@ export default function SeasonBookPage() {
   const [payHistEditNote, setPayHistEditNote] = useState('')
   const [payHistSearch, setPayHistSearch] = useState('')
 
+  // ── Cut-off date ──────────────────────────────────────────────────────────
+  // Stored in app_settings: key = 'cutoff_SS' / 'cutoff_AW', value = 'YYYY-MM-DD|active' or 'YYYY-MM-DD|inactive'
+  const [cutoffDate, setCutoffDate] = useState<string>('')       // 'YYYY-MM-DD' or ''
+  const [cutoffActive, setCutoffActive] = useState(false)
+  const [showCutoffPopover, setShowCutoffPopover] = useState(false)
+  const [cutoffInput, setCutoffInput] = useState('')
+  const [cutoffSaving, setCutoffSaving] = useState(false)
+
+  // Which half is the active season? SS or AW
+  const seasonHalf = season.startsWith('SS') ? 'SS' : 'AW'
+
+  // Is cutoff currently in effect? (date set, active flag on, today >= cutoff)
+  const cutoffInEffect = cutoffActive && !!cutoffDate && today() >= cutoffDate
+
+  async function loadCutoff(half: string) {
+    const { data } = await supabase.from('app_settings').select('value').eq('key', `cutoff_${half}`).maybeSingle()
+    if (data?.value) {
+      const [d, flag] = data.value.split('|')
+      setCutoffDate(d ?? '')
+      setCutoffActive(flag === 'active')
+      setCutoffInput(d ?? '')
+    } else {
+      setCutoffDate(''); setCutoffActive(false); setCutoffInput('')
+    }
+  }
+
+  async function saveCutoff(half: string, date: string, active: boolean) {
+    setCutoffSaving(true)
+    const value = `${date}|${active ? 'active' : 'inactive'}`
+    const { error } = await supabase.from('app_settings').upsert({ key: `cutoff_${half}`, value }, { onConflict: 'key' })
+    setCutoffSaving(false)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    setCutoffDate(date); setCutoffActive(active)
+    showToast('✅ Cut-off date saved')
+    setShowCutoffPopover(false)
+  }
+
   async function openPayHistory(row: LedgerRow) {
     setPayHistRow(row)
     setPayHistLoading(true)
@@ -316,6 +353,8 @@ export default function SeasonBookPage() {
     if (!u) { router.push('/'); return }
     setUser(u)
     fetchRows(season, u)
+    loadCutoff(season.startsWith('SS') ? 'SS' : 'AW')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, fetchRows, season])
 
   // Modal brand autocomplete
@@ -327,6 +366,8 @@ export default function SeasonBookPage() {
     setModalBrandSuggs(all.filter(b => b.toLowerCase().includes(q)).slice(0, 10))
   }, [modalBrandQ, rows])
 
+  const cutoffPopoverRef = useRef<HTMLDivElement>(null)
+
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -335,6 +376,9 @@ export default function SeasonBookPage() {
       }
       if (modalBrandRef.current && !modalBrandRef.current.contains(e.target as Node)) {
         setShowModalBrandDrop(false)
+      }
+      if (cutoffPopoverRef.current && !cutoffPopoverRef.current.contains(e.target as Node)) {
+        setShowCutoffPopover(false)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -624,6 +668,7 @@ export default function SeasonBookPage() {
       <style>{`
         * { box-sizing: border-box; }
         .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: sticky; top: 0; z-index: 100; }
+        @keyframes cutoff-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(202,138,4,0.5); } 50% { box-shadow: 0 0 0 5px rgba(202,138,4,0); } }
         .sb-subbar { padding: 6px 0 6px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
         .sb-layout { display: flex; flex: 1; position: relative; }
         .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: 97px; height: calc(100vh - 97px); /* subbar ~43px + header 54px */ }
@@ -730,6 +775,56 @@ export default function SeasonBookPage() {
 
         {/* Right: action buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
+
+          {/* Cut-off date alert/admin control */}
+          <div ref={cutoffPopoverRef} style={{ position: 'relative' }}>
+            {cutoffInEffect && (
+              <button
+                onClick={() => isAdmin ? setShowCutoffPopover(v => !v) : undefined}
+                style={{ background: '#fef08a', color: '#713f12', border: '1.5px solid #ca8a04', borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 800, cursor: isAdmin ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', animation: 'cutoff-pulse 2s ease-in-out infinite' }}>
+                ⚠️ {seasonHalf} Cut-Off In Effect
+              </button>
+            )}
+            {!cutoffInEffect && isAdmin && (
+              <button
+                onClick={() => setShowCutoffPopover(v => !v)}
+                style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', border: '1px dashed rgba(255,255,255,0.3)', borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                ✂️ Cut-Off
+              </button>
+            )}
+
+            {/* Admin popover */}
+            {showCutoffPopover && isAdmin && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 10, padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 300, minWidth: 240 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: purpleD, marginBottom: 10 }}>✂️ {seasonHalf} Cut-Off Date</div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4 }}>Date</label>
+                <input type="date" value={cutoffInput} onChange={e => setCutoffInput(e.target.value)}
+                  style={{ ...inp, fontSize: 12, marginBottom: 10 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={cutoffActive} onChange={e => setCutoffActive(e.target.checked)} />
+                    Active
+                  </label>
+                  {cutoffActive && cutoffDate && (
+                    <span style={{ fontSize: 10, color: today() >= cutoffDate ? '#dc2626' : '#6b7280' }}>
+                      {today() >= cutoffDate ? '🔴 In effect now' : `⏳ Starts ${cutoffDate}`}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => setShowCutoffPopover(false)}
+                    style={{ flex: 1, background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 6, padding: '6px 0', fontSize: 12, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button onClick={() => saveCutoff(seasonHalf, cutoffInput, cutoffActive)} disabled={!cutoffInput || cutoffSaving}
+                    style={{ flex: 1, background: purpleD, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 0', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: !cutoffInput || cutoffSaving ? 0.6 : 1 }}>
+                    {cutoffSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button onClick={() => activeBrand ? openNewEntry(activeBrand) : openNewEntryBlank()}
             style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             + New
