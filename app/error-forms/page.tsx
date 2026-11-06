@@ -376,17 +376,19 @@ export default function ErrorFormsPage() {
             <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
               {allSeasons.map(s => (
                 <div key={s} className="sp-season-row"
-                  style={{ background: s === season ? redD : 'transparent', color: s === season ? '#fff' : '#1f2937' }}
+                  style={{ background: s === season ? '#fef2f2' : 'transparent',
+                    color: s === season ? redD : '#374151',
+                    borderLeft: s === season ? `3px solid ${redD}` : '3px solid transparent' }}
                   onClick={() => { setSeason(s); setShowSeasonPanel(false) }}>
                   <span style={{ fontWeight: s === season ? 800 : 500 }}>{s}</span>
-                  {s === season && <span style={{ fontSize: 10, opacity: 0.8 }}>✓ current</span>}
+                  {s === season && <span style={{ fontSize: 10, color: redD, opacity: 0.7 }}>✓</span>}
                 </div>
               ))}
             </div>
-            <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ padding: '10px 14px', borderTop: `1px solid ${border}` }}>
               {!showNewSeason ? (
                 <button onClick={() => setShowNewSeason(true)}
-                  style={{ width: '100%', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px dashed rgba(255,255,255,0.4)',
+                  style={{ width: '100%', background: '#f9fafb', color: '#374151', border: `1px dashed #d1d5db`,
                     borderRadius: 7, padding: '7px 0', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                   + Add Season
                 </button>
@@ -395,10 +397,10 @@ export default function ErrorFormsPage() {
                   <input value={newSeasonInput} onChange={e => setNewSeasonInput(e.target.value.toUpperCase())}
                     onKeyDown={e => { if (e.key === 'Enter') createSeason(); if (e.key === 'Escape') { setShowNewSeason(false); setNewSeasonInput('') } }}
                     placeholder="e.g. AW29" autoFocus maxLength={6}
-                    style={{ flex: 1, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6,
-                      padding: '5px 8px', fontSize: 12, color: '#fff', outline: 'none', fontFamily: 'Inter, sans-serif' }} />
+                    style={{ flex: 1, background: '#fff', border: `1px solid #d1d5db`, borderRadius: 6,
+                      padding: '5px 8px', fontSize: 12, color: '#111', outline: 'none', fontFamily: 'Inter, sans-serif' }} />
                   <button onClick={createSeason}
-                    style={{ background: '#fff', color: redD, border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    style={{ background: redD, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     Add
                   </button>
                 </div>
@@ -778,20 +780,20 @@ export default function ErrorFormsPage() {
         .season-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 2000; }
         .season-panel {
           position: fixed; top: 0; left: 0; height: 100vh; width: 220px;
-          background: ${redD}; color: #fff; display: flex; flex-direction: column;
-          box-shadow: 4px 0 20px rgba(0,0,0,0.3); z-index: 2001;
+          background: #fff; color: #1f2937; display: flex; flex-direction: column;
+          box-shadow: 4px 0 24px rgba(0,0,0,0.18); z-index: 2001;
           animation: slideInLeft 0.2s ease;
         }
         @keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
         .sp-head {
           padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
-          border-bottom: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.15);
+          border-bottom: 1px solid #f3f4f6; background: ${redD}; color: #fff;
         }
         .sp-season-row {
           padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
-          font-size: 13px; transition: background 0.1s; border-bottom: 1px solid rgba(255,255,255,0.06);
+          font-size: 13px; transition: background 0.1s; border-bottom: 1px solid #f3f4f6; color: #374151;
         }
-        .sp-season-row:hover { background: rgba(255,255,255,0.1) !important; }
+        .sp-season-row:hover { background: #fef2f2 !important; }
         @media (max-width: 768px) {
           table { font-size: 11px; }
         }
