@@ -224,8 +224,10 @@ export default function SettingsPage() {
   // Vendor helpers
   const filteredVendors = useMemo(() => {
     const q = vendorSearch.toLowerCase().trim()
-    if (!q) return vendors
-    return vendors.filter(v => v.vendor_id.toLowerCase().includes(q) || v.brand.toLowerCase().includes(q))
+    // Always hide rows with no vendor_id unless searching explicitly for blank
+    const base = vendors.filter(v => v.vendor_id && v.vendor_id.trim())
+    if (!q) return base
+    return base.filter(v => v.vendor_id.toLowerCase().includes(q) || v.brand.toLowerCase().includes(q))
   }, [vendors, vendorSearch])
 
   function addVendorRow(e: React.FormEvent) {
@@ -436,7 +438,7 @@ export default function SettingsPage() {
       {tab === 'vendors' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Add row + search */}
-          <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', position: 'sticky', top: 0, zIndex: 10 }}>
             <label style={labelStyle}>Search:</label>
             <input value={vendorSearch} onChange={e => setVendorSearch(e.target.value)}
               placeholder="vendor or brand…" style={{ ...inlineInput, flex: 1, minWidth: 120 }} />
@@ -458,7 +460,7 @@ export default function SettingsPage() {
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 40px' }}>
             <div style={{ overflowX: 'auto', maxWidth: 700, margin: '0 auto', paddingTop: 8 }}>
               <table className="ss-table">
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
                   <tr>
                     <th style={{ width: 28, textAlign: 'center' }}>#</th>
                     <th>Vendor ID</th>
