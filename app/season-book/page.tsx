@@ -538,6 +538,10 @@ export default function SeasonBookPage() {
   // ── Save new log entry ─────────────────────────────────────────────────────
   async function saveNewEntry() {
     if (!user || !activeBrand) return
+    if (cutoffInEffect && !isAdmin) {
+      showToast('⚠️ Cut-off is in effect. Please reach out to Manager to approve logging this invoice.', 'err')
+      return
+    }
     setSaving(true)
     const inserts = formStores
       .filter(e => e.units || e.initial_total || e.deposit || e.duties)
@@ -919,7 +923,13 @@ export default function SeasonBookPage() {
             )}
           </div>
 
-          <button onClick={() => activeBrand ? openNewEntry(activeBrand) : openNewEntryBlank()}
+          <button onClick={() => {
+              if (cutoffInEffect && !isAdmin) {
+                alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.')
+                return
+              }
+              activeBrand ? openNewEntry(activeBrand) : openNewEntryBlank()
+            }}
             style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             + New
           </button>
@@ -1537,7 +1547,8 @@ export default function SeasonBookPage() {
                         <div>
                           <label style={lbl}>Payment Date</label>
                           <input type="date" value={entry.payment_date}
-                            onChange={e => upd({ payment_date: e.target.value })} style={inp} />
+                            onChange={e => upd({ payment_date: e.target.value })} style={inp}
+                            disabled={!canPay} title={!canPay ? 'Payment access restricted' : undefined} />
                         </div>
                       </div>
                       {/* Row 4: Comment */}
@@ -1748,7 +1759,8 @@ export default function SeasonBookPage() {
                       <div>
                         <label style={lbl}>Payment Date</label>
                         <input type="date" value={entry.payment_date}
-                          onChange={e => upd({ payment_date: e.target.value })} style={inp} />
+                          onChange={e => upd({ payment_date: e.target.value })} style={inp}
+                          disabled={!canPay} title={!canPay ? 'Payment access restricted' : undefined} />
                       </div>
                       {/* Live balance — right column bottom */}
                       <div style={{ marginTop: 'auto', paddingTop: 4 }}>
@@ -1781,6 +1793,7 @@ export default function SeasonBookPage() {
                     {!siblingExists && siblingStore && (
                       <button
                         onClick={() => {
+                          if (cutoffInEffect && !isAdmin) { alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.'); return }
                           setModal('none')
                           setActiveBrand(editRow.brand)
                           setFormDrop(editRow.drop_num)
@@ -1793,6 +1806,7 @@ export default function SeasonBookPage() {
                     )}
                     <button
                       onClick={() => {
+                        if (cutoffInEffect && !isAdmin) { alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.'); return }
                         setModal('none')
                         setActiveBrand(editRow.brand)
                         setFormDrop(maxDrop + 1)
@@ -1869,7 +1883,10 @@ export default function SeasonBookPage() {
                     style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     💳 Pay
                   </button>}
-                  <button onClick={() => { setModal('none'); openNewEntry(invoiceBrand) }}
+                  <button onClick={() => {
+                      if (cutoffInEffect && !isAdmin) { alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.'); return }
+                      setModal('none'); openNewEntry(invoiceBrand)
+                    }}
                     style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     + Drop
                   </button>
