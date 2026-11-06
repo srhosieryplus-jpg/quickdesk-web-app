@@ -660,6 +660,38 @@ export default function SeasonBookPage() {
         {/* Blank spacer matching sidebar width */}
         <div style={{ width: 220, flexShrink: 0 }} />
 
+        {/* Drop dropdown — left of search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: gray }}>Drop:</span>
+          <select
+            value={activeDropName ?? ''}
+            onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
+            style={{ fontSize: 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none' }}>
+            <option value="">All</option>
+            {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
+          </select>
+          {showDropNameMgr ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input autoFocus value={newDropNameInput} onChange={e => setNewDropNameInput(e.target.value)}
+                placeholder="New name…" maxLength={40}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput(''); setShowDropNameMgr(false) }
+                  if (e.key === 'Escape') { setShowDropNameMgr(false); setNewDropNameInput('') }
+                }}
+                style={{ fontSize: 11, border: `1.5px solid ${border}`, borderRadius: 6, padding: '3px 8px', outline: 'none', width: 110 }} />
+              <button onClick={() => { if (newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput('') } setShowDropNameMgr(false) }}
+                style={{ fontSize: 11, background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✓</button>
+              <button onClick={() => { setShowDropNameMgr(false); setNewDropNameInput('') }}
+                style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowDropNameMgr(true)}
+              style={{ fontSize: 11, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: gray }}>
+              + New
+            </button>
+          )}
+        </div>
+
         {/* Search — aligns with grand total box */}
         <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
           <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
@@ -720,41 +752,8 @@ export default function SeasonBookPage() {
           </div>
         )}
 
-        {/* Spacer pushes Drop to right */}
+        {/* Spacer */}
         <div style={{ flex: 1 }} />
-
-        {/* Drop dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 16 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: gray, flexShrink: 0 }}>Drop:</span>
-          <select
-            value={activeDropName ?? ''}
-            onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value === '__new__' ? null : e.target.value)}
-            style={{ fontSize: 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none' }}>
-            <option value="">All</option>
-            {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
-          </select>
-          {/* Add new drop name */}
-          {showDropNameMgr ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <input autoFocus value={newDropNameInput} onChange={e => setNewDropNameInput(e.target.value)}
-                placeholder="New name…" maxLength={40}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput(''); setShowDropNameMgr(false) }
-                  if (e.key === 'Escape') { setShowDropNameMgr(false); setNewDropNameInput('') }
-                }}
-                style={{ fontSize: 11, border: `1.5px solid ${border}`, borderRadius: 6, padding: '3px 8px', outline: 'none', width: 110 }} />
-              <button onClick={() => { if (newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput('') } setShowDropNameMgr(false) }}
-                style={{ fontSize: 11, background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✓</button>
-              <button onClick={() => { setShowDropNameMgr(false); setNewDropNameInput('') }}
-                style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✕</button>
-            </div>
-          ) : (
-            <button onClick={() => setShowDropNameMgr(true)}
-              style={{ fontSize: 11, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: gray }}>
-              + New
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Body */}
@@ -1376,8 +1375,8 @@ export default function SeasonBookPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <label style={lbl}>Vendor ID</label>
                         {currentVid && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 20, padding: '2px 8px' }}>
-                            {currentVid}{VENDOR_DATA.find(v => v.vendor_id === currentVid && v.brand === editRow.brand)?.brand ? ` · ${editRow.brand}` : ''}
+                          <span style={{ fontSize: 13, fontWeight: 700, color: purpleD }}>
+                            {currentVid} - {editRow.brand}
                           </span>
                         )}
                         {vids.length > 1 && (
@@ -1386,7 +1385,7 @@ export default function SeasonBookPage() {
                               setVendorPickerBrand(editRow.brand)
                               setVendorPickerCandidates(vids)
                               setVendorPickerOnSelect(() => async (vid: string) => {
-                                const { error } = await supabase.from('season_book').update({ vendor_id: vid }).eq('id', editRow.id)
+                                const { error } = await supabase.from('season_ledger').update({ vendor_id: vid }).eq('id', editRow.id)
                                 if (!error && user) { setEditRow({ ...editRow, vendor_id: vid }); fetchRows(season, user) }
                                 setVendorPickerBrand(null)
                               })
@@ -1831,8 +1830,35 @@ export default function SeasonBookPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 6 }}>
                       <div>
                         <label style={lbl}>Amount</label>
-                        <input type="number" value={quickPayAmt} onChange={e => setQuickPayAmt(e.target.value)}
-                          placeholder="0.00" step="0.01" autoFocus style={inp} />
+                        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                          <input type="number" value={quickPayAmt} onChange={e => setQuickPayAmt(e.target.value)}
+                            placeholder="0.00" step="0.01" autoFocus style={{ ...inp, flex: 1 }} />
+                          <button
+                            type="button"
+                            title={selectedRows.length > 0
+                              ? `30% of total initial order${selectedRows.length > 1 ? 's' : ''} (${selectedRows.map(r => fmt$(r.initial_total, r.currency)).join(' + ')})`
+                              : 'Select rows first'}
+                            disabled={selectedRows.length === 0}
+                            onClick={() => {
+                              // Sum initial_totals of selected rows and compute 30%
+                              const total = selectedRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
+                              setQuickPayAmt((total * 0.3).toFixed(2))
+                            }}
+                            style={{
+                              fontSize: 11, fontWeight: 800, padding: '5px 9px', borderRadius: 7, flexShrink: 0,
+                              border: `1.5px solid ${border}`,
+                              background: selectedRows.length > 0 ? '#ede9fe' : '#f3f4f6',
+                              color: selectedRows.length > 0 ? purpleD : gray,
+                              cursor: selectedRows.length > 0 ? 'pointer' : 'not-allowed',
+                            }}>
+                            30%
+                          </button>
+                        </div>
+                        {selectedRows.length > 0 && quickPayAmt && (
+                          <div style={{ fontSize: 10, color: gray, marginTop: 3 }}>
+                            Applying to {selectedRows.length} drop{selectedRows.length > 1 ? 's' : ''} · edit amount above before applying
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label style={lbl}>Payment Date</label>
