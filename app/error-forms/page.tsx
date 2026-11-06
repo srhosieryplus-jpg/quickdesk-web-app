@@ -197,10 +197,12 @@ export default function ErrorFormsPage() {
         if (parsed.length > 0) { setStoreIds(parsed); return }
       }
     } catch {}
-    // Fallback: pull distinct stores from users table
-    supabase.from('users').select('store').then(({ data }) => {
+    // Fallback: pull distinct stores from users table (fetch all, no limit)
+    supabase.from('users').select('store').limit(1000).then(({ data }) => {
       if (data) {
-        const unique = Array.from(new Set(data.map((r: { store: string }) => r.store).filter(Boolean))).sort() as string[]
+        const unique = Array.from(new Set(
+          data.map((r: { store: string }) => r.store).filter(s => s && s !== 'ALL')
+        )).sort() as string[]
         if (unique.length > 0) setStoreIds(unique)
       }
     })
@@ -228,6 +230,8 @@ export default function ErrorFormsPage() {
   const [form, setForm] = useState(blankForm())
   const [brandInput, setBrandInput] = useState('')
   const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
+  const [storeSearch, setStoreSearch] = useState('')
+  const [showStoreDrop, setShowStoreDrop] = useState(false)
 
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type); setTimeout(() => setToast(''), 3000)
@@ -648,16 +652,54 @@ export default function ErrorFormsPage() {
                 {/* Row 0: Store */}
                 <div>
                   <label style={lbl}>Store *</label>
-                  {(isAdmin || modal === 'new') ? (
-                    <select value={vals.store_id} onChange={e => upd({ store_id: e.target.value })}
-                      disabled={!isAdmin && modal === 'edit'}
-                      style={{ ...inp, width: 180 }}>
-                      <option value="">— Select Store —</option>
-                      {storeIds.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  ) : (
-                    <div style={{ ...inp, width: 180, background: '#f9fafb', color: gray }}>{vals.store_id || '—'}</div>
-                  )}
+                  {(!isAdmin && modal === 'edit') ? (
+                    <div style={{ ...inp, width: 220, background: '#f9fafb', color: gray }}>{vals.store_id || '—'}</div>
+                  ) : (() => {
+                    const filteredStores = storeIds.filter(s =>
+                      !storeSearch || s.toLowerCase().includes(storeSearch.toLowerCase())
+                    )
+                    return (
+                      <div style={{ position: 'relative', width: 220 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${vals.store_id ? redD : '#d1d5db'}`,
+                          borderRadius: 6, background: '#fff', overflow: 'hidden' }}>
+                          <input
+                            value={showStoreDrop ? storeSearch : (vals.store_id || '')}
+                            onChange={e => { setStoreSearch(e.target.value); setShowStoreDrop(true); if (!e.target.value) upd({ store_id: '' }) }}
+                            onFocus={() => { setStoreSearch(''); setShowStoreDrop(true) }}
+                            onBlur={() => setTimeout(() => setShowStoreDrop(false), 150)}
+                            placeholder="Search store…"
+                            style={{ flex: 1, border: 'none', outline: 'none', padding: '5px 8px', fontSize: 12,
+                              fontFamily: 'Inter, sans-serif', color: '#111', background: 'transparent' }}
+                          />
+                          {vals.store_id && (
+                            <button onClick={() => { upd({ store_id: '' }); setStoreSearch('') }}
+                              style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', padding: '0 6px', fontSize: 14, lineHeight: 1 }}>✕</button>
+                          )}
+                        </div>
+                        {showStoreDrop && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff',
+                            border: `1px solid ${border}`, borderRadius: 6, zIndex: 20,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 200, overflowY: 'auto', marginTop: 2 }}>
+                            {filteredStores.length === 0 ? (
+                              <div style={{ padding: '8px 12px', fontSize: 12, color: gray }}>No stores found</div>
+                            ) : filteredStores.map(s => (
+                              <div key={s}
+                                onMouseDown={() => { upd({ store_id: s }); setStoreSearch(''); setShowStoreDrop(false) }}
+                                style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer',
+                                  background: vals.store_id === s ? '#fef2f2' : '#fff',
+                                  color: vals.store_id === s ? redD : '#111',
+                                  fontWeight: vals.store_id === s ? 700 : 400,
+                                  borderBottom: `1px solid #f3f4f6` }}
+                                onMouseEnter={e => { if (vals.store_id !== s) e.currentTarget.style.background = '#f9fafb' }}
+                                onMouseLeave={e => { if (vals.store_id !== s) e.currentTarget.style.background = '#fff' }}>
+                                {s}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                   {!isAdmin && modal === 'new' && (
                     <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Defaults to your store</div>
                   )}
