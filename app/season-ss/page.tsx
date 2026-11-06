@@ -113,6 +113,19 @@ export default function SeasonSSPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
 
+  // ── Cut-off banner ────────────────────────────────────────────────────────
+  const [cutoffDate, setCutoffDate] = useState('')
+  const [cutoffActive, setCutoffActive] = useState(false)
+  const cutoffInEffect = cutoffActive && !!cutoffDate && new Date().toISOString().slice(0,10) >= cutoffDate
+
+  async function loadCutoffSS() {
+    try {
+      const { data, error } = await supabase.from('app_settings').select('value').eq('key', 'cutoff_SS').maybeSingle()
+      if (!error && data?.value) { const [d,f] = data.value.split('|'); setCutoffDate(d ?? ''); setCutoffActive(f === 'active'); return }
+    } catch { /* ignore */ }
+    try { const s = localStorage.getItem('sb_cutoff_SS'); if (s) { const [d,f] = s.split('|'); setCutoffDate(d ?? ''); setCutoffActive(f === 'active') } } catch { /* ignore */ }
+  }
+
   const [invoiceQ, setInvoiceQ]     = useState('')
   const [brandQ, setBrandQ]         = useState('')
   const [searching, setSearching]   = useState(false)
@@ -177,6 +190,8 @@ export default function SeasonSSPage() {
     const u = getSession()
     if (!u) { router.push('/'); return }
     setUser(u)
+    loadCutoffSS()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   useEffect(() => {
@@ -482,6 +497,7 @@ export default function SeasonSSPage() {
         .modal-tab.active { background: ${green}; color: #fff; }
         .modal-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
         .qs-header { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid ${greenD}; background: ${green}; }
+        @keyframes cutoff-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(202,138,4,0.5); } 50% { box-shadow: 0 0 0 5px rgba(202,138,4,0); } }
         .qs-logo { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; }
         @media (max-width: 600px) { .qs-logo { order: 3; width: 100%; justify-content: center; } }
         .paste-layout { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
@@ -538,7 +554,12 @@ export default function SeasonSSPage() {
           <span style={{ fontSize: 14, fontWeight: 600, color: '#fcd34d' }}>Invoice Log</span>
         </div>
 
-        <div style={{ flexShrink: 0, minWidth: 80, display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+          {cutoffInEffect && (
+            <span style={{ background: '#fef08a', color: '#713f12', border: '1.5px solid #ca8a04', borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap', animation: 'cutoff-pulse 2s ease-in-out infinite' }}>
+              ⚠️ SS Cut-Off In Effect
+            </span>
+          )}
           {isAdmin && (
             <button onClick={() => { setShowModal(true); setModalTab('paste') }}
               style={{ background: amber, border: 'none', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', borderRadius: 7, padding: '6px 14px', letterSpacing: '0.04em', boxShadow: '0 2px 8px rgba(217,119,6,0.4)' }}>

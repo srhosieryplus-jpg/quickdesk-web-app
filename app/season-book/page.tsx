@@ -45,6 +45,7 @@ interface LedgerRow {
   logged_by: string
   created_at: string
   updated_at: string
+  invoice_file_url: string | null
 }
 
 // ── Seasons ───────────────────────────────────────────────────────────────────
@@ -648,6 +649,64 @@ export default function SeasonBookPage() {
   const allSeasons = buildSeasons(extraSeasons)
 
   if (!user) return null
+
+  // ── Invoice file attachment component ────────────────────────────────────
+  function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () => void }) {
+    const [uploading, setUploading] = useState(false)
+    const fileRef = useRef<HTMLInputElement>(null)
+
+    async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+      const file = e.target.files?.[0]
+      if (!file) return
+      setUploading(true)
+      const ext = file.name.split('.').pop()
+      const path = `${row.id}.${ext}`
+      const { error: upErr } = await supabase.storage.from('invoices').upload(path, file, { upsert: true })
+      if (upErr) { showToast('❌ ' + upErr.message, 'err'); setUploading(false); return }
+      const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path)
+      const { error: dbErr } = await supabase.from('season_ledger').update({ invoice_file_url: urlData.publicUrl }).eq('id', row.id)
+      if (dbErr) { showToast('❌ ' + dbErr.message, 'err'); setUploading(false); return }
+      setUploading(false)
+      showToast('📎 Invoice attached')
+      onUpdated()
+      if (fileRef.current) fileRef.current.value = ''
+    }
+
+    async function handleRemove() {
+      if (!row.invoice_file_url) return
+      const path = row.invoice_file_url.split('/invoices/').pop()
+      if (path) await supabase.storage.from('invoices').remove([path])
+      await supabase.from('season_ledger').update({ invoice_file_url: null }).eq('id', row.id)
+      showToast('🗑 Invoice removed')
+      onUpdated()
+    }
+
+    return (
+      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        {row.invoice_file_url ? (
+          <>
+            <a href={row.invoice_file_url} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 11, fontWeight: 700, color: purpleD, background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+              📄 View Invoice
+            </a>
+            <button onClick={handleRemove}
+              style={{ fontSize: 10, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>
+              Remove
+            </button>
+          </>
+        ) : (
+          <>
+            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleUpload}
+              style={{ display: 'none' }} id={`inv-file-${row.id}`} />
+            <label htmlFor={`inv-file-${row.id}`}
+              style={{ fontSize: 11, fontWeight: 700, color: gray, background: '#f9fafb', border: `1px dashed ${border}`, borderRadius: 5, padding: '2px 8px', cursor: uploading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+              {uploading ? '⏳ Uploading…' : '📎 Attach Invoice'}
+            </label>
+          </>
+        )}
+      </div>
+    )
+  }
 
   // ── Payment sub-row component ─────────────────────────────────────────────
   function PaymentRow({ row }: { row: LedgerRow }) {
@@ -1899,6 +1958,9 @@ export default function SeasonBookPage() {
                                       {bal > 0.001 ? `Balance: ${fmt$(bal, dRow.currency)}` : '✓ Paid'}
                                     </span>
                                   </div>
+
+                                  {/* Invoice file attachment */}
+                                  <InvoiceAttachment row={dRow} onUpdated={() => fetchRows(season, user!)} />
                                 </div>
                               )
                             })}
