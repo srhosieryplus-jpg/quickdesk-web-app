@@ -186,13 +186,25 @@ export default function ErrorFormsPage() {
   const [toast, setToast] = useState('')
   const [toastType, setToastType] = useState<'ok'|'err'>('ok')
 
-  // ── Store IDs (from settings localStorage) ───────────────────────────────
-  const [storeIds] = useState<string[]>(() => {
+  // ── Store IDs (from settings localStorage + DB users as fallback) ─────────
+  const [storeIds, setStoreIds] = useState<string[]>([])
+  useEffect(() => {
+    // Load from localStorage first
     try {
-      const saved = typeof window !== 'undefined' ? localStorage.getItem('qd_stores') : null
-      return saved ? JSON.parse(saved) : []
-    } catch { return [] }
-  })
+      const saved = localStorage.getItem('qd_stores')
+      if (saved) {
+        const parsed: string[] = JSON.parse(saved)
+        if (parsed.length > 0) { setStoreIds(parsed); return }
+      }
+    } catch {}
+    // Fallback: pull distinct stores from users table
+    supabase.from('users').select('store').then(({ data }) => {
+      if (data) {
+        const unique = Array.from(new Set(data.map((r: { store: string }) => r.store).filter(Boolean))).sort() as string[]
+        if (unique.length > 0) setStoreIds(unique)
+      }
+    })
+  }, [])
 
   // ── Season state ──────────────────────────────────────────────────────────
   const [season, setSeason] = useState('SS27')
