@@ -92,10 +92,13 @@ export default function ICLogPage() {
     let didUpdate = false
 
     // 1) Try matching order_num against invoice_num (exact match, any time)
-    const { data: invoiceMatches } = await supabase
+    const { data: invoiceMatches, error: invErr } = await supabase
       .from('autocsv_log')
       .select('*')
       .in('invoice_num', orderNums)
+
+    console.log('[autoMatch] pending order_nums:', orderNums)
+    console.log('[autoMatch] invoice matches:', invoiceMatches, invErr)
 
     const matchedEntryIds = new Set<string>()
 
@@ -117,10 +120,12 @@ export default function ICLogPage() {
     // 2) For still-unmatched entries, try matching order_num against po_num
     const stillPending = pending.filter(e => !matchedEntryIds.has(e.id))
     if (stillPending.length) {
-      const { data: poMatches } = await supabase
+      const { data: poMatches, error: poErr } = await supabase
         .from('autocsv_log')
         .select('*')
         .in('po_num', stillPending.map(e => e.order_num))
+      console.log('[autoMatch] still-pending order_nums:', stillPending.map(e => e.order_num))
+      console.log('[autoMatch] PO matches:', poMatches, poErr)
 
       for (const match of poMatches || []) {
         const entry = stillPending.find(e => e.order_num === match.po_num)
