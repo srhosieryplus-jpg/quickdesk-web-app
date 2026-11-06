@@ -311,6 +311,10 @@ export default function SeasonSSPage() {
 
   async function logRow(row: SSRow) {
     if (!user) return
+    if (cutoffInEffect && !isAdmin) {
+      alert('⚠️ SS Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.')
+      return
+    }
     setLogging(true)
     const loggedAt = new Date().toISOString()
     const { error } = await supabase.from('season_ss')

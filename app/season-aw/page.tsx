@@ -332,6 +332,10 @@ export default function SeasonAWPage() {
 
   async function logRow(row: AWRow) {
     if (!user) return
+    if (cutoffInEffect && !isAdmin) {
+      alert('⚠️ AW Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.')
+      return
+    }
     setLogging(true)
     const loggedAt = new Date().toISOString()
     const { error } = await supabase.from('season_aw')
