@@ -324,7 +324,7 @@ export default function SeasonBookPage() {
 
   const isAdmin = user?.store === 'ALL'
   // Payment/history/deposit access: STAR (admin) and MG only
-  const canPay = isAdmin || user?.userid?.toUpperCase() === 'MG'
+  const canPay = ['STAR', 'MG'].includes(user?.userid?.toUpperCase() ?? '')
 
   // ── Vendor lookup map: brand → vendor_id[] (blank vendor_ids excluded) ────
   const brandToVendors = (() => {
