@@ -115,19 +115,12 @@ export default function ICLogPage() {
     }
 
     // 2) For still-unmatched entries, try matching order_num against po_num
-    //    but restrict to current month only to avoid false positives
     const stillPending = pending.filter(e => !matchedEntryIds.has(e.id))
     if (stillPending.length) {
-      const now = new Date()
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString()
-
       const { data: poMatches } = await supabase
         .from('autocsv_log')
         .select('*')
         .in('po_num', stillPending.map(e => e.order_num))
-        .gte('exported_at', monthStart)
-        .lte('exported_at', monthEnd)
 
       for (const match of poMatches || []) {
         const entry = stillPending.find(e => e.order_num === match.po_num)
@@ -295,6 +288,17 @@ export default function ICLogPage() {
     if (error) { showToast(`❌ ${error.message}`, 'err'); return }
     setEditingEntry(null)
     showToast('✅ Updated')
+    fetchEntries()
+  }
+
+  async function markPushedIn(id: string) {
+    setContextMenu(null)
+    const { error } = await supabase.from('ic_log').update({
+      status: 'Pushed In',
+      in_push_log: true,
+    }).eq('id', id)
+    if (error) { showToast(`❌ ${error.message}`, 'err'); return }
+    showToast('✅ Marked as Pushed In')
     fetchEntries()
   }
 
@@ -577,6 +581,15 @@ export default function ICLogPage() {
             style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: purpleD, fontWeight: 600, cursor: 'pointer' }}>
             ✏️ Edit
           </button>
+          {entries.find(e => e.id === contextMenu.id)?.status === 'Pending' && (
+            <>
+              <div style={{ height: 1, background: border }} />
+              <button onClick={() => markPushedIn(contextMenu.id)}
+                style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: 'none', border: 'none', fontSize: 13, color: '#15803d', fontWeight: 600, cursor: 'pointer' }}>
+                ✅ Mark as Pushed In
+              </button>
+            </>
+          )}
           {currentUser?.store === 'ALL' && (
             <>
               <div style={{ height: 1, background: border }} />
