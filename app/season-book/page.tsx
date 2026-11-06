@@ -801,13 +801,15 @@ export default function SeasonBookPage() {
 
           {/* Cut-off date alert/admin control */}
           <div ref={cutoffPopoverRef} style={{ position: 'relative' }}>
+            {/* Alert badge — always visible when in effect */}
             {cutoffInEffect && (
               <button
-                onClick={() => isAdmin ? setShowCutoffPopover(v => !v) : undefined}
+                onClick={() => { if (isAdmin) setShowCutoffPopover(v => !v) }}
                 style={{ background: '#fef08a', color: '#713f12', border: '1.5px solid #ca8a04', borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 800, cursor: isAdmin ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', animation: 'cutoff-pulse 2s ease-in-out infinite' }}>
                 ⚠️ {seasonHalf} Cut-Off In Effect
               </button>
             )}
+            {/* Admin-only dashed button when NOT in effect */}
             {!cutoffInEffect && isAdmin && (
               <button
                 onClick={() => setShowCutoffPopover(v => !v)}
@@ -825,12 +827,12 @@ export default function SeasonBookPage() {
                   style={{ ...inp, fontSize: 12, marginBottom: 10 }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={cutoffActive} onChange={e => setCutoffActive(e.target.checked)} />
+                    <input type="checkbox" checked={cutoffActive} onChange={e => { setCutoffActive(e.target.checked) }} />
                     Active
                   </label>
-                  {cutoffActive && cutoffDate && (
-                    <span style={{ fontSize: 10, color: today() >= cutoffDate ? '#dc2626' : '#6b7280' }}>
-                      {today() >= cutoffDate ? '🔴 In effect now' : `⏳ Starts ${cutoffDate}`}
+                  {cutoffActive && cutoffInput && (
+                    <span style={{ fontSize: 10, color: today() >= cutoffInput ? '#dc2626' : '#6b7280' }}>
+                      {today() >= cutoffInput ? '🔴 In effect now' : `⏳ Starts ${cutoffInput}`}
                     </span>
                   )}
                 </div>
@@ -839,7 +841,14 @@ export default function SeasonBookPage() {
                     style={{ flex: 1, background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 6, padding: '6px 0', fontSize: 12, cursor: 'pointer' }}>
                     Cancel
                   </button>
-                  <button onClick={() => saveCutoff(seasonHalf, cutoffInput, cutoffActive)} disabled={!cutoffInput || cutoffSaving}
+                  <button
+                    onClick={() => {
+                      // Read active state directly from DOM to avoid stale closure
+                      const cb = cutoffPopoverRef.current?.querySelector('input[type="checkbox"]') as HTMLInputElement | null
+                      const isActive = cb ? cb.checked : cutoffActive
+                      saveCutoff(seasonHalf, cutoffInput, isActive)
+                    }}
+                    disabled={!cutoffInput || cutoffSaving}
                     style={{ flex: 1, background: purpleD, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 0', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: !cutoffInput || cutoffSaving ? 0.6 : 1 }}>
                     {cutoffSaving ? 'Saving…' : 'Save'}
                   </button>
