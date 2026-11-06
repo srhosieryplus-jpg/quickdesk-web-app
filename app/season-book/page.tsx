@@ -205,7 +205,20 @@ export default function SeasonBookPage() {
       .order('payment_date', { ascending: false })
     setPayHistLoading(false)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
-    setPayHistRecords(data ?? [])
+    // If no history records but deposit exists, synthesize one from ledger data
+    const records = data ?? []
+    if (records.length === 0 && (row.deposit ?? 0) > 0) {
+      setPayHistRecords([{
+        id: `__legacy__${row.id}`,
+        ledger_id: row.id,
+        amount: row.deposit ?? 0,
+        payment_date: row.payment_date ?? row.created_at.slice(0, 10),
+        note: 'Recorded before history tracking',
+        created_at: row.created_at,
+      }])
+    } else {
+      setPayHistRecords(records)
+    }
   }
 
   async function deletePayment(payId: string, row: LedgerRow, amount: number) {
@@ -610,7 +623,7 @@ export default function SeasonBookPage() {
         .sb-main { flex: 1; padding: 16px; }
         .sb-brand-row { padding: 8px 14px; cursor: pointer; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; color: #374151; transition: background 0.1s; }
         .sb-brand-row:hover, .sb-brand-row.active { background: #ede9fe; color: ${purpleD}; }
-        .sb-brand-row.active { font-weight: 800; }
+        .sb-brand-row.active { font-weight: 600; }
         .drop-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
         .drop-head { background: #ede9fe; padding: 7px 14px; display: flex; align-items: center; gap: 10px; }
         .store-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -726,7 +739,21 @@ export default function SeasonBookPage() {
               .order('payment_date', { ascending: false })
             setPayHistLoading(false)
             if (error) { showToast('❌ ' + error.message, 'err'); return }
-            setPayHistRecords(data ?? [])
+            const realRecords = data ?? []
+            // Synthesize legacy records for rows with a deposit but no payment history entry
+            const coveredIds = new Set(realRecords.map((r: {ledger_id: string}) => r.ledger_id))
+            const legacyRecords = rows
+              .filter(r => !coveredIds.has(r.id) && (r.deposit ?? 0) > 0)
+              .map(r => ({
+                id: `__legacy__${r.id}`,
+                ledger_id: r.id,
+                amount: r.deposit ?? 0,
+                payment_date: r.payment_date ?? r.created_at.slice(0, 10),
+                note: 'Recorded before history tracking',
+                created_at: r.created_at,
+              }))
+            const all = [...realRecords, ...legacyRecords].sort((a, b) => b.payment_date.localeCompare(a.payment_date))
+            setPayHistRecords(all)
           }}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             🕐 History
@@ -885,20 +912,13 @@ export default function SeasonBookPage() {
                   // Use actual assigned vendor IDs from rows, fall back to VENDOR_DATA if unassigned
                   const assigned = brandAssignedVendors.get(b)
                   const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(b) ?? [])
-                  if (vids.length === 0) return null
-                  if (vids.length === 1) return (
-                    <span style={{ fontSize: 9, fontWeight: 700, color: purpleD, flexShrink: 0 }}>
-                      {vids[0]}
+                  const vidLabel = vids.length > 0 ? vids[0] : null
+                  return (
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'inherit' }}>
+                      {vidLabel ? `${vidLabel} - ${b}` : b}
                     </span>
                   )
-                  // Multiple different vendor IDs assigned across drops — show all compactly
-                  return vids.map(vid => (
-                    <span key={vid} style={{ fontSize: 9, fontWeight: 700, color: purpleD, flexShrink: 0 }}>
-                      {vid}
-                    </span>
-                  ))
                 })()}
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
                 {hasOwing && (
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 5px', flexShrink: 0 }}>
                     {fmt$(totalBal)}
@@ -1033,7 +1053,7 @@ export default function SeasonBookPage() {
                             </span>
                           ))
                         })()}
-                        <span style={{ fontSize: 13, fontWeight: 900, color: purpleD }}>{brand}</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: purpleD }}>{brand}</span>
                         <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
                         <span style={{ fontSize: 11, color: gray }}>{bDrops.length} drop{bDrops.length !== 1 ? 's' : ''}</span>
                         {totBal <= 0.001 && totInit > 0 && (
