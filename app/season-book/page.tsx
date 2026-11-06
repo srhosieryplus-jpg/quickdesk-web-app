@@ -532,10 +532,9 @@ export default function SeasonBookPage() {
       <style>{`
         * { box-sizing: border-box; }
         .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: sticky; top: 0; z-index: 100; }
-        .sb-subbar { padding: 8px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; justify-content: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
-        .sb-dropbar { padding: 6px 16px; background: #fff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: sticky; top: 100px; z-index: 98; min-height: 38px; }
+        .sb-subbar { padding: 6px 0 6px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
         .sb-layout { display: flex; flex: 1; position: relative; }
-        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: 138px; height: calc(100vh - 138px); }
+        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: 97px; height: calc(100vh - 97px); }
         .sb-main { flex: 1; padding: 16px; }
         .sb-brand-row { padding: 8px 14px; cursor: pointer; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; color: #374151; transition: background 0.1s; }
         .sb-brand-row:hover, .sb-brand-row.active { background: #ede9fe; color: ${purpleD}; }
@@ -656,17 +655,21 @@ export default function SeasonBookPage() {
         </div>
       </div>
 
-      {/* Sub-bar: search */}
+      {/* Combined sub-bar: sidebar gap | search | filters | Drop dropdown */}
       <div className="sb-subbar">
-        <div ref={headerSearchRef} style={{ position: 'relative', flex: 1 }}>
+        {/* Blank spacer matching sidebar width */}
+        <div style={{ width: 220, flexShrink: 0 }} />
+
+        {/* Search — aligns with grand total box */}
+        <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
           <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
             <span style={{ padding: '0 8px', color: gray, fontSize: 14 }}>🔍</span>
             <input
               value={headerSearch}
               onChange={e => { setHeaderSearch(e.target.value); setShowHeaderDrop(true) }}
               onFocus={() => setShowHeaderDrop(true)}
-              placeholder="Search or select a brand…"
-              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#111', fontSize: 13, fontWeight: 500, padding: '6px 8px 6px 0', flex: 1 }}
+              placeholder="Search brand or vendor…"
+              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#111', fontSize: 13, fontWeight: 500, padding: '5px 8px 5px 0', flex: 1, minWidth: 0 }}
             />
             {headerSearch && (
               <button onClick={() => { setHeaderSearch(''); setShowHeaderDrop(false) }}
@@ -678,12 +681,8 @@ export default function SeasonBookPage() {
               {headerSearchResults.map((item, i) => (
                 <div key={i}
                   onClick={() => {
-                    if (item.type === 'vendor') {
-                      setActiveVendorId(item.vendorId!)
-                      setActiveBrand(null)
-                    } else {
-                      setActiveBrand(item.brand)
-                    }
+                    if (item.type === 'vendor') { setActiveVendorId(item.vendorId!); setActiveBrand(null) }
+                    else { setActiveBrand(item.brand) }
                     setHeaderSearch(''); setShowHeaderDrop(false)
                   }}
                   style={{ padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
@@ -697,90 +696,66 @@ export default function SeasonBookPage() {
                     ) : item.label}
                   </span>
                   <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                    {item.type === 'vendor' && (
-                      <span style={{ fontSize: 10, color: '#065f46', fontWeight: 700, background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 4, padding: '1px 5px' }}>
-                        Vendor ID
-                      </span>
-                    )}
-                    {item.type === 'invoice' && (
-                      <span style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px' }}>
-                        INV {item.invoiceNum}
-                      </span>
-                    )}
-                    {item.type === 'brand' && brandsInSeason.includes(item.brand) && (
-                      <span style={{ fontSize: 10, color: purpleD, fontWeight: 700, background: '#ede9fe', borderRadius: 6, padding: '1px 6px' }}>in {season}</span>
-                    )}
+                    {item.type === 'vendor' && <span style={{ fontSize: 10, color: '#065f46', fontWeight: 700, background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 4, padding: '1px 5px' }}>Vendor ID</span>}
+                    {item.type === 'invoice' && <span style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px' }}>INV {item.invoiceNum}</span>}
+                    {item.type === 'brand' && brandsInSeason.includes(item.brand) && <span style={{ fontSize: 10, color: purpleD, fontWeight: 700, background: '#ede9fe', borderRadius: 6, padding: '1px 6px' }}>in {season}</span>}
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* Active filters */}
         {activeBrand && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: purpleD }}>
-            <span style={{ color: gray, fontWeight: 400 }}>Viewing:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: purpleD, background: '#ede9fe', borderRadius: 20, padding: '3px 10px', border: `1px solid ${border}` }}>
             {activeBrand}
-            <button onClick={() => setActiveBrand(null)}
-              style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 }}>✕</button>
+            <button onClick={() => setActiveBrand(null)} style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
           </div>
         )}
         {activeVendorId && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 20, padding: '3px 10px' }}>
-            <span style={{ fontWeight: 400, color: '#374151' }}>Vendor:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 20, padding: '3px 10px' }}>
             {activeVendorId}
-            <button onClick={() => setActiveVendorId(null)}
-              style={{ background: 'none', border: 'none', color: '#065f46', cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 }}>✕</button>
+            <button onClick={() => setActiveVendorId(null)} style={{ background: 'none', border: 'none', color: '#065f46', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
           </div>
         )}
-      </div>
 
-      {/* Drop Name Filter Bar — always visible so new names can be added */}
-      <div className="sb-dropbar">
+        {/* Spacer pushes Drop to right */}
+        <div style={{ flex: 1 }} />
+
+        {/* Drop dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 16 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: gray, flexShrink: 0 }}>Drop:</span>
-          <button
-            onClick={() => setActiveDropName(null)}
-            style={{
-              fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '3px 10px', cursor: 'pointer', border: 'none',
-              background: activeDropName === null ? purpleD : '#e5e7eb',
-              color: activeDropName === null ? '#fff' : '#374151',
-            }}>All</button>
-          {dropNamesInSeason.map(dn => (
-            <button key={dn}
-              onClick={() => setActiveDropName(activeDropName === dn ? null : dn)}
-              style={{
-                fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '3px 10px', cursor: 'pointer', border: 'none',
-                background: activeDropName === dn ? purpleD : '#ede9fe',
-                color: activeDropName === dn ? '#fff' : purpleD,
-              }}>{dn}</button>
-          ))}
+          <select
+            value={activeDropName ?? ''}
+            onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value === '__new__' ? null : e.target.value)}
+            style={{ fontSize: 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none' }}>
+            <option value="">All</option>
+            {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
+          </select>
           {/* Add new drop name */}
           {showDropNameMgr ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <input autoFocus value={newDropNameInput} onChange={e => setNewDropNameInput(e.target.value)}
                 placeholder="New name…" maxLength={40}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && newDropNameInput.trim()) {
-                    setActiveDropName(newDropNameInput.trim())
-                    setNewDropNameInput('')
-                    setShowDropNameMgr(false)
-                  }
+                  if (e.key === 'Enter' && newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput(''); setShowDropNameMgr(false) }
                   if (e.key === 'Escape') { setShowDropNameMgr(false); setNewDropNameInput('') }
                 }}
                 style={{ fontSize: 11, border: `1.5px solid ${border}`, borderRadius: 6, padding: '3px 8px', outline: 'none', width: 110 }} />
-              <button onClick={() => {
-                if (newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput('') }
-                setShowDropNameMgr(false)
-              }} style={{ fontSize: 11, background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✓</button>
+              <button onClick={() => { if (newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput('') } setShowDropNameMgr(false) }}
+                style={{ fontSize: 11, background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✓</button>
               <button onClick={() => { setShowDropNameMgr(false); setNewDropNameInput('') }}
                 style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✕</button>
             </div>
           ) : (
             <button onClick={() => setShowDropNameMgr(true)}
-              style={{ fontSize: 11, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 20, padding: '3px 10px', cursor: 'pointer', color: gray }}>
+              style={{ fontSize: 11, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: gray }}>
               + New
             </button>
           )}
         </div>
+      </div>
 
       {/* Body */}
       <div className="sb-layout">
@@ -1391,6 +1366,40 @@ export default function SeasonBookPage() {
                   </div>
                 </div>
 
+                {/* Vendor ID row */}
+                {(() => {
+                  const vids = brandToVendors.get(editRow.brand) ?? []
+                  const currentVid = editRow.vendor_id
+                  if (vids.length === 0 && !currentVid) return null
+                  return (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label style={lbl}>Vendor ID</label>
+                        {currentVid && (
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 20, padding: '2px 8px' }}>
+                            {currentVid}{VENDOR_DATA.find(v => v.vendor_id === currentVid && v.brand === editRow.brand)?.brand ? ` · ${editRow.brand}` : ''}
+                          </span>
+                        )}
+                        {vids.length > 1 && (
+                          <button
+                            onClick={() => {
+                              setVendorPickerBrand(editRow.brand)
+                              setVendorPickerCandidates(vids)
+                              setVendorPickerOnSelect(() => async (vid: string) => {
+                                const { error } = await supabase.from('season_book').update({ vendor_id: vid }).eq('id', editRow.id)
+                                if (!error && user) { setEditRow({ ...editRow, vendor_id: vid }); fetchRows(season, user) }
+                                setVendorPickerBrand(null)
+                              })
+                            }}
+                            style={{ fontSize: 11, fontWeight: 700, background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 7, padding: '3px 10px', cursor: 'pointer', color: purpleD }}>
+                            {currentVid ? 'Change Vendor' : 'Pick Vendor'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+
                 {/* Divider */}
                 <div style={{ height: 1, background: border, marginBottom: 14 }} />
 
@@ -1876,7 +1885,7 @@ export default function SeasonBookPage() {
                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = purple; (e.currentTarget as HTMLButtonElement).style.background = '#ede9fe' }}
                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = border; (e.currentTarget as HTMLButtonElement).style.background = '#f5f3ff' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 6, padding: '2px 8px' }}>{vid}</span>
-                  Vendor {vid}
+                  {vid} - {vendorPickerBrand}
                 </button>
               ))}
             </div>
