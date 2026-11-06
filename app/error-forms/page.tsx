@@ -187,13 +187,12 @@ export default function ErrorFormsPage() {
   const [toastType, setToastType] = useState<'ok'|'err'>('ok')
 
   // ── Store IDs (from settings localStorage) ───────────────────────────────
-  const [storeIds, setStoreIds] = useState<string[]>([])
-  useEffect(() => {
+  const [storeIds] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem('qd_stores')
-      if (saved) setStoreIds(JSON.parse(saved))
-    } catch {}
-  }, [])
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('qd_stores') : null
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
 
   // ── Season state ──────────────────────────────────────────────────────────
   const [season, setSeason] = useState('SS27')
@@ -420,10 +419,10 @@ export default function ErrorFormsPage() {
       )}
 
       {/* ── Header ── */}
-      <div style={{ background: redD, color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ background: redD, color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => setShowSeasonPanel(true)}
-            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 14, cursor: 'pointer' }}
             title="Switch season">
             ☰
           </button>
@@ -431,11 +430,12 @@ export default function ErrorFormsPage() {
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ← Home
           </button>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '0.05em' }}>⚠ ERROR FORMS</div>
-            <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
-              {season} · {openCount} open · {finalCount} finalized
-            </div>
+        </div>
+        {/* Centered title */}
+        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+          <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '0.05em' }}>⚠ ERROR FORMS</div>
+          <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
+            {season} · {openCount} open · {finalCount} finalized
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
