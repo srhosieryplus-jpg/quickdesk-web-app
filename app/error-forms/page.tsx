@@ -13,11 +13,24 @@ import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
 import { BRAND_LIST } from '@/lib/brands'
 
+// ── Seasons ───────────────────────────────────────────────────────────────────
+const BASE_SEASONS = ['SS24','SS25','SS26','SS27','SS28','AW24','AW25','AW26','AW27','AW28']
+function buildSeasons(extra: string[]): string[] {
+  const all = [...BASE_SEASONS, ...extra.filter(s => !BASE_SEASONS.includes(s))]
+  return all.sort((a, b) => {
+    const yr = (s: string) => parseInt(s.slice(2))
+    const half = (s: string) => s.slice(0,2) === 'SS' ? 0 : 1
+    if (yr(a) !== yr(b)) return yr(a) - yr(b)
+    return half(a) - half(b)
+  })
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 type EFStatus = 'pending' | 'credit' | 'refund' | 'item_received' | 'invoice_fixed'
 
 interface ErrorForm {
   id: string
+  season: string
   brand: string
   amount: number | null
   email_sent: boolean
@@ -154,9 +167,9 @@ function FileAttach({
 }
 
 // ── Blank new form ────────────────────────────────────────────────────────────
-function blankForm(): Omit<ErrorForm, 'id' | 'logged_by' | 'created_at' | 'updated_at'> {
+function blankForm(season = 'SS27'): Omit<ErrorForm, 'id' | 'logged_by' | 'created_at' | 'updated_at'> {
   return {
-    brand: '', amount: null, email_sent: false, error_date: today(),
+    season, brand: '', amount: null, email_sent: false, error_date: today(),
     status: 'pending', comments: null, log_date: today(), final_date: null,
     invoice_file_url: null, error_file_url: null,
     credit_note_url: null, credit_note2_url: null, refund2_url: null,
@@ -173,6 +186,14 @@ export default function ErrorFormsPage() {
   const [toast, setToast] = useState('')
   const [toastType, setToastType] = useState<'ok'|'err'>('ok')
 
+  // ── Season state ──────────────────────────────────────────────────────────
+  const [season, setSeason] = useState('SS27')
+  const [extraSeasons, setExtraSeasons] = useState<string[]>([])
+  const [showSeasonPanel, setShowSeasonPanel] = useState(false)
+  const [showNewSeason, setShowNewSeason] = useState(false)
+  const [newSeasonInput, setNewSeasonInput] = useState('')
+  const allSeasons = buildSeasons(extraSeasons)
+
   // Filter state
   const [filterStatus, setFilterStatus] = useState<'all'|'open'|'finalized'>('open')
   const [filterBrand, setFilterBrand] = useState('')
@@ -187,29 +208,34 @@ export default function ErrorFormsPage() {
   const [brandInput, setBrandInput] = useState('')
   const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const u = getSession()
-    if (!u) { router.replace('/'); return }
-    setUser(u)
-    fetchForms()
-  }, [router])
-
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type); setTimeout(() => setToast(''), 3000)
   }
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
-  const fetchForms = useCallback(async () => {
+  const fetchForms = useCallback(async (s?: string) => {
     setLoading(true)
     const { data, error } = await supabase
       .from('error_forms')
       .select('*')
+      .eq('season', s ?? season)
       .order('created_at', { ascending: false })
-    if (error) { showToast('❌ ' + error.message, 'err') }
+    if (error) { setToast('❌ ' + error.message); setToastType('err') }
     else setForms(data ?? [])
     setLoading(false)
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [season])
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const u = getSession()
+    if (!u) { router.replace('/'); return }
+    setUser(u)
+  }, [router])
+
+  useEffect(() => {
+    if (user) fetchForms()
+  }, [user, season, fetchForms])
 
   // ── Filtered list ─────────────────────────────────────────────────────────
   const filtered = forms.filter(f => {
@@ -225,6 +251,18 @@ export default function ErrorFormsPage() {
     return true
   })
 
+  // ── Create season ─────────────────────────────────────────────────────────
+  async function createSeason() {
+    const val = newSeasonInput.trim().toUpperCase()
+    if (!val) return
+    if (allSeasons.includes(val)) { showToast('Season already exists', 'err'); return }
+    setExtraSeasons(prev => [...prev, val])
+    setSeason(val)
+    setNewSeasonInput('')
+    setShowNewSeason(false)
+    setShowSeasonPanel(false)
+  }
+
   // ── Save new ──────────────────────────────────────────────────────────────
   async function saveNew() {
     if (!user) return
@@ -232,6 +270,7 @@ export default function ErrorFormsPage() {
     setSaving(true)
     const { error } = await supabase.from('error_forms').insert({
       ...form,
+      season,
       error_date: form.error_date ? safeDate(form.error_date) : null,
       log_date: safeDate(form.log_date),
       final_date: form.final_date ? safeDate(form.final_date) : null,
@@ -287,7 +326,7 @@ export default function ErrorFormsPage() {
 
   // ── Open new modal ────────────────────────────────────────────────────────
   function openNew() {
-    setForm(blankForm())
+    setForm(blankForm(season))
     setBrandInput('')
     setBrandSuggestions([])
     setModal('new')
@@ -315,9 +354,58 @@ export default function ErrorFormsPage() {
         </div>
       )}
 
+      {/* ── Season slide-out panel ── */}
+      {showSeasonPanel && (
+        <div className="season-overlay" onClick={() => setShowSeasonPanel(false)}>
+          <div className="season-panel" onClick={e => e.stopPropagation()}>
+            <div className="sp-head">
+              <span style={{ fontWeight: 800, fontSize: 15 }}>Seasons</span>
+              <button onClick={() => setShowSeasonPanel(false)}
+                style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+              {allSeasons.map(s => (
+                <div key={s} className="sp-season-row"
+                  style={{ background: s === season ? redD : 'transparent', color: s === season ? '#fff' : '#1f2937' }}
+                  onClick={() => { setSeason(s); setShowSeasonPanel(false) }}>
+                  <span style={{ fontWeight: s === season ? 800 : 500 }}>{s}</span>
+                  {s === season && <span style={{ fontSize: 10, opacity: 0.8 }}>✓ current</span>}
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              {!showNewSeason ? (
+                <button onClick={() => setShowNewSeason(true)}
+                  style={{ width: '100%', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px dashed rgba(255,255,255,0.4)',
+                    borderRadius: 7, padding: '7px 0', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  + Add Season
+                </button>
+              ) : (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input value={newSeasonInput} onChange={e => setNewSeasonInput(e.target.value.toUpperCase())}
+                    onKeyDown={e => { if (e.key === 'Enter') createSeason(); if (e.key === 'Escape') { setShowNewSeason(false); setNewSeasonInput('') } }}
+                    placeholder="e.g. AW29" autoFocus maxLength={6}
+                    style={{ flex: 1, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6,
+                      padding: '5px 8px', fontSize: 12, color: '#fff', outline: 'none', fontFamily: 'Inter, sans-serif' }} />
+                  <button onClick={createSeason}
+                    style={{ background: '#fff', color: redD, border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    Add
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Header ── */}
       <div style={{ background: redD, color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => setShowSeasonPanel(true)}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+            title="Switch season">
+            ☰
+          </button>
           <button onClick={() => router.push('/selector')}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ← Home
@@ -325,11 +413,17 @@ export default function ErrorFormsPage() {
           <div>
             <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '0.05em' }}>⚠ ERROR FORMS</div>
             <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
-              {openCount} open · {finalCount} finalized
+              {season} · {openCount} open · {finalCount} finalized
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Season badge */}
+          <button onClick={() => setShowSeasonPanel(true)}
+            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)',
+              borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.05em' }}>
+            {season}
+          </button>
           {/* Status filter */}
           <div style={{ display: 'flex', gap: 4 }}>
             {(['all','open','finalized'] as const).map(s => (
@@ -649,6 +743,23 @@ export default function ErrorFormsPage() {
       <style>{`
         .ef-row { cursor: pointer; transition: background 0.1s; }
         .ef-row:hover { background: #fef2f2 !important; }
+        .season-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 2000; }
+        .season-panel {
+          position: fixed; top: 0; left: 0; height: 100vh; width: 220px;
+          background: ${redD}; color: #fff; display: flex; flex-direction: column;
+          box-shadow: 4px 0 20px rgba(0,0,0,0.3); z-index: 2001;
+          animation: slideInLeft 0.2s ease;
+        }
+        @keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+        .sp-head {
+          padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
+          border-bottom: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.15);
+        }
+        .sp-season-row {
+          padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+          font-size: 13px; transition: background 0.1s; border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .sp-season-row:hover { background: rgba(255,255,255,0.1) !important; }
         @media (max-width: 768px) {
           table { font-size: 11px; }
         }
