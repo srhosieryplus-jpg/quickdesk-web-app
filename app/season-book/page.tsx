@@ -149,6 +149,9 @@ export default function SeasonBookPage() {
   const [quickPayBrand, setQuickPayBrand] = useState<string | null>(null)
   const [quickPayAmt, setQuickPayAmt] = useState('')
   const [quickPayDate, setQuickPayDate] = useState(today())
+  // Per-row override amounts when using 30% or manual per-row entry; keyed by row id
+  const [perRowAmts, setPerRowAmts] = useState<Map<string, string>>(new Map())
+  const [usePerRow, setUsePerRow] = useState(false)
   // Which rows are selected for payment (by id); null = all with balance
   const [paySelectedIds, setPaySelectedIds] = useState<Set<string>>(new Set())
   // Payment modal brand/vendor search
@@ -970,6 +973,7 @@ export default function SeasonBookPage() {
             setQuickPayAmt(''); setQuickPayDate(today())
             setPaySelectedIds(new Set())
             setPayBrandSearch('')
+            setPerRowAmts(new Map()); setUsePerRow(false)
             setModal('quick-pay')
           }}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
@@ -1879,7 +1883,7 @@ export default function SeasonBookPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {canPay && <button onClick={() => { setQuickPayBrand(invoiceBrand); setQuickPayVendorId(null); setQuickPayAmt(''); setQuickPayDate(today()); setPaySelectedIds(new Set()); setPayBrandSearch(''); setModal('quick-pay') }}
+                  {canPay && <button onClick={() => { setQuickPayBrand(invoiceBrand); setQuickPayVendorId(null); setQuickPayAmt(''); setQuickPayDate(today()); setPaySelectedIds(new Set()); setPayBrandSearch(''); setPerRowAmts(new Map()); setUsePerRow(false); setModal('quick-pay') }}
                     style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     💳 Pay
                   </button>}
@@ -2183,65 +2187,107 @@ export default function SeasonBookPage() {
                       })}
                     </div>
 
-                    {/* Amount + date */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 6 }}>
-                      <div>
-                        <label style={lbl}>Amount</label>
-                        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                          <input type="number" value={quickPayAmt} onChange={e => setQuickPayAmt(e.target.value)}
-                            placeholder="0.00" step="0.01" autoFocus style={{ ...inp, flex: 1 }} />
-                          <button
-                            type="button"
-                            title={selectedRows.length > 0
-                              ? `30% of total initial order${selectedRows.length > 1 ? 's' : ''} (${selectedRows.map(r => fmt$(r.initial_total, r.currency)).join(' + ')})`
-                              : 'Select rows first'}
-                            disabled={selectedRows.length === 0}
-                            onClick={() => {
-                              // Sum initial_totals of selected rows and compute 30%
-                              const total = selectedRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
-                              setQuickPayAmt((total * 0.3).toFixed(2))
-                            }}
-                            style={{
-                              fontSize: 11, fontWeight: 800, padding: '5px 9px', borderRadius: 7, flexShrink: 0,
-                              border: `1.5px solid ${border}`,
-                              background: selectedRows.length > 0 ? '#ede9fe' : '#f3f4f6',
-                              color: selectedRows.length > 0 ? purpleD : gray,
-                              cursor: selectedRows.length > 0 ? 'pointer' : 'not-allowed',
-                            }}>
-                            30%
-                          </button>
-                        </div>
-                        {selectedRows.length > 0 && quickPayAmt && (
-                          <div style={{ fontSize: 10, color: gray, marginTop: 3 }}>
-                            Applying to {selectedRows.length} drop{selectedRows.length > 1 ? 's' : ''} · edit amount above before applying
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <label style={lbl}>Payment Date</label>
-                        <input type="date" value={quickPayDate} onChange={e => setQuickPayDate(e.target.value)} style={inp} />
-                      </div>
+                    {/* Date row */}
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={lbl}>Payment Date</label>
+                      <input type="date" value={quickPayDate} onChange={e => setQuickPayDate(e.target.value)} style={{ ...inp, maxWidth: 180 }} />
                     </div>
 
                     {selectedRows.length === 0 && (
                       <div style={{ fontSize: 11, color: '#b45309', marginBottom: 8 }}>⚠ Select at least one row to apply payment to.</div>
                     )}
 
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+                    {/* Per-row amount preview */}
+                    {selectedRows.length > 0 && (
+                      <div style={{ border: `1.5px solid ${border}`, borderRadius: 8, overflow: 'hidden', marginBottom: 10 }}>
+                        {/* Header */}
+                        <div style={{ background: '#f5f3ff', padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottom: `1px solid ${border}` }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>
+                            {selectedRows.length} Drop{selectedRows.length > 1 ? 's' : ''} Selected
+                          </span>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button type="button"
+                              onClick={() => {
+                                const m = new Map<string, string>()
+                                selectedRows.forEach(r => m.set(r.id, ((r.initial_total ?? 0) * 0.3).toFixed(2)))
+                                setPerRowAmts(m); setUsePerRow(true); setQuickPayAmt('')
+                              }}
+                              style={{ fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 6, border: `1.5px solid ${purpleD}`, background: '#ede9fe', color: purpleD, cursor: 'pointer' }}>
+                              Fill 30% each
+                            </button>
+                            <button type="button"
+                              onClick={() => { setUsePerRow(false); setPerRowAmts(new Map()) }}
+                              style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 6, border: `1px solid ${border}`, background: '#f3f4f6', color: gray, cursor: 'pointer' }}>
+                              Same amt
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Per-row table */}
+                        <div>
+                          {selectedRows.map((r, i) => {
+                            const rowAmt = usePerRow ? (perRowAmts.get(r.id) ?? '') : quickPayAmt
+                            const isLast = i === selectedRows.length - 1
+                            return (
+                              <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, alignItems: 'center', padding: '7px 12px', borderBottom: isLast ? 'none' : `1px solid #f3f4f6`, background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>{r.brand} · Drop {r.drop_num}</div>
+                                  <div style={{ fontSize: 10, color: gray }}>{r.store} · Balance: {fmt$(r.balance_due, r.currency)} · Total: {fmt$(r.initial_total, r.currency)}</div>
+                                </div>
+                                {usePerRow ? (
+                                  <input type="number" step="0.01" placeholder="0.00"
+                                    value={perRowAmts.get(r.id) ?? ''}
+                                    onChange={e => {
+                                      const m = new Map(perRowAmts)
+                                      m.set(r.id, e.target.value)
+                                      setPerRowAmts(m)
+                                    }}
+                                    style={{ ...inp, width: 90, textAlign: 'right', fontWeight: 700 }} />
+                                ) : (
+                                  <input type="number" step="0.01" placeholder="0.00"
+                                    value={quickPayAmt}
+                                    onChange={e => setQuickPayAmt(e.target.value)}
+                                    style={{ ...inp, width: 90, textAlign: 'right', fontWeight: 700 }} />
+                                )}
+                                <div style={{ fontSize: 10, color: gray, minWidth: 28 }}>{r.currency}</div>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Total summary */}
+                        {selectedRows.length > 1 && (
+                          <div style={{ background: '#f5f3ff', borderTop: `1.5px solid ${border}`, padding: '6px 12px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 11, color: gray }}>Total payment:</span>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: purpleD }}>
+                              {fmt$(selectedRows.reduce((s, r) => {
+                                const a = usePerRow ? parseFloat(perRowAmts.get(r.id) ?? '0') : parseFloat(quickPayAmt || '0')
+                                return s + (isNaN(a) ? 0 : a)
+                              }, 0))}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
                       <button onClick={() => setModal('none')}
                         style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                         Cancel
                       </button>
-                      <button disabled={selectedRows.length === 0 || !quickPayAmt || !user}
+                      <button
+                        disabled={selectedRows.length === 0 || !user || (usePerRow ? selectedRows.some(r => !perRowAmts.get(r.id)) : !quickPayAmt)}
                         onClick={async () => {
-                          if (!quickPayAmt || !user || selectedRows.length === 0) return
+                          if (!user || selectedRows.length === 0) return
                           for (const r of selectedRows) {
-                            await addPayment(r, quickPayAmt, quickPayDate)
+                            const amt = usePerRow ? (perRowAmts.get(r.id) ?? '') : quickPayAmt
+                            if (!amt) continue
+                            await addPayment(r, amt, quickPayDate)
                           }
                           setModal('none')
                         }}
-                        style={{ background: selectedRows.length === 0 || !quickPayAmt ? '#c4b5fd' : purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: selectedRows.length === 0 || !quickPayAmt ? 'not-allowed' : 'pointer' }}>
-                        Apply to {selectedRows.length > 0 ? `${selectedRows.length} Row${selectedRows.length > 1 ? 's' : ''}` : 'Selected'}
+                        style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: (selectedRows.length === 0 || (usePerRow ? selectedRows.some(r => !perRowAmts.get(r.id)) : !quickPayAmt)) ? 0.5 : 1 }}>
+                        Apply to {selectedRows.length > 0 ? `${selectedRows.length} Drop${selectedRows.length > 1 ? 's' : ''}` : 'Selected'}
                       </button>
                     </div>
                   </>
