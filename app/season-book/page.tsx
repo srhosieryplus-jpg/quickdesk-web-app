@@ -289,12 +289,12 @@ export default function SeasonBookPage() {
     }
     const { error } = await supabase.from('season_payments').delete().eq('id', payId)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
-    // Recalculate deposit on ledger row
-    const remaining = payHistRecords.filter(p => p.id !== payId)
-    const newDep = remaining.reduce((s, p) => s + p.amount, 0)
+    // Re-fetch only payments for THIS ledger row to get accurate total
+    const { data: rowPayments } = await supabase.from('season_payments').select('amount').eq('ledger_id', row.id)
+    const newDep = (rowPayments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
     const newBal = (row.initial_total ?? 0) - newDep - (row.duties ?? 0)
     await supabase.from('season_ledger').update({ deposit: newDep, balance_due: newBal }).eq('id', row.id)
-    setPayHistRecords(remaining)
+    setPayHistRecords(prev => prev.filter(p => p.id !== payId))
     if (user) fetchRows(season, user)
     showToast('🗑 Payment deleted')
   }
@@ -310,12 +310,12 @@ export default function SeasonBookPage() {
       amount: newAmt, payment_date: payHistEditDate, note: payHistEditNote || null
     }).eq('id', payId)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
-    // Recalculate deposit
-    const updated = payHistRecords.map(p => p.id === payId ? { ...p, amount: newAmt, payment_date: payHistEditDate, note: payHistEditNote || null } : p)
-    const newDep = updated.reduce((s, p) => s + p.amount, 0)
+    // Re-fetch only payments for THIS ledger row to get accurate total
+    const { data: rowPayments } = await supabase.from('season_payments').select('amount').eq('ledger_id', row.id)
+    const newDep = (rowPayments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
     const newBal = (row.initial_total ?? 0) - newDep - (row.duties ?? 0)
     await supabase.from('season_ledger').update({ deposit: newDep, balance_due: newBal }).eq('id', row.id)
-    setPayHistRecords(updated)
+    setPayHistRecords(prev => prev.map(p => p.id === payId ? { ...p, amount: newAmt, payment_date: payHistEditDate, note: payHistEditNote || null } : p))
     setPayHistEditId(null)
     fetchRows(season, user)
     showToast('✅ Payment updated')
@@ -2282,7 +2282,9 @@ export default function SeasonBookPage() {
                           for (const r of selectedRows) {
                             const amt = usePerRow ? (perRowAmts.get(r.id) ?? '') : quickPayAmt
                             if (!amt) continue
-                            await addPayment(r, amt, quickPayDate)
+                            // Always fetch fresh row data so deposit is current before adding
+                            const { data: fresh } = await supabase.from('season_ledger').select('*').eq('id', r.id).maybeSingle()
+                            await addPayment(fresh ?? r, amt, quickPayDate)
                           }
                           setModal('none')
                         }}
