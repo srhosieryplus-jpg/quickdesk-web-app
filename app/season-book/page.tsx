@@ -209,26 +209,44 @@ export default function SeasonBookPage() {
   // Is cutoff currently in effect? (date set, active flag on, today >= cutoff)
   const cutoffInEffect = cutoffActive && !!cutoffDate && today() >= cutoffDate
 
+  function lsKey(half: string) { return `sb_cutoff_${half}` }
+
   async function loadCutoff(half: string) {
-    const { data } = await supabase.from('app_settings').select('value').eq('key', `cutoff_${half}`).maybeSingle()
-    if (data?.value) {
-      const [d, flag] = data.value.split('|')
-      setCutoffDate(d ?? '')
-      setCutoffActive(flag === 'active')
-      setCutoffInput(d ?? '')
-    } else {
-      setCutoffDate(''); setCutoffActive(false); setCutoffInput('')
-    }
+    // Try Supabase first, fall back to localStorage
+    try {
+      const { data, error } = await supabase.from('app_settings').select('value').eq('key', `cutoff_${half}`).maybeSingle()
+      if (!error && data?.value) {
+        const [d, flag] = data.value.split('|')
+        setCutoffDate(d ?? ''); setCutoffActive(flag === 'active'); setCutoffInput(d ?? '')
+        return
+      }
+    } catch { /* table may not exist yet */ }
+    // localStorage fallback
+    try {
+      const stored = localStorage.getItem(lsKey(half))
+      if (stored) {
+        const [d, flag] = stored.split('|')
+        setCutoffDate(d ?? ''); setCutoffActive(flag === 'active'); setCutoffInput(d ?? '')
+        return
+      }
+    } catch { /* ignore */ }
+    setCutoffDate(''); setCutoffActive(false); setCutoffInput('')
   }
 
   async function saveCutoff(half: string, date: string, active: boolean) {
     setCutoffSaving(true)
     const value = `${date}|${active ? 'active' : 'inactive'}`
-    const { error } = await supabase.from('app_settings').upsert({ key: `cutoff_${half}`, value }, { onConflict: 'key' })
+    // Try Supabase; if it fails, localStorage keeps it working
+    let savedToDb = false
+    try {
+      const { error } = await supabase.from('app_settings').upsert({ key: `cutoff_${half}`, value }, { onConflict: 'key' })
+      if (!error) savedToDb = true
+    } catch { /* table may not exist */ }
+    // Always persist to localStorage as reliable fallback
+    try { localStorage.setItem(lsKey(half), value) } catch { /* ignore */ }
     setCutoffSaving(false)
-    if (error) { showToast('❌ ' + error.message, 'err'); return }
     setCutoffDate(date); setCutoffActive(active)
-    showToast('✅ Cut-off date saved')
+    showToast(savedToDb ? '✅ Cut-off date saved' : '✅ Cut-off date saved (local)')
     setShowCutoffPopover(false)
   }
 
