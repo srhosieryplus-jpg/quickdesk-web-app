@@ -6,7 +6,7 @@ function displayUser(id: string | null | undefined) {
   return USER_DISPLAY[id.toUpperCase()] ?? id
 }
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -143,7 +143,7 @@ export default function SeasonBookPage() {
   const [activeBrand, setActiveBrand] = useState<string | null>(null)
 
   // Modal: new log entry
-  const [modal, setModal] = useState<'none'|'new-entry'|'edit-entry'|'add-payment'|'quick-pay'|'invoice'>('none')
+  const [modal, setModal] = useState<'none'|'new-entry'|'edit-entry'|'add-payment'|'quick-pay'|'invoice'|'pay-history'>('none')
   const [editRow, setEditRow] = useState<LedgerRow | null>(null)
   const [quickPayBrand, setQuickPayBrand] = useState<string | null>(null)
   const [quickPayAmt, setQuickPayAmt] = useState('')
@@ -184,6 +184,63 @@ export default function SeasonBookPage() {
   const [vendorPickerCandidates, setVendorPickerCandidates] = useState<string[]>([])
   const [vendorPickerOnSelect, setVendorPickerOnSelect] = useState<((vid: string) => void) | null>(null)
 
+  // Payment history modal
+  const [payHistRow, setPayHistRow] = useState<LedgerRow | null>(null)
+  interface PaymentRecord { id: string; ledger_id: string; amount: number; payment_date: string; note: string | null; created_at: string }
+  const [payHistRecords, setPayHistRecords] = useState<PaymentRecord[]>([])
+  const [payHistLoading, setPayHistLoading] = useState(false)
+  const [payHistEditId, setPayHistEditId] = useState<string | null>(null)
+  const [payHistEditAmt, setPayHistEditAmt] = useState('')
+  const [payHistEditDate, setPayHistEditDate] = useState('')
+  const [payHistEditNote, setPayHistEditNote] = useState('')
+
+  async function openPayHistory(row: LedgerRow) {
+    setPayHistRow(row)
+    setPayHistLoading(true)
+    setModal('pay-history')
+    const { data, error } = await supabase
+      .from('season_payments')
+      .select('*')
+      .eq('ledger_id', row.id)
+      .order('payment_date', { ascending: false })
+    setPayHistLoading(false)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    setPayHistRecords(data ?? [])
+  }
+
+  async function deletePayment(payId: string, row: LedgerRow, amount: number) {
+    if (!user) return
+    const { error } = await supabase.from('season_payments').delete().eq('id', payId)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    // Recalculate deposit on ledger row
+    const remaining = payHistRecords.filter(p => p.id !== payId)
+    const newDep = remaining.reduce((s, p) => s + p.amount, 0)
+    const newBal = (row.initial_total ?? 0) - newDep - (row.duties ?? 0)
+    await supabase.from('season_ledger').update({ deposit: newDep, balance_due: newBal }).eq('id', row.id)
+    setPayHistRecords(remaining)
+    if (user) fetchRows(season, user)
+    showToast('🗑 Payment deleted')
+  }
+
+  async function savePayHistEdit(payId: string, row: LedgerRow) {
+    if (!user) return
+    const newAmt = parseFloat(payHistEditAmt)
+    if (!newAmt) return
+    const { error } = await supabase.from('season_payments').update({
+      amount: newAmt, payment_date: payHistEditDate, note: payHistEditNote || null
+    }).eq('id', payId)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    // Recalculate deposit
+    const updated = payHistRecords.map(p => p.id === payId ? { ...p, amount: newAmt, payment_date: payHistEditDate, note: payHistEditNote || null } : p)
+    const newDep = updated.reduce((s, p) => s + p.amount, 0)
+    const newBal = (row.initial_total ?? 0) - newDep - (row.duties ?? 0)
+    await supabase.from('season_ledger').update({ deposit: newDep, balance_due: newBal }).eq('id', row.id)
+    setPayHistRecords(updated)
+    setPayHistEditId(null)
+    fetchRows(season, user)
+    showToast('✅ Payment updated')
+  }
+
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type); setTimeout(() => setToast(''), 3000)
   }
@@ -202,6 +259,19 @@ export default function SeasonBookPage() {
     }
     return map
   })()
+
+  // ── Actual assigned vendor IDs per brand (from live row data) ──────────────
+  // Used for sidebar/table badges — reflects what was actually saved, not static VENDOR_DATA
+  const brandAssignedVendors = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    for (const r of rows) {
+      if (!r.vendor_id || !r.vendor_id.trim()) continue
+      const s = map.get(r.brand) ?? new Set<string>()
+      s.add(r.vendor_id)
+      map.set(r.brand, s)
+    }
+    return map
+  }, [rows])
 
   // Helper: get vendor_id for a brand (returns null if 0 or 2+ vendors)
   function getUniqueVendorId(brand: string): string | null {
@@ -475,6 +545,8 @@ export default function SeasonBookPage() {
       updated_at: new Date().toISOString(),
     }).eq('id', row.id)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
+    // Also log to season_payments for history (non-fatal if table doesn't exist yet)
+    await supabase.from('season_payments').insert({ ledger_id: row.id, amount: addDep, payment_date: date || today() })
     showToast('✅ Payment recorded')
     fetchRows(season, user)
   }
@@ -660,38 +732,6 @@ export default function SeasonBookPage() {
         {/* Blank spacer matching sidebar width */}
         <div style={{ width: 220, flexShrink: 0 }} />
 
-        {/* Drop dropdown — left of search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: gray }}>Drop:</span>
-          <select
-            value={activeDropName ?? ''}
-            onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
-            style={{ fontSize: 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none' }}>
-            <option value="">All</option>
-            {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
-          </select>
-          {showDropNameMgr ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <input autoFocus value={newDropNameInput} onChange={e => setNewDropNameInput(e.target.value)}
-                placeholder="New name…" maxLength={40}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput(''); setShowDropNameMgr(false) }
-                  if (e.key === 'Escape') { setShowDropNameMgr(false); setNewDropNameInput('') }
-                }}
-                style={{ fontSize: 11, border: `1.5px solid ${border}`, borderRadius: 6, padding: '3px 8px', outline: 'none', width: 110 }} />
-              <button onClick={() => { if (newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput('') } setShowDropNameMgr(false) }}
-                style={{ fontSize: 11, background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✓</button>
-              <button onClick={() => { setShowDropNameMgr(false); setNewDropNameInput('') }}
-                style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✕</button>
-            </div>
-          ) : (
-            <button onClick={() => setShowDropNameMgr(true)}
-              style={{ fontSize: 11, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: gray }}>
-              + New
-            </button>
-          )}
-        </div>
-
         {/* Search — aligns with grand total box */}
         <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
           <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
@@ -761,6 +801,40 @@ export default function SeasonBookPage() {
 
         {/* Sidebar — brand list */}
         <div className="sb-sidebar">
+          {/* Drop name filter — always visible */}
+          <div style={{ padding: '6px 10px', borderBottom: `1px solid ${border}`, background: '#f5f3ff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: gray, flexShrink: 0 }}>Drop:</span>
+              <select
+                value={activeDropName ?? ''}
+                onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
+                style={{ fontSize: 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: '3px 6px', background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none', flex: 1, minWidth: 0 }}>
+                <option value="">All drops</option>
+                {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
+              </select>
+              {showDropNameMgr ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, width: '100%', marginTop: 4 }}>
+                  <input autoFocus value={newDropNameInput} onChange={e => setNewDropNameInput(e.target.value)}
+                    placeholder="New name…" maxLength={40}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput(''); setShowDropNameMgr(false) }
+                      if (e.key === 'Escape') { setShowDropNameMgr(false); setNewDropNameInput('') }
+                    }}
+                    style={{ fontSize: 11, border: `1.5px solid ${border}`, borderRadius: 6, padding: '3px 6px', outline: 'none', flex: 1 }} />
+                  <button onClick={() => { if (newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput('') } setShowDropNameMgr(false) }}
+                    style={{ fontSize: 11, background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 6px', cursor: 'pointer' }}>✓</button>
+                  <button onClick={() => { setShowDropNameMgr(false); setNewDropNameInput('') }}
+                    style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 6px', cursor: 'pointer' }}>✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowDropNameMgr(true)}
+                  style={{ fontSize: 10, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 6, padding: '2px 7px', cursor: 'pointer', color: gray, flexShrink: 0 }}>
+                  + New
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Filter existing brands */}
           {brandsInSeason.length > 0 && (
             <div style={{ padding: '6px 12px', borderBottom: `1px solid ${border}` }}>
@@ -793,18 +867,21 @@ export default function SeasonBookPage() {
                   }
                 }}>
                 {(() => {
-                  const vids = brandToVendors.get(b)
-                  if (!vids || vids.length === 0) return null
+                  // Use actual assigned vendor IDs from rows, fall back to VENDOR_DATA if unassigned
+                  const assigned = brandAssignedVendors.get(b)
+                  const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(b) ?? [])
+                  if (vids.length === 0) return null
                   if (vids.length === 1) return (
-                    <span style={{ fontSize: 9, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: purpleD, flexShrink: 0 }}>
                       {vids[0]}
                     </span>
                   )
-                  return (
-                    <span style={{ fontSize: 9, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
-                      {vids.length}+
+                  // Multiple different vendor IDs assigned across drops — show all compactly
+                  return vids.map(vid => (
+                    <span key={vid} style={{ fontSize: 9, fontWeight: 700, color: purpleD, flexShrink: 0 }}>
+                      {vid}
                     </span>
-                  )
+                  ))
                 })()}
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
                 {hasOwing && (
@@ -929,21 +1006,14 @@ export default function SeasonBookPage() {
                         title="Click to open invoice view"
                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#f5f3ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap', cursor: 'pointer' }}>
                         {(() => {
-                          const vids = brandToVendors.get(brand)
-                          if (!vids || vids.length === 0) return null
-                          if (vids.length === 1) return (
-                            <span
-                              onClick={e => { e.stopPropagation(); setActiveVendorId(activeVendorId === vids[0] ? null : vids[0]) }}
-                              title={`Filter by vendor ${vids[0]}`}
-                              style={{ fontSize: 10, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 6, padding: '1px 7px', cursor: 'pointer' }}>
-                              {vids[0]}
-                            </span>
-                          )
+                          const assigned = brandAssignedVendors.get(brand)
+                          const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(brand) ?? [])
+                          if (vids.length === 0) return null
                           return vids.map(vid => (
                             <span key={vid}
                               onClick={e => { e.stopPropagation(); setActiveVendorId(activeVendorId === vid ? null : vid) }}
                               title={`Filter by vendor ${vid}`}
-                              style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 6, padding: '1px 7px', cursor: 'pointer' }}>
+                              style={{ fontSize: 11, fontWeight: 700, color: purpleD, cursor: 'pointer' }}>
                               {vid}
                             </span>
                           ))
@@ -1625,11 +1695,18 @@ export default function SeasonBookPage() {
                                         </span>
                                       )}
                                     </div>
-                                    <button
-                                      onClick={() => { setModal('none'); openEdit(dRow) }}
-                                      style={{ fontSize: 10, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', cursor: 'pointer', fontWeight: 600 }}>
-                                      Edit
-                                    </button>
+                                    <div style={{ display: 'flex', gap: 5 }}>
+                                      <button
+                                        onClick={() => openPayHistory(dRow)}
+                                        style={{ fontSize: 10, color: '#166534', background: '#f0fdf4', border: `1px solid #86efac`, borderRadius: 5, padding: '2px 8px', cursor: 'pointer', fontWeight: 600 }}>
+                                        💳 History
+                                      </button>
+                                      <button
+                                        onClick={() => { setModal('none'); openEdit(dRow) }}
+                                        style={{ fontSize: 10, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', cursor: 'pointer', fontWeight: 600 }}>
+                                        Edit
+                                      </button>
+                                    </div>
                                   </div>
 
                                   {/* Drop detail grid */}
@@ -1894,6 +1971,92 @@ export default function SeasonBookPage() {
           </div>
         )
       })()}
+
+      {/* ── Payment History Modal ────────────────────────────────────────────── */}
+      {modal === 'pay-history' && payHistRow && (
+        <div className="modal-bg">
+          <div className="modal-box" style={{ maxWidth: 500 }}>
+            <div className="modal-head">
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>💳 Payment History</div>
+                <div style={{ fontSize: 12, color: gray }}>
+                  {payHistRow.brand} · {payHistRow.store} · Drop {payHistRow.drop_num}{payHistRow.drop_name ? ` · ${payHistRow.drop_name}` : ''}
+                </div>
+              </div>
+              <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div className="modal-body">
+              {/* Summary row */}
+              <div style={{ display: 'flex', gap: 16, marginBottom: 14, padding: '8px 12px', background: '#f5f3ff', borderRadius: 8, fontSize: 12 }}>
+                <span>Total: <strong style={{ color: purpleD }}>{fmt$(payHistRow.initial_total, payHistRow.currency)}</strong></span>
+                <span>Paid: <strong style={{ color: '#166534' }}>{fmt$(payHistRow.deposit, payHistRow.currency)}</strong></span>
+                <span style={{ marginLeft: 'auto' }}>
+                  Balance: <strong style={{ color: (payHistRow.balance_due ?? 0) > 0.001 ? '#dc2626' : '#166534' }}>
+                    {fmt$(payHistRow.balance_due, payHistRow.currency)}
+                  </strong>
+                </span>
+              </div>
+
+              {payHistLoading ? (
+                <p style={{ textAlign: 'center', color: gray, fontSize: 13, padding: '12px 0' }}>Loading…</p>
+              ) : payHistRecords.length === 0 ? (
+                <p style={{ textAlign: 'center', color: gray, fontSize: 13, padding: '12px 0' }}>
+                  No payment records found.<br />
+                  <span style={{ fontSize: 11 }}>Payments made before history tracking was added won&apos;t appear here.</span>
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                  {payHistRecords.map(p => (
+                    <div key={p.id} style={{ background: payHistEditId === p.id ? '#f5f3ff' : '#fafafa', border: `1px solid ${payHistEditId === p.id ? purpleD : border}`, borderRadius: 8, padding: '8px 12px' }}>
+                      {payHistEditId === p.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <label style={{ fontSize: 10, fontWeight: 700, color: gray, display: 'block', marginBottom: 2 }}>Amount</label>
+                              <input type="number" value={payHistEditAmt} onChange={e => setPayHistEditAmt(e.target.value)}
+                                step="0.01" style={{ ...inp, fontSize: 12 }} autoFocus />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 10, fontWeight: 700, color: gray, display: 'block', marginBottom: 2 }}>Date</label>
+                              <input type="date" value={payHistEditDate} onChange={e => setPayHistEditDate(e.target.value)} style={{ ...inp, fontSize: 12 }} />
+                            </div>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 10, fontWeight: 700, color: gray, display: 'block', marginBottom: 2 }}>Note</label>
+                            <input value={payHistEditNote} onChange={e => setPayHistEditNote(e.target.value)} placeholder="Optional note" style={{ ...inp, fontSize: 12 }} />
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            <button onClick={() => setPayHistEditId(null)}
+                              style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => savePayHistEdit(p.id, payHistRow)}
+                              style={{ background: purpleD, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ flex: 1 }}>
+                            <span style={{ fontWeight: 800, color: '#166534', fontSize: 14 }}>{fmt$(p.amount, payHistRow.currency)}</span>
+                            <span style={{ fontSize: 11, color: gray, marginLeft: 8 }}>{fmtDate(p.payment_date)}</span>
+                            {p.note && <span style={{ fontSize: 11, color: '#374151', marginLeft: 8 }}>{p.note}</span>}
+                          </div>
+                          <button onClick={() => { setPayHistEditId(p.id); setPayHistEditAmt(p.amount.toString()); setPayHistEditDate(p.payment_date); setPayHistEditNote(p.note ?? '') }}
+                            style={{ fontSize: 10, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>Edit</button>
+                          <button onClick={() => { if (confirm('Delete this payment?')) deletePayment(p.id, payHistRow, p.amount) }}
+                            style={{ fontSize: 10, color: '#dc2626', background: '#fef2f2', border: `1px solid #fca5a5`, borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>Delete</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                <button onClick={() => setModal('none')}
+                  style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Vendor Picker Modal ──────────────────────────────────────────────── */}
       {vendorPickerBrand && vendorPickerCandidates.length > 0 && (
