@@ -190,10 +190,11 @@ export default function SeasonBookPage() {
 
   const isAdmin = user?.store === 'ALL'
 
-  // ── Vendor lookup map: brand → vendor_id[] ───────────────────────────────
+  // ── Vendor lookup map: brand → vendor_id[] (blank vendor_ids excluded) ────
   const brandToVendors = (() => {
     const map = new Map<string, string[]>()
     for (const v of VENDOR_DATA) {
+      if (!v.vendor_id || !v.vendor_id.trim()) continue   // skip blank vendor IDs
       const existing = map.get(v.brand) ?? []
       if (!existing.includes(v.vendor_id)) {
         map.set(v.brand, [...existing, v.vendor_id])

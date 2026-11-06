@@ -289,6 +289,7 @@ export default function SettingsPage() {
       `}</style>
 
       {/* ── HEADER ── */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: '#eeeaf6' }}>
       <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${border}`, background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={goHome} disabled={goingHome}
@@ -315,6 +316,7 @@ export default function SettingsPage() {
         <button className={`settings-tab ${tab === 'vendors' ? 'active' : ''}`} onClick={() => setTab('vendors')}>🏷 Vendors / Brands</button>
         <button className={`settings-tab ${tab === 'stores' ? 'active' : ''}`} onClick={() => setTab('stores')}>🏪 Store IDs</button>
       </div>
+      </div>{/* end sticky header+tabs wrapper */}
 
       {/* ══ USER IDs TAB ══════════════════════════════════════════════════════ */}
       {tab === 'users' && (
@@ -438,7 +440,7 @@ export default function SettingsPage() {
       {tab === 'vendors' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Add row + search */}
-          <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', position: 'sticky', top: 0, zIndex: 10 }}>
+          <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <label style={labelStyle}>Search:</label>
             <input value={vendorSearch} onChange={e => setVendorSearch(e.target.value)}
               placeholder="vendor or brand…" style={{ ...inlineInput, flex: 1, minWidth: 120 }} />
