@@ -639,6 +639,11 @@ export default function SeasonBookPage() {
       <div>
         {adding ? (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setAmt(((row.initial_total ?? 0) * 0.3).toFixed(2))}
+              style={{ background: '#ede9fe', color: purpleD, border: `1px solid ${purpleD}`, borderRadius: 6, padding: '4px 9px', fontSize: 11, fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}>
+              30%
+            </button>
             <input value={amt} onChange={e => setAmt(e.target.value)} placeholder="Amount $" type="number"
               style={{ ...inp, width: 100 }} />
             <input value={payDate} onChange={e => setPayDate(e.target.value)} type="date"
@@ -1833,11 +1838,6 @@ export default function SeasonBookPage() {
                                       )}
                                     </div>
                                     <div style={{ display: 'flex', gap: 5 }}>
-                                      <button
-                                        onClick={() => openPayHistory(dRow)}
-                                        style={{ fontSize: 10, color: '#166534', background: '#f0fdf4', border: `1px solid #86efac`, borderRadius: 5, padding: '2px 8px', cursor: 'pointer', fontWeight: 600 }}>
-                                        💳 History
-                                      </button>
                                       <button
                                         onClick={() => { setModal('none'); openEdit(dRow) }}
                                         style={{ fontSize: 10, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', cursor: 'pointer', fontWeight: 600 }}>
