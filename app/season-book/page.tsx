@@ -150,8 +150,9 @@ export default function SeasonBookPage() {
   const [quickPayDate, setQuickPayDate] = useState(today())
   // Which rows are selected for payment (by id); null = all with balance
   const [paySelectedIds, setPaySelectedIds] = useState<Set<string>>(new Set())
-  // Payment modal brand search
+  // Payment modal brand/vendor search
   const [payBrandSearch, setPayBrandSearch] = useState('')
+  const [quickPayVendorId, setQuickPayVendorId] = useState<string | null>(null)
   // Invoice modal
   const [invoiceBrand, setInvoiceBrand] = useState<string | null>(null)
   const [invoiceStoreFilter, setInvoiceStoreFilter] = useState<string | null>(null) // null = both stores
@@ -894,6 +895,7 @@ export default function SeasonBookPage() {
           </button>
           <button onClick={() => {
             setQuickPayBrand(activeBrand ?? null)
+            setQuickPayVendorId(null)
             setQuickPayAmt(''); setQuickPayDate(today())
             setPaySelectedIds(new Set())
             setPayBrandSearch('')
@@ -1800,7 +1802,7 @@ export default function SeasonBookPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button onClick={() => { setQuickPayBrand(invoiceBrand); setQuickPayAmt(''); setQuickPayDate(today()); setPaySelectedIds(new Set()); setModal('quick-pay') }}
+                  <button onClick={() => { setQuickPayBrand(invoiceBrand); setQuickPayVendorId(null); setQuickPayAmt(''); setQuickPayDate(today()); setPaySelectedIds(new Set()); setPayBrandSearch(''); setModal('quick-pay') }}
                     style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     💳 Pay
                   </button>
@@ -1948,7 +1950,9 @@ export default function SeasonBookPage() {
         const allBalanceRows = rows.filter(r => (r.balance_due ?? 0) > 0.001)
         const filteredRows = quickPayBrand
           ? allBalanceRows.filter(r => r.brand === quickPayBrand)
-          : allBalanceRows
+          : quickPayVendorId
+            ? allBalanceRows.filter(r => r.vendor_id === quickPayVendorId)
+            : allBalanceRows
 
         // Group by brand → drop for display
         const brandGroups = Array.from(new Set(filteredRows.map(r => r.brand))).sort()
@@ -1977,12 +1981,15 @@ export default function SeasonBookPage() {
               </div>
               <div className="modal-body">
 
-                {/* Brand filter — typeahead search */}
+                {/* Brand / vendor search */}
                 {(() => {
+                  const q = payBrandSearch.trim().toLowerCase()
                   const allBrandsWithBal = Array.from(new Set(allBalanceRows.map(r => r.brand))).sort()
-                  const searchResults = payBrandSearch.trim()
-                    ? allBrandsWithBal.filter(b => b.toLowerCase().includes(payBrandSearch.toLowerCase()))
-                    : allBrandsWithBal
+                  const allVendorIdsWithBal = Array.from(new Set(allBalanceRows.map(r => r.vendor_id).filter(Boolean))).sort() as string[]
+                  const brandResults = q ? allBrandsWithBal.filter(b => b.toLowerCase().includes(q)) : []
+                  const vendorResults = q ? allVendorIdsWithBal.filter(v => v.toLowerCase().includes(q)) : []
+                  const hasResults = brandResults.length > 0 || vendorResults.length > 0
+                  const hasFilter = quickPayBrand || quickPayVendorId
                   return (
                     <div style={{ marginBottom: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -1991,7 +1998,7 @@ export default function SeasonBookPage() {
                           <input
                             value={payBrandSearch}
                             onChange={e => setPayBrandSearch(e.target.value)}
-                            placeholder="Search brand…"
+                            placeholder="Search brand or vendor ID…"
                             style={{ background: 'transparent', border: 'none', outline: 'none', color: '#111', fontSize: 12, fontWeight: 500, padding: '6px 8px 6px 0', flex: 1 }}
                           />
                           {payBrandSearch && (
@@ -1999,27 +2006,53 @@ export default function SeasonBookPage() {
                               style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', padding: '0 8px', fontSize: 13 }}>✕</button>
                           )}
                         </div>
-                        {quickPayBrand && (
-                          <button onClick={() => { setQuickPayBrand(null); setPaySelectedIds(new Set()); setPayBrandSearch('') }}
+                        {hasFilter && (
+                          <button onClick={() => { setQuickPayBrand(null); setQuickPayVendorId(null); setPaySelectedIds(new Set()); setPayBrandSearch('') }}
                             style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 7, border: `1.5px solid ${border}`, background: '#f5f3ff', color: gray, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                             Clear filter
                           </button>
                         )}
                       </div>
-                      {/* Show brand results as compact chips when searching */}
-                      {payBrandSearch.trim() && searchResults.length > 0 && (
-                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', maxHeight: 80, overflowY: 'auto', padding: '4px 2px' }}>
-                          {searchResults.map(b => (
-                            <button key={b} onClick={() => { setQuickPayBrand(b); setPaySelectedIds(new Set()); setPayBrandSearch('') }}
-                              style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${quickPayBrand === b ? purpleD : border}`, background: quickPayBrand === b ? purpleD : '#fff', color: quickPayBrand === b ? '#fff' : gray, cursor: 'pointer' }}>
-                              {b}
-                            </button>
-                          ))}
+                      {/* Results: vendor IDs first, then brands */}
+                      {q && hasResults && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }}>
+                          {vendorResults.length > 0 && (
+                            <>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: gray, padding: '0 2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vendor ID</div>
+                              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                                {vendorResults.map(v => (
+                                  <button key={v} onClick={() => { setQuickPayVendorId(v); setQuickPayBrand(null); setPaySelectedIds(new Set()); setPayBrandSearch('') }}
+                                    style={{ fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${quickPayVendorId === v ? purpleD : border}`, background: quickPayVendorId === v ? purpleD : '#ede9fe', color: quickPayVendorId === v ? '#fff' : purpleD, cursor: 'pointer' }}>
+                                    {v}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                          {brandResults.length > 0 && (
+                            <>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: gray, padding: '0 2px', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: vendorResults.length > 0 ? 4 : 0 }}>Brand</div>
+                              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                                {brandResults.map(b => (
+                                  <button key={b} onClick={() => { setQuickPayBrand(b); setQuickPayVendorId(null); setPaySelectedIds(new Set()); setPayBrandSearch('') }}
+                                    style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${quickPayBrand === b ? purpleD : border}`, background: quickPayBrand === b ? purpleD : '#fff', color: quickPayBrand === b ? '#fff' : gray, cursor: 'pointer' }}>
+                                    {b}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
-                      {quickPayBrand && (
-                        <div style={{ fontSize: 11, color: purpleD, fontWeight: 700, padding: '2px 4px' }}>
-                          Filtering: <span style={{ background: '#ede9fe', borderRadius: 6, padding: '1px 7px' }}>{quickPayBrand}</span>
+                      {q && !hasResults && (
+                        <div style={{ fontSize: 11, color: gray, padding: '2px 4px' }}>No brands or vendor IDs found</div>
+                      )}
+                      {/* Active filter chip */}
+                      {(quickPayBrand || quickPayVendorId) && (
+                        <div style={{ fontSize: 11, color: purpleD, fontWeight: 700, padding: '2px 4px', marginTop: 4 }}>
+                          Filtering by {quickPayVendorId
+                            ? <><span style={{ background: '#ede9fe', borderRadius: 6, padding: '1px 7px' }}>Vendor {quickPayVendorId}</span></>
+                            : <><span style={{ background: '#ede9fe', borderRadius: 6, padding: '1px 7px' }}>{quickPayBrand}</span></>}
                         </div>
                       )}
                     </div>
