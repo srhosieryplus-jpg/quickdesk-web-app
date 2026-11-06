@@ -23,6 +23,7 @@ const ALL_MODULES = [
   { id: 'po_tracker',  label: 'PO Tracker' },
   { id: 'tasks',       label: 'Tasks' },
   { id: 'hair_acc',    label: 'Hair Acc' },
+  { id: 'error_forms', label: 'Error Forms' },
   { id: 'settings',    label: 'Settings' },
 ]
 
