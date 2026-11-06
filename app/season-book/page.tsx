@@ -90,8 +90,9 @@ function fmtMoney(n: number | null | undefined, currency: Currency = 'USD') {
 function fmt$(n: number | null | undefined, currency?: Currency) { return fmtMoney(n, currency) }
 function fmtDate(iso: string | null) {
   if (!iso) return '—'
-  const d = new Date(iso)
-  return `${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`
+  const s = iso.slice(0, 10) // YYYY-MM-DD, no timezone shift
+  const [y, m, d] = s.split('-')
+  return `${m}-${d}-${String(y).slice(2)}`
 }
 
 // ── Blank store entry for the form ───────────────────────────────────────────
@@ -2400,7 +2401,7 @@ export default function SeasonBookPage() {
                               )}
                               {p.note && <span style={{ fontSize: 11, color: '#374151', marginLeft: 8 }}>{p.note}</span>}
                             </div>
-                            <button onClick={() => { setPayHistEditId(p.id); setPayHistEditAmt(p.amount.toString()); setPayHistEditDate(p.payment_date); setPayHistEditNote(p.note ?? '') }}
+                            <button onClick={() => { setPayHistEditId(p.id); setPayHistEditAmt(p.amount.toString()); setPayHistEditDate((p.payment_date ?? '').slice(0, 10)); setPayHistEditNote(p.note ?? '') }}
                               style={{ fontSize: 10, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}>Edit</button>
                             {ledgerRow && (
                               <button onClick={() => { if (confirm('Delete this payment?')) deletePayment(p.id, ledgerRow, p.amount) }}
