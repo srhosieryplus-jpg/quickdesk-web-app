@@ -648,7 +648,7 @@ export default function SeasonBookPage() {
     // Also log to season_payments for history (non-fatal if table doesn't exist yet)
     await supabase.from('season_payments').insert({ ledger_id: row.id, amount: addDep, payment_date: safeDate(date || today()) })
     showToast('✅ Payment recorded')
-    fetchRows(season, user)
+    await fetchRows(season, user)
   }
 
   // ── Create new season ─────────────────────────────────────────────────────
@@ -2293,7 +2293,8 @@ export default function SeasonBookPage() {
                             const { data: fresh } = await supabase.from('season_ledger').select('*').eq('id', r.id).maybeSingle()
                             await addPayment(fresh ?? r, amt, quickPayDate)
                           }
-                          setModal('none')
+                          // fetchRows already awaited inside addPayment — data is fresh before closing
+                          setModal('invoice')
                         }}
                         style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: (selectedRows.length === 0 || (usePerRow ? selectedRows.some(r => !perRowAmts.get(r.id)) : !quickPayAmt)) ? 0.5 : 1 }}>
                         Apply to {selectedRows.length > 0 ? `${selectedRows.length} Drop${selectedRows.length > 1 ? 's' : ''}` : 'Selected'}
