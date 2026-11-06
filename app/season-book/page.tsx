@@ -117,6 +117,12 @@ function today() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
+// Ensure a YYYY-MM-DD date string survives a timestamptz round-trip by
+// appending noon local time before writing so UTC never flips the day.
+function safeDate(d: string) {
+  if (!d) return d
+  return d.slice(0, 10) + 'T12:00:00'
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function SeasonBookPage() {
@@ -308,7 +314,7 @@ export default function SeasonBookPage() {
     const newAmt = parseFloat(payHistEditAmt)
     if (!newAmt) return
     const { error } = await supabase.from('season_payments').update({
-      amount: newAmt, payment_date: payHistEditDate, note: payHistEditNote || null
+      amount: newAmt, payment_date: safeDate(payHistEditDate), note: payHistEditNote || null
     }).eq('id', payId)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     // Re-fetch only payments for THIS ledger row to get accurate total
@@ -558,7 +564,7 @@ export default function SeasonBookPage() {
           season, brand: activeBrand, drop_num: formDrop, store: e.store,
           units: parseInt(e.units) || null,
           initial_total: init, deposit: dep, duties: dut, balance_due: bal,
-          payment_date: (e.deposit && e.payment_date) ? e.payment_date : null,
+          payment_date: (e.deposit && e.payment_date) ? safeDate(e.payment_date) : null,
           comment: e.comment || null,
           currency: e.currency,
           invoice_num: e.invoice_num || null,
@@ -596,7 +602,7 @@ export default function SeasonBookPage() {
     const { error } = await supabase.from('season_ledger').update({
       units: parseInt(e.units) || null,
       initial_total: init, deposit: dep, duties: dut, balance_due: bal,
-      payment_date: (dep && e.payment_date) ? e.payment_date : null,
+      payment_date: (dep && e.payment_date) ? safeDate(e.payment_date) : null,
       comment: e.comment || null,
       currency: e.currency,
       invoice_num: e.invoice_num || null,
@@ -635,12 +641,12 @@ export default function SeasonBookPage() {
     const newBal = init - newDep - dut
     const { error } = await supabase.from('season_ledger').update({
       deposit: newDep, balance_due: newBal,
-      payment_date: date || row.payment_date,
+      payment_date: safeDate(date || row.payment_date || today()),
       updated_at: new Date().toISOString(),
     }).eq('id', row.id)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     // Also log to season_payments for history (non-fatal if table doesn't exist yet)
-    await supabase.from('season_payments').insert({ ledger_id: row.id, amount: addDep, payment_date: date || today() })
+    await supabase.from('season_payments').insert({ ledger_id: row.id, amount: addDep, payment_date: safeDate(date || today()) })
     showToast('✅ Payment recorded')
     fetchRows(season, user)
   }
