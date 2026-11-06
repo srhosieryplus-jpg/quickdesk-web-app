@@ -323,6 +323,8 @@ export default function SeasonBookPage() {
   }
 
   const isAdmin = user?.store === 'ALL'
+  // Payment/history/deposit access: STAR (admin) and MG only
+  const canPay = isAdmin || user?.userid?.toUpperCase() === 'MG'
 
   // ── Vendor lookup map: brand → vendor_id[] (blank vendor_ids excluded) ────
   const brandToVendors = (() => {
@@ -921,7 +923,7 @@ export default function SeasonBookPage() {
             style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             + New
           </button>
-          <button onClick={async () => {
+          {canPay && <button onClick={async () => {
             setPayHistRow(null)
             setPayHistLoading(true)
             setModal('pay-history')
@@ -951,8 +953,8 @@ export default function SeasonBookPage() {
           }}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             🕐 History
-          </button>
-          <button onClick={() => {
+          </button>}
+          {canPay && <button onClick={() => {
             setQuickPayBrand(activeBrand ?? null)
             setQuickPayVendorId(null)
             setQuickPayAmt(''); setQuickPayDate(today())
@@ -962,7 +964,7 @@ export default function SeasonBookPage() {
           }}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             💳 Payment
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -1524,7 +1526,8 @@ export default function SeasonBookPage() {
                         <div>
                           <label style={lbl}>Deposit ({sym})</label>
                           <input type="number" value={entry.deposit} placeholder="0.00" step="0.01"
-                            onChange={e => upd({ deposit: e.target.value })} style={inp} />
+                            onChange={e => upd({ deposit: e.target.value })} style={inp}
+                            disabled={!canPay} title={!canPay ? 'Payment access restricted' : undefined} />
                         </div>
                         <div>
                           <label style={lbl}>Duties ({sym})</label>
@@ -1731,7 +1734,8 @@ export default function SeasonBookPage() {
                       <div>
                         <label style={lbl}>Deposit ({sym})</label>
                         <input type="number" value={entry.deposit} step="0.01" placeholder="0.00"
-                          onChange={e => upd({ deposit: e.target.value })} style={inp} />
+                          onChange={e => upd({ deposit: e.target.value })} style={inp}
+                          disabled={!canPay} title={!canPay ? 'Payment access restricted' : undefined} />
                       </div>
                     </div>
                     {/* Right column */}
@@ -1861,10 +1865,10 @@ export default function SeasonBookPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button onClick={() => { setQuickPayBrand(invoiceBrand); setQuickPayVendorId(null); setQuickPayAmt(''); setQuickPayDate(today()); setPaySelectedIds(new Set()); setPayBrandSearch(''); setModal('quick-pay') }}
+                  {canPay && <button onClick={() => { setQuickPayBrand(invoiceBrand); setQuickPayVendorId(null); setQuickPayAmt(''); setQuickPayDate(today()); setPaySelectedIds(new Set()); setPayBrandSearch(''); setModal('quick-pay') }}
                     style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     💳 Pay
-                  </button>
+                  </button>}
                   <button onClick={() => { setModal('none'); openNewEntry(invoiceBrand) }}
                     style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     + Drop
