@@ -31,13 +31,13 @@ type EFStatus = 'pending' | 'credit' | 'refund' | 'item_received' | 'invoice_fix
 interface ErrorForm {
   id: string
   season: string
+  store_id: string
   brand: string
   amount: number | null
   email_sent: boolean
   error_date: string | null
   status: EFStatus
   comments: string | null
-  log_date: string        // when form was created
   final_date: string | null  // when form was finalized/closed
   invoice_file_url: string | null
   error_file_url: string | null
@@ -167,10 +167,10 @@ function FileAttach({
 }
 
 // ── Blank new form ────────────────────────────────────────────────────────────
-function blankForm(season = 'SS27'): Omit<ErrorForm, 'id' | 'logged_by' | 'created_at' | 'updated_at'> {
+function blankForm(season = 'SS27', store_id = ''): Omit<ErrorForm, 'id' | 'logged_by' | 'created_at' | 'updated_at'> {
   return {
-    season, brand: '', amount: null, email_sent: false, error_date: today(),
-    status: 'pending', comments: null, log_date: today(), final_date: null,
+    season, store_id, brand: '', amount: null, email_sent: false, error_date: today(),
+    status: 'pending', comments: null, final_date: null,
     invoice_file_url: null, error_file_url: null,
     credit_note_url: null, credit_note2_url: null, refund2_url: null,
   }
@@ -197,6 +197,7 @@ export default function ErrorFormsPage() {
   // Filter state
   const [filterStatus, setFilterStatus] = useState<'all'|'open'|'finalized'>('open')
   const [filterBrand, setFilterBrand] = useState('')
+  const [filterStore, setFilterStore] = useState('')
   const [search, setSearch] = useState('')
 
   // Modal
@@ -215,16 +216,21 @@ export default function ErrorFormsPage() {
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchForms = useCallback(async (s?: string) => {
     setLoading(true)
-    const { data, error } = await supabase
+    let q = supabase
       .from('error_forms')
       .select('*')
       .eq('season', s ?? season)
       .order('created_at', { ascending: false })
+    // Non-admin users only see their own store
+    if (user && user.store !== 'ALL') {
+      q = q.eq('store_id', user.store)
+    }
+    const { data, error } = await q
     if (error) { setToast('❌ ' + error.message); setToastType('err') }
     else setForms(data ?? [])
     setLoading(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [season])
+  }, [season, user])
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -242,11 +248,13 @@ export default function ErrorFormsPage() {
     if (filterStatus === 'open' && f.final_date) return false
     if (filterStatus === 'finalized' && !f.final_date) return false
     if (filterBrand && f.brand !== filterBrand) return false
+    if (filterStore && f.store_id !== filterStore) return false
     if (search) {
       const q = search.toLowerCase()
       if (!f.brand.toLowerCase().includes(q) &&
           !(f.comments ?? '').toLowerCase().includes(q) &&
-          !(f.status).toLowerCase().includes(q)) return false
+          !(f.status).toLowerCase().includes(q) &&
+          !f.store_id.toLowerCase().includes(q)) return false
     }
     return true
   })
@@ -267,12 +275,13 @@ export default function ErrorFormsPage() {
   async function saveNew() {
     if (!user) return
     if (!form.brand) { showToast('⚠️ Brand is required', 'err'); return }
+    if (!form.store_id) { showToast('⚠️ Store is required', 'err'); return }
     setSaving(true)
     const { error } = await supabase.from('error_forms').insert({
       ...form,
       season,
+      store_id: form.store_id,
       error_date: form.error_date ? safeDate(form.error_date) : null,
-      log_date: safeDate(form.log_date),
       final_date: form.final_date ? safeDate(form.final_date) : null,
       logged_by: user.userid,
     })
@@ -289,12 +298,12 @@ export default function ErrorFormsPage() {
     setSaving(true)
     const { error } = await supabase.from('error_forms').update({
       brand: editForm.brand,
+      store_id: editForm.store_id,
       amount: editForm.amount,
       email_sent: editForm.email_sent,
       error_date: editForm.error_date ? safeDate(editForm.error_date) : null,
       status: editForm.status,
       comments: editForm.comments,
-      log_date: safeDate(editForm.log_date),
       final_date: editForm.final_date ? safeDate(editForm.final_date) : null,
       invoice_file_url: editForm.invoice_file_url,
       error_file_url: editForm.error_file_url,
@@ -320,13 +329,14 @@ export default function ErrorFormsPage() {
 
   // ── Open edit modal ───────────────────────────────────────────────────────
   function openEdit(f: ErrorForm) {
-    setEditForm({ ...f, error_date: f.error_date?.slice(0,10) ?? null, log_date: f.log_date.slice(0,10), final_date: f.final_date?.slice(0,10) ?? null })
+    setEditForm({ ...f, error_date: f.error_date?.slice(0,10) ?? null, final_date: f.final_date?.slice(0,10) ?? null })
     setModal('edit')
   }
 
   // ── Open new modal ────────────────────────────────────────────────────────
   function openNew() {
-    setForm(blankForm(season))
+    const defaultStore = user?.store !== 'ALL' ? (user?.store ?? '') : ''
+    setForm(blankForm(season, defaultStore))
     setBrandInput('')
     setBrandSuggestions([])
     setModal('new')
@@ -445,15 +455,24 @@ export default function ErrorFormsPage() {
       {/* ── Filters bar ── */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '8px 20px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search brand, status, comments…"
-          style={{ ...inp, width: 240, flex: '0 0 auto' }} />
+          placeholder="Search brand, store, status…"
+          style={{ ...inp, width: 220, flex: '0 0 auto' }} />
         <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)}
-          style={{ ...inp, width: 180, flex: '0 0 auto' }}>
+          style={{ ...inp, width: 160, flex: '0 0 auto' }}>
           <option value="">All Brands</option>
           {brandsInUse.map(b => <option key={b} value={b}>{b}</option>)}
         </select>
-        {(search || filterBrand) && (
-          <button onClick={() => { setSearch(''); setFilterBrand('') }}
+        {isAdmin && (
+          <select value={filterStore} onChange={e => setFilterStore(e.target.value)}
+            style={{ ...inp, width: 140, flex: '0 0 auto' }}>
+            <option value="">All Stores</option>
+            {Array.from(new Set(forms.map(f => f.store_id))).filter(Boolean).sort().map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        )}
+        {(search || filterBrand || filterStore) && (
+          <button onClick={() => { setSearch(''); setFilterBrand(''); setFilterStore('') }}
             style={{ fontSize: 11, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
             Clear
           </button>
@@ -475,6 +494,7 @@ export default function ErrorFormsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: redD, color: '#fff' }}>
+                <th style={th}>Store</th>
                 <th style={th}>Brand</th>
                 <th style={th}>Amount</th>
                 <th style={th}>Date</th>
@@ -486,7 +506,6 @@ export default function ErrorFormsPage() {
                 <th style={th}>Credit Note 2</th>
                 <th style={th}>Refund 2</th>
                 <th style={th}>Comments</th>
-                <th style={th}>Logged</th>
                 <th style={th}>Finalized</th>
                 <th style={th}>By</th>
                 <th style={{ ...th, width: 60 }}></th>
@@ -502,6 +521,12 @@ export default function ErrorFormsPage() {
                       borderBottom: `1px solid ${border}`, opacity: isFinalized ? 0.8 : 1 }}
                     onClick={() => openEdit(f)}
                     className="ef-row">
+                    <td style={td}>
+                      <span style={{ fontWeight: 700, color: '#1d4ed8', fontSize: 11, background: '#eff6ff',
+                        border: '1px solid #bfdbfe', borderRadius: 4, padding: '1px 6px' }}>
+                        {f.store_id || '—'}
+                      </span>
+                    </td>
                     <td style={td}>
                       <span style={{ fontWeight: 700, color: redD }}>{f.brand}</span>
                     </td>
@@ -549,7 +574,6 @@ export default function ErrorFormsPage() {
                     <td style={{ ...td, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: gray }}>
                       {f.comments ?? '—'}
                     </td>
-                    <td style={td}>{fmtDate(f.log_date)}</td>
                     <td style={td}>
                       {isFinalized
                         ? <span style={{ color: '#166534', fontWeight: 700 }}>{fmtDate(f.final_date)}</span>
@@ -591,12 +615,24 @@ export default function ErrorFormsPage() {
               <div style={{ background: redD, color: '#fff', padding: '14px 20px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 15 }}>{isEdit ? `Edit — ${ef!.brand}` : '+ New Error Form'}</div>
-                  {isEdit && <div style={{ fontSize: 10, opacity: 0.75 }}>Logged {fmtDate(ef!.log_date)} by {displayUser(ef!.logged_by)}</div>}
+                  {isEdit && <div style={{ fontSize: 10, opacity: 0.75 }}>{ef!.store_id} · by {displayUser(ef!.logged_by)}</div>}
                 </div>
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
 
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                {/* Row 0: Store */}
+                <div>
+                  <label style={lbl}>Store *</label>
+                  <input value={vals.store_id} onChange={e => upd({ store_id: e.target.value.toUpperCase() })}
+                    placeholder="e.g. NYC01"
+                    disabled={!isAdmin && modal === 'edit'}
+                    style={{ ...inp, width: 180, textTransform: 'uppercase' }} />
+                  {!isAdmin && modal === 'new' && (
+                    <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Defaults to your store</div>
+                  )}
+                </div>
 
                 {/* Row 1: Brand + Amount + Date */}
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
@@ -659,12 +695,8 @@ export default function ErrorFormsPage() {
                   </div>
                 </div>
 
-                {/* Row 3: Log date + Final date */}
+                {/* Row 3: Final date */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={lbl}>Log Date (Created)</label>
-                    <input type="date" value={vals.log_date} onChange={e => upd({ log_date: e.target.value })} style={inp} />
-                  </div>
                   <div>
                     <label style={lbl}>Final Date (Finalized)</label>
                     <input type="date" value={vals.final_date ?? ''} onChange={e => upd({ final_date: e.target.value || null })} style={inp} />
