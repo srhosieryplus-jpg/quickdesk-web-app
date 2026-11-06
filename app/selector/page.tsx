@@ -42,7 +42,8 @@ export default function SelectorPage() {
 
   if (!user) return null
 
-  const modules = ALL_MODULES.filter(m => user.modules.includes(m.id))
+  const isAdmin = user.store === 'ALL'
+  const modules = ALL_MODULES.filter(m => isAdmin || user.modules.includes(m.id))
 
   return (
     <div style={{ minHeight: '100vh', background: '#eeeaf6' }}>
