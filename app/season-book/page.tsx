@@ -193,6 +193,7 @@ export default function SeasonBookPage() {
   const [payHistEditAmt, setPayHistEditAmt] = useState('')
   const [payHistEditDate, setPayHistEditDate] = useState('')
   const [payHistEditNote, setPayHistEditNote] = useState('')
+  const [payHistSearch, setPayHistSearch] = useState('')
 
   async function openPayHistory(row: LedgerRow) {
     setPayHistRow(row)
@@ -223,6 +224,9 @@ export default function SeasonBookPage() {
 
   async function deletePayment(payId: string, row: LedgerRow, amount: number) {
     if (!user) return
+    if (payId.startsWith('__legacy__')) {
+      showToast('⚠️ This payment was recorded before history tracking — edit the deposit directly on the entry.', 'err'); return
+    }
     const { error } = await supabase.from('season_payments').delete().eq('id', payId)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     // Recalculate deposit on ledger row
@@ -237,6 +241,9 @@ export default function SeasonBookPage() {
 
   async function savePayHistEdit(payId: string, row: LedgerRow) {
     if (!user) return
+    if (payId.startsWith('__legacy__')) {
+      showToast('⚠️ This payment was recorded before history tracking — edit the deposit directly on the entry.', 'err'); return
+    }
     const newAmt = parseFloat(payHistEditAmt)
     if (!newAmt) return
     const { error } = await supabase.from('season_payments').update({
@@ -2020,7 +2027,7 @@ export default function SeasonBookPage() {
                     : `All payments — ${season}`}
                 </div>
               </div>
-              <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
+              <button onClick={() => { setModal('none'); setPayHistSearch('') }} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
             </div>
             <div className="modal-body">
               {/* Single-row summary */}
@@ -2036,6 +2043,14 @@ export default function SeasonBookPage() {
                 </div>
               )}
 
+              {/* Search */}
+              <input
+                value={payHistSearch}
+                onChange={e => setPayHistSearch(e.target.value)}
+                placeholder="Search brand, store, note…"
+                style={{ ...inp, fontSize: 12, marginBottom: 10, width: '100%' }}
+              />
+
               {payHistLoading ? (
                 <p style={{ textAlign: 'center', color: gray, fontSize: 13, padding: '12px 0' }}>Loading…</p>
               ) : payHistRecords.length === 0 ? (
@@ -2044,8 +2059,19 @@ export default function SeasonBookPage() {
                   <span style={{ fontSize: 11 }}>Payments made before history tracking was added won&apos;t appear here.</span>
                 </p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, maxHeight: 420, overflowY: 'auto' }}>
-                  {payHistRecords.map(p => {
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, maxHeight: 400, overflowY: 'auto' }}>
+                  {payHistRecords.filter(p => {
+                    if (!payHistSearch.trim()) return true
+                    const q = payHistSearch.toLowerCase()
+                    const lr = rows.find(r => r.id === p.ledger_id) ?? payHistRow
+                    return (
+                      (lr?.brand ?? '').toLowerCase().includes(q) ||
+                      (lr?.store ?? '').toLowerCase().includes(q) ||
+                      (p.note ?? '').toLowerCase().includes(q) ||
+                      p.payment_date.includes(q) ||
+                      p.amount.toString().includes(q)
+                    )
+                  }).map(p => {
                     const ledgerRow = rows.find(r => r.id === p.ledger_id) ?? payHistRow
                     return (
                       <div key={p.id} style={{ background: payHistEditId === p.id ? '#f5f3ff' : '#fafafa', border: `1px solid ${payHistEditId === p.id ? purpleD : border}`, borderRadius: 8, padding: '8px 12px' }}>
@@ -2102,7 +2128,7 @@ export default function SeasonBookPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                <button onClick={() => setModal('none')}
+                <button onClick={() => { setModal('none'); setPayHistSearch('') }}
                   style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>Close</button>
               </div>
             </div>
