@@ -606,7 +606,7 @@ export default function SeasonBookPage() {
         .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: sticky; top: 0; z-index: 100; }
         .sb-subbar { padding: 6px 0 6px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
         .sb-layout { display: flex; flex: 1; position: relative; }
-        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: 97px; height: calc(100vh - 97px); }
+        .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: 97px; height: calc(100vh - 97px); /* subbar ~43px + header 54px */ }
         .sb-main { flex: 1; padding: 16px; }
         .sb-brand-row { padding: 8px 14px; cursor: pointer; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; color: #374151; transition: background 0.1s; }
         .sb-brand-row:hover, .sb-brand-row.active { background: #ede9fe; color: ${purpleD}; }
@@ -714,6 +714,23 @@ export default function SeasonBookPage() {
             style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             + New
           </button>
+          <button onClick={async () => {
+            setPayHistRow(null)
+            setPayHistLoading(true)
+            setModal('pay-history')
+            const ledgerIds = rows.map(r => r.id)
+            if (ledgerIds.length === 0) { setPayHistLoading(false); setPayHistRecords([]); return }
+            const { data, error } = await supabase
+              .from('season_payments').select('*')
+              .in('ledger_id', ledgerIds)
+              .order('payment_date', { ascending: false })
+            setPayHistLoading(false)
+            if (error) { showToast('❌ ' + error.message, 'err'); return }
+            setPayHistRecords(data ?? [])
+          }}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            🕐 History
+          </button>
           <button onClick={() => {
             setQuickPayBrand(activeBrand ?? null)
             setQuickPayAmt(''); setQuickPayDate(today())
@@ -727,10 +744,42 @@ export default function SeasonBookPage() {
         </div>
       </div>
 
-      {/* Combined sub-bar: sidebar gap | search | filters | Drop dropdown */}
+      {/* Combined sub-bar: Drop | search | active filters */}
       <div className="sb-subbar">
-        {/* Blank spacer matching sidebar width */}
-        <div style={{ width: 220, flexShrink: 0 }} />
+        {/* Drop dropdown — left edge, no sidebar spacer needed here */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>
+          <select
+            value={activeDropName ?? ''}
+            onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
+            style={{ fontSize: 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none' }}>
+            <option value="">All</option>
+            {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
+          </select>
+          {showDropNameMgr ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <input autoFocus value={newDropNameInput} onChange={e => setNewDropNameInput(e.target.value)}
+                placeholder="New name…" maxLength={40}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput(''); setShowDropNameMgr(false) }
+                  if (e.key === 'Escape') { setShowDropNameMgr(false); setNewDropNameInput('') }
+                }}
+                style={{ fontSize: 11, border: `1.5px solid ${border}`, borderRadius: 6, padding: '3px 6px', outline: 'none', width: 110 }} />
+              <button onClick={() => { if (newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput('') } setShowDropNameMgr(false) }}
+                style={{ fontSize: 11, background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 6px', cursor: 'pointer' }}>✓</button>
+              <button onClick={() => { setShowDropNameMgr(false); setNewDropNameInput('') }}
+                style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 6px', cursor: 'pointer' }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowDropNameMgr(true)}
+              style={{ fontSize: 11, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 7, padding: '3px 8px', cursor: 'pointer', color: gray }}>
+              + New
+            </button>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 20, background: border, flexShrink: 0 }} />
 
         {/* Search — aligns with grand total box */}
         <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
@@ -801,40 +850,6 @@ export default function SeasonBookPage() {
 
         {/* Sidebar — brand list */}
         <div className="sb-sidebar">
-          {/* Drop name filter — always visible */}
-          <div style={{ padding: '6px 10px', borderBottom: `1px solid ${border}`, background: '#f5f3ff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: gray, flexShrink: 0 }}>Drop:</span>
-              <select
-                value={activeDropName ?? ''}
-                onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
-                style={{ fontSize: 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: '3px 6px', background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none', flex: 1, minWidth: 0 }}>
-                <option value="">All drops</option>
-                {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
-              </select>
-              {showDropNameMgr ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3, width: '100%', marginTop: 4 }}>
-                  <input autoFocus value={newDropNameInput} onChange={e => setNewDropNameInput(e.target.value)}
-                    placeholder="New name…" maxLength={40}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput(''); setShowDropNameMgr(false) }
-                      if (e.key === 'Escape') { setShowDropNameMgr(false); setNewDropNameInput('') }
-                    }}
-                    style={{ fontSize: 11, border: `1.5px solid ${border}`, borderRadius: 6, padding: '3px 6px', outline: 'none', flex: 1 }} />
-                  <button onClick={() => { if (newDropNameInput.trim()) { setActiveDropName(newDropNameInput.trim()); setNewDropNameInput('') } setShowDropNameMgr(false) }}
-                    style={{ fontSize: 11, background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 6px', cursor: 'pointer' }}>✓</button>
-                  <button onClick={() => { setShowDropNameMgr(false); setNewDropNameInput('') }}
-                    style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 6px', cursor: 'pointer' }}>✕</button>
-                </div>
-              ) : (
-                <button onClick={() => setShowDropNameMgr(true)}
-                  style={{ fontSize: 10, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 6, padding: '2px 7px', cursor: 'pointer', color: gray, flexShrink: 0 }}>
-                  + New
-                </button>
-              )}
-            </div>
-          </div>
-
           {/* Filter existing brands */}
           {brandsInSeason.length > 0 && (
             <div style={{ padding: '6px 12px', borderBottom: `1px solid ${border}` }}>
@@ -1013,12 +1028,12 @@ export default function SeasonBookPage() {
                             <span key={vid}
                               onClick={e => { e.stopPropagation(); setActiveVendorId(activeVendorId === vid ? null : vid) }}
                               title={`Filter by vendor ${vid}`}
-                              style={{ fontSize: 11, fontWeight: 700, color: purpleD, cursor: 'pointer' }}>
+                              style={{ fontSize: 13, fontWeight: 700, color: purpleD, cursor: 'pointer' }}>
                               {vid}
                             </span>
                           ))
                         })()}
-                        <span style={{ fontSize: 15, fontWeight: 900, color: purpleD }}>{brand}</span>
+                        <span style={{ fontSize: 13, fontWeight: 900, color: purpleD }}>{brand}</span>
                         <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
                         <span style={{ fontSize: 11, color: gray }}>{bDrops.length} drop{bDrops.length !== 1 ? 's' : ''}</span>
                         {totBal <= 0.001 && totInit > 0 && (
@@ -1973,29 +1988,33 @@ export default function SeasonBookPage() {
       })()}
 
       {/* ── Payment History Modal ────────────────────────────────────────────── */}
-      {modal === 'pay-history' && payHistRow && (
+      {modal === 'pay-history' && (
         <div className="modal-bg">
-          <div className="modal-box" style={{ maxWidth: 500 }}>
+          <div className="modal-box" style={{ maxWidth: 540 }}>
             <div className="modal-head">
               <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>💳 Payment History</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>🕐 Payment History</div>
                 <div style={{ fontSize: 12, color: gray }}>
-                  {payHistRow.brand} · {payHistRow.store} · Drop {payHistRow.drop_num}{payHistRow.drop_name ? ` · ${payHistRow.drop_name}` : ''}
+                  {payHistRow
+                    ? `${payHistRow.brand} · ${payHistRow.store} · Drop ${payHistRow.drop_num}${payHistRow.drop_name ? ` · ${payHistRow.drop_name}` : ''}`
+                    : `All payments — ${season}`}
                 </div>
               </div>
               <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
             </div>
             <div className="modal-body">
-              {/* Summary row */}
-              <div style={{ display: 'flex', gap: 16, marginBottom: 14, padding: '8px 12px', background: '#f5f3ff', borderRadius: 8, fontSize: 12 }}>
-                <span>Total: <strong style={{ color: purpleD }}>{fmt$(payHistRow.initial_total, payHistRow.currency)}</strong></span>
-                <span>Paid: <strong style={{ color: '#166534' }}>{fmt$(payHistRow.deposit, payHistRow.currency)}</strong></span>
-                <span style={{ marginLeft: 'auto' }}>
-                  Balance: <strong style={{ color: (payHistRow.balance_due ?? 0) > 0.001 ? '#dc2626' : '#166534' }}>
-                    {fmt$(payHistRow.balance_due, payHistRow.currency)}
-                  </strong>
-                </span>
-              </div>
+              {/* Single-row summary */}
+              {payHistRow && (
+                <div style={{ display: 'flex', gap: 16, marginBottom: 14, padding: '8px 12px', background: '#f5f3ff', borderRadius: 8, fontSize: 12 }}>
+                  <span>Total: <strong style={{ color: purpleD }}>{fmt$(payHistRow.initial_total, payHistRow.currency)}</strong></span>
+                  <span>Paid: <strong style={{ color: '#166534' }}>{fmt$(payHistRow.deposit, payHistRow.currency)}</strong></span>
+                  <span style={{ marginLeft: 'auto' }}>
+                    Balance: <strong style={{ color: (payHistRow.balance_due ?? 0) > 0.001 ? '#dc2626' : '#166534' }}>
+                      {fmt$(payHistRow.balance_due, payHistRow.currency)}
+                    </strong>
+                  </span>
+                </div>
+              )}
 
               {payHistLoading ? (
                 <p style={{ textAlign: 'center', color: gray, fontSize: 13, padding: '12px 0' }}>Loading…</p>
@@ -2005,48 +2024,61 @@ export default function SeasonBookPage() {
                   <span style={{ fontSize: 11 }}>Payments made before history tracking was added won&apos;t appear here.</span>
                 </p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-                  {payHistRecords.map(p => (
-                    <div key={p.id} style={{ background: payHistEditId === p.id ? '#f5f3ff' : '#fafafa', border: `1px solid ${payHistEditId === p.id ? purpleD : border}`, borderRadius: 8, padding: '8px 12px' }}>
-                      {payHistEditId === p.id ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                            <div>
-                              <label style={{ fontSize: 10, fontWeight: 700, color: gray, display: 'block', marginBottom: 2 }}>Amount</label>
-                              <input type="number" value={payHistEditAmt} onChange={e => setPayHistEditAmt(e.target.value)}
-                                step="0.01" style={{ ...inp, fontSize: 12 }} autoFocus />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, maxHeight: 420, overflowY: 'auto' }}>
+                  {payHistRecords.map(p => {
+                    const ledgerRow = rows.find(r => r.id === p.ledger_id) ?? payHistRow
+                    return (
+                      <div key={p.id} style={{ background: payHistEditId === p.id ? '#f5f3ff' : '#fafafa', border: `1px solid ${payHistEditId === p.id ? purpleD : border}`, borderRadius: 8, padding: '8px 12px' }}>
+                        {payHistEditId === p.id ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                              <div>
+                                <label style={{ fontSize: 10, fontWeight: 700, color: gray, display: 'block', marginBottom: 2 }}>Amount</label>
+                                <input type="number" value={payHistEditAmt} onChange={e => setPayHistEditAmt(e.target.value)}
+                                  step="0.01" style={{ ...inp, fontSize: 12 }} autoFocus />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: 10, fontWeight: 700, color: gray, display: 'block', marginBottom: 2 }}>Date</label>
+                                <input type="date" value={payHistEditDate} onChange={e => setPayHistEditDate(e.target.value)} style={{ ...inp, fontSize: 12 }} />
+                              </div>
                             </div>
                             <div>
-                              <label style={{ fontSize: 10, fontWeight: 700, color: gray, display: 'block', marginBottom: 2 }}>Date</label>
-                              <input type="date" value={payHistEditDate} onChange={e => setPayHistEditDate(e.target.value)} style={{ ...inp, fontSize: 12 }} />
+                              <label style={{ fontSize: 10, fontWeight: 700, color: gray, display: 'block', marginBottom: 2 }}>Note</label>
+                              <input value={payHistEditNote} onChange={e => setPayHistEditNote(e.target.value)} placeholder="Optional note" style={{ ...inp, fontSize: 12 }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              <button onClick={() => setPayHistEditId(null)}
+                                style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+                              {ledgerRow && (
+                                <button onClick={() => savePayHistEdit(p.id, ledgerRow)}
+                                  style={{ background: purpleD, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                              )}
                             </div>
                           </div>
-                          <div>
-                            <label style={{ fontSize: 10, fontWeight: 700, color: gray, display: 'block', marginBottom: 2 }}>Note</label>
-                            <input value={payHistEditNote} onChange={e => setPayHistEditNote(e.target.value)} placeholder="Optional note" style={{ ...inp, fontSize: 12 }} />
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ fontWeight: 800, color: '#166534', fontSize: 14 }}>{fmt$(p.amount, ledgerRow?.currency)}</span>
+                              <span style={{ fontSize: 11, color: gray, marginLeft: 8 }}>{fmtDate(p.payment_date)}</span>
+                              {/* Show brand/store context in global view */}
+                              {!payHistRow && ledgerRow && (
+                                <span style={{ fontSize: 11, color: purpleD, fontWeight: 600, marginLeft: 8 }}>
+                                  {ledgerRow.brand} · {ledgerRow.store} · Drop {ledgerRow.drop_num}
+                                </span>
+                              )}
+                              {p.note && <span style={{ fontSize: 11, color: '#374151', marginLeft: 8 }}>{p.note}</span>}
+                            </div>
+                            <button onClick={() => { setPayHistEditId(p.id); setPayHistEditAmt(p.amount.toString()); setPayHistEditDate(p.payment_date); setPayHistEditNote(p.note ?? '') }}
+                              style={{ fontSize: 10, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}>Edit</button>
+                            {ledgerRow && (
+                              <button onClick={() => { if (confirm('Delete this payment?')) deletePayment(p.id, ledgerRow, p.amount) }}
+                                style={{ fontSize: 10, color: '#dc2626', background: '#fef2f2', border: `1px solid #fca5a5`, borderRadius: 5, padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}>Delete</button>
+                            )}
                           </div>
-                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                            <button onClick={() => setPayHistEditId(null)}
-                              style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
-                            <button onClick={() => savePayHistEdit(p.id, payHistRow)}
-                              style={{ background: purpleD, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Save</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ flex: 1 }}>
-                            <span style={{ fontWeight: 800, color: '#166534', fontSize: 14 }}>{fmt$(p.amount, payHistRow.currency)}</span>
-                            <span style={{ fontSize: 11, color: gray, marginLeft: 8 }}>{fmtDate(p.payment_date)}</span>
-                            {p.note && <span style={{ fontSize: 11, color: '#374151', marginLeft: 8 }}>{p.note}</span>}
-                          </div>
-                          <button onClick={() => { setPayHistEditId(p.id); setPayHistEditAmt(p.amount.toString()); setPayHistEditDate(p.payment_date); setPayHistEditNote(p.note ?? '') }}
-                            style={{ fontSize: 10, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>Edit</button>
-                          <button onClick={() => { if (confirm('Delete this payment?')) deletePayment(p.id, payHistRow, p.amount) }}
-                            style={{ fontSize: 10, color: '#dc2626', background: '#fef2f2', border: `1px solid #fca5a5`, borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>Delete</button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
