@@ -186,6 +186,15 @@ export default function ErrorFormsPage() {
   const [toast, setToast] = useState('')
   const [toastType, setToastType] = useState<'ok'|'err'>('ok')
 
+  // ── Store IDs (from settings localStorage) ───────────────────────────────
+  const [storeIds, setStoreIds] = useState<string[]>([])
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('qd_stores')
+      if (saved) setStoreIds(JSON.parse(saved))
+    } catch {}
+  }, [])
+
   // ── Season state ──────────────────────────────────────────────────────────
   const [season, setSeason] = useState('SS27')
   const [extraSeasons, setExtraSeasons] = useState<string[]>([])
@@ -627,10 +636,16 @@ export default function ErrorFormsPage() {
                 {/* Row 0: Store */}
                 <div>
                   <label style={lbl}>Store *</label>
-                  <input value={vals.store_id} onChange={e => upd({ store_id: e.target.value.toUpperCase() })}
-                    placeholder="e.g. NYC01"
-                    disabled={!isAdmin && modal === 'edit'}
-                    style={{ ...inp, width: 180, textTransform: 'uppercase' }} />
+                  {(isAdmin || modal === 'new') ? (
+                    <select value={vals.store_id} onChange={e => upd({ store_id: e.target.value })}
+                      disabled={!isAdmin && modal === 'edit'}
+                      style={{ ...inp, width: 180 }}>
+                      <option value="">— Select Store —</option>
+                      {storeIds.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  ) : (
+                    <div style={{ ...inp, width: 180, background: '#f9fafb', color: gray }}>{vals.store_id || '—'}</div>
+                  )}
                   {!isAdmin && modal === 'new' && (
                     <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Defaults to your store</div>
                   )}
