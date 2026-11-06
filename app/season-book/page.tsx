@@ -278,8 +278,8 @@ export default function SeasonBookPage() {
   const allBrandOptions = Array.from(new Set([...BRAND_LIST, ...brandsInSeason]))
   const headerSearchResults: Array<{ type: 'brand' | 'invoice' | 'vendor'; label: string; brand: string; invoiceNum?: string; vendorId?: string }> = headerSearch.trim()
     ? [
-        // Vendor ID matches — show at top if the search looks like a vendor ID
-        ...Array.from(new Set(VENDOR_DATA.map(v => v.vendor_id)))
+        // Vendor ID matches — only vendors with a vendor_id
+        ...Array.from(new Set(VENDOR_DATA.filter(v => v.vendor_id && v.vendor_id.trim()).map(v => v.vendor_id)))
           .filter(vid => vid.toLowerCase().includes(headerSearch.toLowerCase()))
           .slice(0, 4)
           .map(vid => ({ type: 'vendor' as const, label: vid, brand: '', vendorId: vid })),
@@ -1073,7 +1073,7 @@ export default function SeasonBookPage() {
 
       {/* ── New Entry Modal ──────────────────────────────────────────────────── */}
       {modal === 'new-entry' && (
-        <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
+        <div className="modal-bg">
           <div className="modal-box">
             <div className="modal-head">
               <div>
@@ -1320,7 +1320,7 @@ export default function SeasonBookPage() {
         const isCancelled = editRow.is_cancelled ?? false
 
         return (
-          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
+          <div className="modal-bg">
             <div className="modal-box" style={{ maxWidth: 560 }}>
 
               {/* Header */}
@@ -1529,7 +1529,7 @@ export default function SeasonBookPage() {
         const sideBySide = !invoiceStoreFilter && storesToShow.length > 1
 
         return (
-          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
+          <div className="modal-bg">
             <div className="modal-box" style={{ maxWidth: sideBySide ? 860 : 520 }}>
               <div className="modal-head">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1716,7 +1716,7 @@ export default function SeasonBookPage() {
         }
 
         return (
-          <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setModal('none') }}>
+          <div className="modal-bg">
             <div className="modal-box" style={{ maxWidth: 520 }}>
               <div className="modal-head">
                 <div>
