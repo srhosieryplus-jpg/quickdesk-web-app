@@ -301,7 +301,7 @@ export default function HairAccPage() {
 
       {/* ── Backend drawer ── */}
       {backendOpen && (() => {
-        const beTab = backendOpenVids.has('__tab_vendors') ? 'vendors' : 'items'
+        const beTab = backendOpenVids.has('__tab_retail') ? 'retail' : backendOpenVids.has('__tab_vendors') ? 'vendors' : 'items'
         const allVids = Array.from(new Map(parsedRows.map(r => [r.vendorId, r.vendorId])).keys())
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', justifyContent: 'flex-end' }} onClick={() => setBackendOpen(false)}>
@@ -315,10 +315,12 @@ export default function HairAccPage() {
 
               {/* Tabs */}
               <div style={{ display: 'flex', borderBottom: `1.5px solid ${border}`, background: '#fafafa' }}>
-                {[{ key: 'items', label: 'Item Names' }, { key: 'vendors', label: 'Vendor Cards' }].map(t => (
+                {[{ key: 'items', label: 'Item Names' }, { key: 'vendors', label: 'Vendor Cards' }, { key: 'retail', label: 'Retail Pricing' }].map(t => (
                   <button key={t.key} onClick={() => {
                     const next = new Set(backendOpenVids)
-                    t.key === 'vendors' ? next.add('__tab_vendors') : next.delete('__tab_vendors')
+                    next.delete('__tab_vendors'); next.delete('__tab_retail')
+                    if (t.key === 'vendors') next.add('__tab_vendors')
+                    if (t.key === 'retail') next.add('__tab_retail')
                     setBackendOpenVids(next)
                   }} style={{ flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 700, border: 'none', borderBottom: beTab === t.key ? `2.5px solid ${purple}` : '2.5px solid transparent', background: 'none', color: beTab === t.key ? purple : gray, cursor: 'pointer' }}>
                     {t.label}
@@ -394,6 +396,37 @@ export default function HairAccPage() {
                               ))}
                             </div>
                           )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* ── Retail Pricing tab ── */}
+                {beTab === 'retail' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ fontSize: 11, color: gray, marginBottom: 4 }}>Set a default retail price per item — auto-fills vendor cards, overridable per vendor.</div>
+                    {uniqueStyles.filter(s => resolveEnding(s).toUpperCase() !== 'X').map(s => {
+                      const ending = resolveEnding(s)
+                      const descEnding2 = (() => { const fd = Object.keys(finalDesc).find(k => k.toLowerCase() === s.toLowerCase()); return finalDesc[fd ?? '']?.trim() || s })()
+                      const label = toProper(descEnding2)
+                      return (
+                        <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: '#fff', border: `1px solid ${border}`, borderRadius: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{label}</div>
+                            <div style={{ fontSize: 10, color: gray, fontFamily: 'monospace' }}>{ending}</div>
+                          </div>
+                          <input
+                            value={defaultRetail[s] ?? ''}
+                            onChange={e => {
+                              const dr = { ...defaultRetail, [s]: e.target.value }
+                              setDefaultRetail(dr); saveTo(LS_DEFAULT_RETAIL, dr)
+                            }}
+                            placeholder="$0.00"
+                            style={{ ...inp, fontSize: 12, width: 90, textAlign: 'right', color: '#059669', borderColor: defaultRetail[s] ? '#a7f3d0' : border, background: defaultRetail[s] ? '#f0fdf4' : '#fff', fontWeight: 600 }}
+                            onFocus={ev => ev.target.style.borderColor = '#059669'}
+                            onBlur={ev => ev.target.style.borderColor = defaultRetail[s] ? '#a7f3d0' : border}
+                          />
                         </div>
                       )
                     })}
@@ -491,11 +524,10 @@ export default function HairAccPage() {
                     <div style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>Style Endings</div>
                     <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>VendorID + Ending = Style Code · Adjust description text · Type <span style={{ color: '#dc2626', fontWeight: 700 }}>X</span> to hide</div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 80px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f0f0f0` }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f0f0f0` }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Item Name</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Description Ending</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Code</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Default Retail</div>
                   </div>
                   {uniqueStyles.map(s => {
                     const ownEnding = abbrevMap[s] ?? ''
@@ -507,7 +539,7 @@ export default function HairAccPage() {
                     const savedDesc = rawSaved === toTitleCase(s) ? '' : rawSaved
                     const previewDesc = savedDesc || toTitleCase(s)
                     return (
-                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 80px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
+                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
                         <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <input
@@ -543,19 +575,6 @@ export default function HairAccPage() {
                           style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border, width: '100%' }}
                           onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
                           onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
-                        />
-                        {/* Default retail price — auto-fills vendor retail row, editable per vendor */}
-                        <input
-                          value={defaultRetail[s] ?? ''}
-                          disabled={isX}
-                          onChange={e => {
-                            const dr = { ...defaultRetail, [s]: e.target.value }
-                            setDefaultRetail(dr); saveTo(LS_DEFAULT_RETAIL, dr)
-                          }}
-                          placeholder="$0.00"
-                          style={{ ...inp, fontSize: 11, background: isX ? '#f9fafb' : '#f0fdf4', color: '#059669', borderColor: '#a7f3d0', width: '100%' }}
-                          onFocus={e => { if (!isX) e.target.style.borderColor = '#059669' }}
-                          onBlur={e => { e.target.style.borderColor = '#a7f3d0' }}
                         />
                       </div>
                     )
