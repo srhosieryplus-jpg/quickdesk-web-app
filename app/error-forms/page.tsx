@@ -33,6 +33,7 @@ interface ErrorForm {
   season: string
   store_id: string
   brand: string
+  invoice_number: string | null
   amount: number | null
   email_sent: boolean
   error_date: string | null
@@ -167,7 +168,7 @@ function FileAttach({
 // ── Blank new form ────────────────────────────────────────────────────────────
 function blankForm(season = 'SS27', store_id = ''): Omit<ErrorForm, 'id' | 'logged_by' | 'created_at' | 'updated_at'> {
   return {
-    season, store_id, brand: '', amount: null, email_sent: false, error_date: today(),
+    season, store_id, brand: '', invoice_number: null, amount: null, email_sent: false, error_date: today(),
     status: 'pending', comments: null, final_date: null,
     invoice_file_url: null, error_file_url: null, credit_note_url: null,
   }
@@ -342,6 +343,7 @@ export default function ErrorFormsPage() {
       status: editForm.status,
       comments: editForm.comments,
       final_date: editForm.final_date ? safeDate(editForm.final_date) : null,
+      invoice_number: editForm.invoice_number || null,
       invoice_file_url: editForm.invoice_file_url,
       error_file_url: editForm.error_file_url,
       credit_note_url: editForm.credit_note_url,
@@ -471,17 +473,14 @@ export default function ErrorFormsPage() {
               borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.05em' }}>
             {season}
           </button>
-          {/* Status filter */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            {(['all','open','finalized'] as const).map(s => (
-              <button key={s} onClick={() => setFilterStatus(s)}
-                style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                  background: filterStatus === s ? '#fff' : 'rgba(255,255,255,0.15)',
-                  color: filterStatus === s ? redD : '#fff' }}>
-                {s === 'all' ? 'All' : s === 'open' ? 'Open' : 'Finalized'}
-              </button>
-            ))}
-          </div>
+          {/* Status filter dropdown */}
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as 'all'|'open'|'finalized')}
+            style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.4)',
+              background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', outline: 'none' }}>
+            <option value="open" style={{ color: '#1f2937', background: '#fff' }}>Open</option>
+            <option value="all" style={{ color: '#1f2937', background: '#fff' }}>All</option>
+            <option value="finalized" style={{ color: '#1f2937', background: '#fff' }}>Finalized</option>
+          </select>
           <button onClick={openNew}
             style={{ background: '#fff', color: redD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             + New
@@ -490,42 +489,52 @@ export default function ErrorFormsPage() {
       </div>
 
       {/* ── Filters bar ── */}
-      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '8px 20px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Search — season-book style */}
-        <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 280 }}>
-          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 13, pointerEvents: 'none' }}>🔍</span>
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search brand, store, comments…"
-            style={{ ...inp, paddingLeft: 28, width: '100%' }} />
-          {search && (
-            <button onClick={() => setSearch('')}
-              style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', color: gray, cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>✕</button>
-          )}
-        </div>
-        <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)}
-          style={{ ...inp, width: 150, flex: '0 0 auto' }}>
-          <option value="">All Brands</option>
-          {brandsInUse.map(b => <option key={b} value={b}>{b}</option>)}
-        </select>
-        {isAdmin && (
-          <select value={filterStore} onChange={e => setFilterStore(e.target.value)}
-            style={{ ...inp, width: 120, flex: '0 0 auto' }}>
-            <option value="">All Stores</option>
-            {Array.from(new Set(forms.map(f => f.store_id))).filter(Boolean).sort().map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
+      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '10px 20px' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', maxWidth: 960, margin: '0 auto' }}>
+          {/* Search — season-book style */}
+          <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 280 }}>
+            <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 13, pointerEvents: 'none' }}>🔍</span>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search brand, store, comments…"
+              style={{ ...inp, paddingLeft: 28, width: '100%' }} />
+            {search && (
+              <button onClick={() => setSearch('')}
+                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', color: gray, cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>✕</button>
+            )}
+          </div>
+          <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)}
+            style={{ ...inp, width: 150, flex: '0 0 auto' }}>
+            <option value="">All Brands</option>
+            {brandsInUse.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
-        )}
-        {(filterBrand || filterStore) && (
-          <button onClick={() => { setFilterBrand(''); setFilterStore('') }}
-            style={{ fontSize: 11, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-            Clear
-          </button>
-        )}
-        <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>
-          {filtered.length} form{filtered.length !== 1 ? 's' : ''}
-        </span>
+          {isAdmin && (
+            <select value={filterStore} onChange={e => setFilterStore(e.target.value)}
+              style={{ ...inp, width: 120, flex: '0 0 auto' }}>
+              <option value="">All Stores</option>
+              {Array.from(new Set(forms.map(f => f.store_id))).filter(Boolean).sort().map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          )}
+          {/* Show closed checkbox */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+            <input type="checkbox"
+              checked={filterStatus !== 'open'}
+              onChange={e => setFilterStatus(e.target.checked ? 'all' : 'open')}
+              style={{ width: 15, height: 15, accentColor: redD }} />
+            Show Closed
+          </label>
+          {(filterBrand || filterStore) && (
+            <button onClick={() => { setFilterBrand(''); setFilterStore('') }}
+              style={{ fontSize: 11, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+              Clear
+            </button>
+          )}
+          <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>
+            {filtered.length} form{filtered.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {/* ── Right-click context menu ── */}
@@ -614,20 +623,14 @@ export default function ErrorFormsPage() {
                     onClick={() => openEdit(f)}
                     onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, form: f }); setShowDelConfirm(false); setDelPassword('') }}
                     className="ef-row">
-                    <td style={td}>
-                      <span style={{ fontWeight: 700, color: '#1d4ed8', fontSize: 11, background: '#eff6ff',
-                        border: '1px solid #bfdbfe', borderRadius: 4, padding: '1px 6px' }}>
-                        {f.store_id || '—'}
-                      </span>
+                    <td style={{ ...td, color: '#1d4ed8', fontWeight: 700 }}>
+                      {f.store_id || '—'}
                     </td>
                     <td style={td}><span style={{ fontWeight: 700, color: redD }}>{f.brand}</span></td>
                     <td style={td}>{f.amount != null ? fmt$(f.amount) : '—'}</td>
                     <td style={td}>{fmtDate(f.error_date)}</td>
-                    <td style={td}>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
-                        background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, whiteSpace: 'nowrap' }}>
-                        {STATUS_LABELS[f.status]}
-                      </span>
+                    <td style={{ ...td, color: sc.color, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' }}>
+                      {STATUS_LABELS[f.status]}
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>
                       {f.email_sent ? <span style={{ color: '#166534', fontWeight: 700 }}>✓</span> : <span style={{ color: gray }}>—</span>}
@@ -746,7 +749,7 @@ export default function ErrorFormsPage() {
                 </div>
 
                 {/* Row 1: Brand + Amount + Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 12 }}>
                   <div style={{ position: 'relative' }}>
                     <label style={lbl}>Brand *</label>
                     <input value={isEdit ? vals.brand : brandInput}
@@ -774,6 +777,10 @@ export default function ErrorFormsPage() {
                         ))}
                       </div>
                     )}
+                  </div>
+                  <div>
+                    <label style={lbl}>Invoice #</label>
+                    <input value={vals.invoice_number ?? ''} onChange={e => upd({ invoice_number: e.target.value || null })} placeholder="Optional" style={inp} />
                   </div>
                   <div>
                     <label style={lbl}>Amount ($)</label>
