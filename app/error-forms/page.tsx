@@ -715,7 +715,7 @@ export default function ErrorFormsPage() {
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
                 {/* Row 0: Store + Error Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12, alignItems: 'start' }}>
                 <div>
                   <label style={lbl}>Store ID *</label>
                   {(!isAdmin && modal === 'edit') ? (
@@ -818,7 +818,7 @@ export default function ErrorFormsPage() {
                 </div>
 
                 {/* Row 2: Status + Email Sent + Final Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 120px 160px', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '160px 120px 160px', gap: 12 }}>
                   <div>
                     <label style={lbl}>Resolution Status</label>
                     <select value={vals.status} onChange={e => upd({ status: e.target.value as EFStatus })} style={inp}>
