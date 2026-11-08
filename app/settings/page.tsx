@@ -87,6 +87,8 @@ export default function SettingsPage() {
   function saveStores(next: string[]) {
     setStores(next)
     try { localStorage.setItem('qd_stores', JSON.stringify(next)) } catch {}
+    // Also persist to Supabase so other pages can read it
+    supabase.from('app_config').upsert({ key: 'store_ids', value: JSON.stringify(next) }, { onConflict: 'key' }).then(() => {})
   }
 
   function addStore(e: React.FormEvent) {
@@ -110,6 +112,18 @@ export default function SettingsPage() {
     if (!u) { router.push('/'); return }
     setCurrentUser(u)
     fetchUsers()
+    // Sync store list from Supabase (source of truth across devices)
+    supabase.from('app_config').select('value').eq('key', 'store_ids').maybeSingle().then(({ data }) => {
+      if (data?.value) {
+        try {
+          const parsed: string[] = JSON.parse(data.value)
+          if (parsed.length > 0) {
+            setStores(parsed)
+            try { localStorage.setItem('qd_stores', JSON.stringify(parsed)) } catch {}
+          }
+        } catch {}
+      }
+    })
   }, [router])
 
   // ── return to selector after screen lock / idle ───────────────────────────

@@ -186,25 +186,33 @@ export default function ErrorFormsPage() {
   const [toast, setToast] = useState('')
   const [toastType, setToastType] = useState<'ok'|'err'>('ok')
 
-  // ── Store IDs (from settings localStorage + DB users as fallback) ─────────
+  // ── Store IDs — read from Supabase app_config (source of truth) ───────────
   const [storeIds, setStoreIds] = useState<string[]>([])
   useEffect(() => {
-    // Load from localStorage first
-    try {
-      const saved = localStorage.getItem('qd_stores')
-      if (saved) {
-        const parsed: string[] = JSON.parse(saved)
-        if (parsed.length > 0) { setStoreIds(parsed); return }
+    supabase.from('app_config').select('value').eq('key', 'store_ids').maybeSingle().then(({ data }) => {
+      if (data?.value) {
+        try {
+          const parsed: string[] = JSON.parse(data.value)
+          if (parsed.length > 0) { setStoreIds(parsed); return }
+        } catch {}
       }
-    } catch {}
-    // Fallback: pull distinct stores from users table (fetch all, no limit)
-    supabase.from('users').select('store').limit(1000).then(({ data }) => {
-      if (data) {
-        const unique = Array.from(new Set(
-          data.map((r: { store: string }) => r.store).filter(s => s && s !== 'ALL')
-        )).sort() as string[]
-        if (unique.length > 0) setStoreIds(unique)
-      }
+      // Fallback: localStorage
+      try {
+        const saved = localStorage.getItem('qd_stores')
+        if (saved) {
+          const parsed: string[] = JSON.parse(saved)
+          if (parsed.length > 0) { setStoreIds(parsed); return }
+        }
+      } catch {}
+      // Last resort: distinct stores from users table
+      supabase.from('users').select('store').limit(1000).then(({ data: ud }) => {
+        if (ud) {
+          const unique = Array.from(new Set(
+            ud.map((r: { store: string }) => r.store).filter(s => s && s !== 'ALL')
+          )).sort() as string[]
+          if (unique.length > 0) setStoreIds(unique)
+        }
+      })
     })
   }, [])
 
