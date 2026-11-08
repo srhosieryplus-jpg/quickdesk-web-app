@@ -293,35 +293,12 @@ export default function HairAccPage() {
 
                 {/* ── Item Names tab ── */}
                 {beTab === 'items' && (
-                  <div>
-                    <div style={{ fontSize: 11, color: gray, marginBottom: 10 }}>All unique item names parsed from your paste, with their ending code and which vendor cards carry them.</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 44px 1fr', gap: '0 8px', padding: '4px 10px', background: '#f5f3ff', borderRadius: '6px 6px 0 0', borderBottom: `1px solid ${border}` }}>
-                      {['Item Name', 'Code', 'Vendor Cards'].map(h => (
-                        <div key={h} style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</div>
-                      ))}
-                    </div>
-                    <div style={{ border: `1px solid ${border}`, borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
-                      {uniqueStyles.map((s, i) => {
-                        const ending = resolveEnding(s)
-                        const isX = ending.toUpperCase() === 'X'
-                        const alias = aliasMap[s]
-                        const carriers = Array.from(new Set(parsedRows.filter(r => r.style.toLowerCase() === s.toLowerCase()).map(r => r.vendorId).filter(Boolean)))
-                        return (
-                          <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 44px 1fr', gap: '0 8px', padding: '6px 10px', borderBottom: i < uniqueStyles.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff', alignItems: 'center' }}>
-                            <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', textDecoration: isX ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s}>
-                              {s}
-                              {alias && <span style={{ fontSize: 10, color: '#a78bfa', marginLeft: 4 }}>→ {alias}</span>}
-                            </div>
-                            <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: isX ? '#fca5a5' : purpleD }}>{ending || '—'}</div>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {carriers.map(v => (
-                                <span key={v} style={{ background: '#f0ebff', color: purpleD, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, fontFamily: 'monospace' }}>{v}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
+                  <div style={{ border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
+                    {uniqueStyles.map((s, i) => (
+                      <div key={s} style={{ padding: '6px 12px', borderBottom: i < uniqueStyles.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff', fontSize: 12, color: '#374151' }}>
+                        {s}
+                      </div>
+                    ))}
                   </div>
                 )}
 
