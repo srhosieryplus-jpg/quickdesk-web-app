@@ -303,9 +303,6 @@ export default function HairAccPage() {
 
                   {vendorGroups.map(([vid, styles]) => (
                     <div key={vid}>
-                      {vid && (
-                        <div style={{ padding: '4px 14px', background: '#fafafa', borderBottom: `1px solid #f0f0f0`, fontSize: 11, fontWeight: 800, color: purpleD, fontFamily: 'monospace' }}>{vid}</div>
-                      )}
                       {styles.map(s => {
                         const ending = abbrevMap[s] ?? ''
                         const isX = ending.trim().toUpperCase() === 'X'
@@ -403,7 +400,7 @@ export default function HairAccPage() {
                                 isSel ? next.delete(s) : next.add(s)
                                 setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
                               }} style={{ accentColor: purple, width: 14, height: 14, cursor: 'pointer', flexShrink: 0 }} />
-                              <span style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 800, color: '#fff', background: isSel ? purpleD : '#9ca3af', borderRadius: 4, padding: '2px 6px', flexShrink: 0 }}>{code}</span>
+                              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 800, color: '#fff', background: isSel ? purpleD : '#9ca3af', borderRadius: 4, padding: '2px 8px', flexShrink: 0 }}>{code}</span>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <input
                                   value={fd}
@@ -411,7 +408,7 @@ export default function HairAccPage() {
                                     const fdUpdated = { ...finalDesc, [s]: e.target.value }
                                     setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
                                   }}
-                                  placeholder={s}
+                                  placeholder="Final description…"
                                   style={{ ...inp, fontSize: 11, width: '100%', background: isSel ? '#fff' : '#f9fafb' }}
                                   onFocus={e => e.target.style.borderColor = purple}
                                   onBlur={e => e.target.style.borderColor = border}
