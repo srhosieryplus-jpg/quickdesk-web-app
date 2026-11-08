@@ -803,73 +803,20 @@ export default function HairAccPage() {
                               {otherVidsWithColors.map(v => <option key={v} value={v}>{v}</option>)}
                             </select>
                           )}
-                          <button onClick={addRow} style={{ background: '#f0ebff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer' }}>+ Color</button>
                         </div>
                       </div>
 
-                      {/* Color rows — single combined input "001 Black" */}
-                      <div style={{ padding: '8px 14px 4px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px', gap: 6, marginBottom: 4 }}>
-                          <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Code + Color Name</div>
-                          <div />
-                        </div>
-                        {entries.map((e, ei) => {
-                          const combined = [e.code.trim(), e.name.trim()].filter(Boolean).join(' ')
-                          return (
-                            <div key={ei} className="color-row" style={{ display: 'grid', gridTemplateColumns: '1fr 24px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                              <input
-                                className="name-inp"
-                                value={combined}
-                                onChange={ev => {
-                                  const val = ev.target.value
-                                  // Parse: leading digits = code, rest = name
-                                  const m = val.match(/^(\d+)\s*(.*)$/)
-                                  const code = m ? m[1] : ''
-                                  const name = m ? m[2] : val
-                                  const u = [...entries]; u[ei] = { ...e, code, name }
-                                  const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
-                                }}
-                                onKeyDown={ev => {
-                                  if (ev.key === 'Enter') {
-                                    ev.preventDefault()
-                                    if (ei === entries.length - 1) {
-                                      addRow()
-                                      setTimeout(() => {
-                                        const rows = document.querySelectorAll(`[data-vid="${vid}"] .color-row`)
-                                        const next = rows[ei + 1]?.querySelector('input') as HTMLInputElement
-                                        next?.focus()
-                                      }, 30)
-                                    } else {
-                                      const rows = document.querySelectorAll(`[data-vid="${vid}"] .color-row`)
-                                      const next = rows[ei + 1]?.querySelector('input') as HTMLInputElement
-                                      next?.focus()
-                                    }
-                                  }
-                                }}
-                                placeholder="001 Black"
-                                style={{ ...inp, fontSize: 12 }}
-                                onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border}
-                              />
-                              <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [vid]: u.length ? u : [{ code: '', name: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 15, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
-                            </div>
-                          )
-                        })}
-                      </div>
-
-                      {/* Inline pivot table */}
+                      {/* Unified pivot table with inline color editing */}
                       {(() => {
                         const xEndings = new Set(Object.entries(abbrevMap).filter(([,v]) => v.trim().toUpperCase() === 'X').map(([k]) => k.toLowerCase()))
                         const vidStyleRows = parsedRows.filter(r => r.vendorId === vid && !xEndings.has(r.style.toLowerCase()))
                         const seen2 = new Set<string>()
                         const vidUniq2 = vidStyleRows.filter(r => { if (seen2.has(r.style.toLowerCase())) return false; seen2.add(r.style.toLowerCase()); return true })
                         const allStyleNames2 = vidUniq2.map(r => r.style)
-                        // Keep column order matching the toggle chip order (vidUniq2 order)
                         const savedPivot: string[] = pivotStyles[vid] ?? allStyleNames2
                         const curPivotStyles2: string[] = allStyleNames2.filter(s => savedPivot.includes(s))
                         const curQty2 = qtyMap[vid] ?? {}
-                        const colors2 = resolveColors(vid)
-                        if (vidUniq2.length === 0) return null
-                        // col count = styles + 1 (color label) + 1 (sum)
+                        // Use entries (all rows incl. blank) for editing; colors2 for display/calc
                         const numCols = curPivotStyles2.length
                         return (
                           <div style={{ borderTop: `1px solid ${border}`, padding: '0 0 8px' }}>
@@ -890,76 +837,120 @@ export default function HairAccPage() {
                                 )
                               })}
                             </div>
-                            {/* Pivot table */}
-                            {numCols > 0 && colors2.length > 0 && (
-                              <div style={{ overflowX: 'auto', padding: '0 14px' }}>
-                                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }} className={`pivot-table-${vid}`}>
-                                  <thead>
-                                    <tr>
-                                      <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Color</th>
-                                      {curPivotStyles2.map(sn => (
-                                        <th key={sn} style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontWeight: 700, fontSize: 11, color: purpleD, whiteSpace: 'nowrap' }}>{sn}</th>
-                                      ))}
-                                      <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sum</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {colors2.map((c, ci) => {
-                                      const ck2 = colorKey(c)
-                                      const label2 = c.code.trim() && c.name.trim() ? `#${c.code} ${c.name}` : c.name.trim() || `#${c.code.trim()}`
-                                      const rowSum = curPivotStyles2.reduce((acc, sn) => {
-                                        const ending2 = resolveEnding(sn) || '?'
-                                        const v = parseInt(curQty2[ending2]?.[ck2] ?? '0', 10)
-                                        return acc + (isNaN(v) ? 0 : v)
-                                      }, 0)
-                                      return (
-                                        <tr key={ci} style={{ background: ci % 2 === 0 ? '#fff' : '#fafbff' }}>
-                                          <td style={{ padding: '4px 8px', borderBottom: `1px solid ${border}`, fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#374151', fontSize: 11 }}>{label2}</td>
-                                          {curPivotStyles2.map((sn, si) => {
-                                            const ending2 = resolveEnding(sn) || '?'
-                                            const val2 = curQty2[ending2]?.[ck2] ?? ''
-                                            return (
-                                              <td key={sn} style={{ padding: '3px 4px', borderBottom: `1px solid ${border}`, textAlign: 'center' }}>
-                                                <input
-                                                  data-row={ci} data-col={si}
-                                                  value={val2}
-                                                  onChange={ev => {
-                                                    const nq = { ...qtyMap, [vid]: { ...curQty2, [ending2]: { ...(curQty2[ending2] ?? {}), [ck2]: ev.target.value } } }
-                                                    setQtyMap(nq); saveTo(LS_QTY_KEY, nq)
-                                                  }}
-                                                  onKeyDown={ev => {
-                                                    const tbl = ev.currentTarget.closest('table')
-                                                    if (!tbl) return
-                                                    const all = Array.from(tbl.querySelectorAll('input[data-row][data-col]')) as HTMLInputElement[]
-                                                    const curR = ci, curC = si
-                                                    const rows2 = colors2.length, cols2 = numCols
-                                                    let nr = curR, nc = curC
-                                                    if (ev.key === 'ArrowRight' || ev.key === 'Tab') { ev.preventDefault(); nc = curC + 1; if (nc >= cols2) { nc = 0; nr = (curR + 1) % rows2 } }
-                                                    else if (ev.key === 'ArrowLeft') { ev.preventDefault(); nc = curC - 1; if (nc < 0) { nc = cols2 - 1; nr = (curR - 1 + rows2) % rows2 } }
-                                                    else if (ev.key === 'ArrowDown' || ev.key === 'Enter') { ev.preventDefault(); nr = (curR + 1) % rows2 }
-                                                    else if (ev.key === 'ArrowUp') { ev.preventDefault(); nr = (curR - 1 + rows2) % rows2 }
-                                                    else return
-                                                    const target = all.find(el => el.dataset.row === String(nr) && el.dataset.col === String(nc))
-                                                    target?.focus()
-                                                  }}
-                                                  placeholder="—"
-                                                  style={{ width: 48, textAlign: 'center', border: `1.5px solid ${border}`, borderRadius: 4, padding: '2px 4px', fontSize: 11, fontFamily: 'monospace', outline: 'none' }}
-                                                  onFocus={ev => ev.target.style.borderColor = purple}
-                                                  onBlur={ev => ev.target.style.borderColor = border}
-                                                />
-                                              </td>
-                                            )
-                                          })}
-                                          <td style={{ padding: '4px 8px', borderBottom: `1px solid ${border}`, textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: rowSum > 0 ? purpleD : '#d1d5db', fontSize: 11 }}>{rowSum > 0 ? rowSum : '—'}</td>
-                                        </tr>
-                                      )
-                                    })}
-                                    {/* Col sum row */}
+                            {/* Combined color+qty table */}
+                            <div style={{ overflowX: 'auto', padding: '0 14px' }}>
+                              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: 160 }}>Color</th>
+                                    {curPivotStyles2.map(sn => (
+                                      <th key={sn} style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontWeight: 700, fontSize: 11, color: purpleD, whiteSpace: 'nowrap' }}>{sn}</th>
+                                    ))}
+                                    {curPivotStyles2.length > 0 && <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sum</th>}
+                                    <th style={{ padding: '5px 4px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, width: 20 }} />
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {entries.map((e, ei) => {
+                                    const combined = [e.code.trim(), e.name.trim()].filter(Boolean).join(' ')
+                                    const ck2 = colorKey(e)
+                                    const hasColor = e.code.trim() || e.name.trim()
+                                    const rowSum = hasColor ? curPivotStyles2.reduce((acc, sn) => {
+                                      const ending2 = resolveEnding(sn) || '?'
+                                      const v = parseInt(curQty2[ending2]?.[ck2] ?? '0', 10)
+                                      return acc + (isNaN(v) ? 0 : v)
+                                    }, 0) : 0
+                                    return (
+                                      <tr key={ei} style={{ background: ei % 2 === 0 ? '#fff' : '#fafbff' }}>
+                                        <td style={{ padding: '3px 4px', borderBottom: `1px solid ${border}` }}>
+                                          <input
+                                            className="color-inp"
+                                            data-ei={ei}
+                                            value={combined}
+                                            onChange={ev => {
+                                              const val = ev.target.value
+                                              const m = val.match(/^(\d+)\s*(.*)$/)
+                                              const code = m ? m[1] : ''
+                                              const name = m ? m[2] : val
+                                              const u = [...entries]; u[ei] = { ...e, code, name }
+                                              const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
+                                            }}
+                                            onKeyDown={ev => {
+                                              if (ev.key === 'Enter') {
+                                                ev.preventDefault()
+                                                if (ei === entries.length - 1) {
+                                                  addRow()
+                                                  setTimeout(() => {
+                                                    const inps = document.querySelectorAll(`[data-vid="${vid}"] .color-inp`)
+                                                    ;(inps[ei + 1] as HTMLInputElement)?.focus()
+                                                  }, 30)
+                                                } else {
+                                                  const inps = document.querySelectorAll(`[data-vid="${vid}"] .color-inp`)
+                                                  ;(inps[ei + 1] as HTMLInputElement)?.focus()
+                                                }
+                                              }
+                                            }}
+                                            placeholder="001 Black"
+                                            style={{ ...inp, fontSize: 11, width: '100%', minWidth: 140 }}
+                                            onFocus={ev => ev.target.style.borderColor = purple}
+                                            onBlur={ev => ev.target.style.borderColor = border}
+                                          />
+                                        </td>
+                                        {curPivotStyles2.map((sn, si) => {
+                                          const ending2 = resolveEnding(sn) || '?'
+                                          const val2 = curQty2[ending2]?.[ck2] ?? ''
+                                          return (
+                                            <td key={sn} style={{ padding: '3px 4px', borderBottom: `1px solid ${border}`, textAlign: 'center' }}>
+                                              <input
+                                                data-row={ei} data-col={si}
+                                                value={val2}
+                                                disabled={!hasColor}
+                                                onChange={ev => {
+                                                  const nq = { ...qtyMap, [vid]: { ...curQty2, [ending2]: { ...(curQty2[ending2] ?? {}), [ck2]: ev.target.value } } }
+                                                  setQtyMap(nq); saveTo(LS_QTY_KEY, nq)
+                                                }}
+                                                onKeyDown={ev => {
+                                                  const tbl = ev.currentTarget.closest('table')
+                                                  if (!tbl) return
+                                                  const all = Array.from(tbl.querySelectorAll('input[data-row][data-col]')) as HTMLInputElement[]
+                                                  const rows2 = entries.length, cols2 = numCols
+                                                  let nr = ei, nc = si
+                                                  if (ev.key === 'ArrowRight' || ev.key === 'Tab') { ev.preventDefault(); nc = si + 1; if (nc >= cols2) { nc = 0; nr = (ei + 1) % rows2 } }
+                                                  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); nc = si - 1; if (nc < 0) { nc = cols2 - 1; nr = (ei - 1 + rows2) % rows2 } }
+                                                  else if (ev.key === 'ArrowDown' || ev.key === 'Enter') { ev.preventDefault(); nr = (ei + 1) % rows2 }
+                                                  else if (ev.key === 'ArrowUp') { ev.preventDefault(); nr = (ei - 1 + rows2) % rows2 }
+                                                  else return
+                                                  const target = all.find(el => el.dataset.row === String(nr) && el.dataset.col === String(nc))
+                                                  target?.focus()
+                                                }}
+                                                placeholder="—"
+                                                style={{ width: 48, textAlign: 'center', border: `1.5px solid ${border}`, borderRadius: 4, padding: '2px 4px', fontSize: 11, fontFamily: 'monospace', outline: 'none', background: hasColor ? '#fff' : '#f9f9f9' }}
+                                                onFocus={ev => ev.target.style.borderColor = purple}
+                                                onBlur={ev => ev.target.style.borderColor = border}
+                                              />
+                                            </td>
+                                          )
+                                        })}
+                                        {curPivotStyles2.length > 0 && <td style={{ padding: '4px 8px', borderBottom: `1px solid ${border}`, textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: rowSum > 0 ? purpleD : '#d1d5db', fontSize: 11 }}>{rowSum > 0 ? rowSum : '—'}</td>}
+                                        <td style={{ padding: '3px 4px', borderBottom: `1px solid ${border}`, textAlign: 'center' }}>
+                                          <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [vid]: u.length ? u : [{ code: '', name: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                  {/* + row */}
+                                  <tr>
+                                    <td colSpan={curPivotStyles2.length + 2} style={{ padding: '4px 8px' }}>
+                                      <button onClick={addRow} style={{ background: 'none', border: 'none', color: purple, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>+ Add color</button>
+                                    </td>
+                                  </tr>
+                                  {/* Total row */}
+                                  {curPivotStyles2.length > 0 && (
                                     <tr style={{ background: '#f5f3ff' }}>
                                       <td style={{ padding: '4px 8px', fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Total</td>
                                       {curPivotStyles2.map(sn => {
                                         const ending2 = resolveEnding(sn) || '?'
-                                        const colSum = colors2.reduce((acc, c) => {
+                                        const colSum = entries.reduce((acc, c) => {
                                           const v = parseInt(curQty2[ending2]?.[colorKey(c)] ?? '0', 10)
                                           return acc + (isNaN(v) ? 0 : v)
                                         }, 0)
@@ -968,14 +959,15 @@ export default function HairAccPage() {
                                       <td style={{ padding: '4px 8px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 900, color: purpleD, fontSize: 11 }}>
                                         {curPivotStyles2.reduce((acc, sn) => {
                                           const ending2 = resolveEnding(sn) || '?'
-                                          return acc + colors2.reduce((a, c) => { const v = parseInt(curQty2[ending2]?.[colorKey(c)] ?? '0', 10); return a + (isNaN(v) ? 0 : v) }, 0)
+                                          return acc + entries.reduce((a, c) => { const v = parseInt(curQty2[ending2]?.[colorKey(c)] ?? '0', 10); return a + (isNaN(v) ? 0 : v) }, 0)
                                         }, 0) || '—'}
                                       </td>
+                                      <td />
                                     </tr>
+                                  )}
                                   </tbody>
                                 </table>
                               </div>
-                            )}
                           </div>
                         )
                       })()}
