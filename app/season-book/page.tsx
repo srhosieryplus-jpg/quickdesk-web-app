@@ -1304,6 +1304,7 @@ export default function SeasonBookPage() {
                             const sDep   = activeRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
                             const sBal   = activeRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
                             const hasCancelled = sRows.some(r => r.is_cancelled)
+                            const rowCurrency = (activeRows[0]?.currency as Currency) ?? 'USD'
                             // Collect unique invoice #s for this store (active only)
                             const invoiceNums = Array.from(new Set(activeRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
                             return (
@@ -1325,9 +1326,9 @@ export default function SeasonBookPage() {
                                   )) : <span style={{ color: gray }}>—</span>}
                                 </td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{sUnits || '—'}</td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit)}</td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep)}</td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: sBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(sBal)}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit, rowCurrency)}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep, rowCurrency)}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: sBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(sBal, rowCurrency)}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right' }}>
                                   <span style={{ fontSize: 10, color: gray }}>view →</span>
                                 </td>
@@ -1343,7 +1344,7 @@ export default function SeasonBookPage() {
                                 Total Owed
                               </td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 13, fontWeight: 900, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>
-                                {fmt$(totBal)}
+                                {fmt$(totBal, (bRows[0]?.currency as Currency) ?? 'USD')}
                               </td>
                               <td style={{ padding: '6px 10px' }} />
                             </tr>
