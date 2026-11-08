@@ -474,14 +474,15 @@ export default function HairAccPage() {
                     const ownEnding = abbrevMap[s] ?? ''
                     const effectiveEnding = resolveEnding(s)
                     const isX = effectiveEnding.trim().toUpperCase() === 'X'
-                    // Description adjustment: stored in finalDesc, defaults to title-cased item name
-                    const descAdj = finalDesc[s] ?? toTitleCase(s)
+                    // Description adjustment: only what user has explicitly saved; placeholder shows title-case
+                    const savedDesc = finalDesc[s] ?? ''
+                    const previewDesc = savedDesc || toTitleCase(s)
                     return (
                       <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
                         <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <input
-                            value={isX ? '' : descAdj}
+                            value={isX ? '' : savedDesc}
                             disabled={isX}
                             onChange={e => {
                               const fd = { ...finalDesc, [s]: e.target.value }
@@ -494,7 +495,7 @@ export default function HairAccPage() {
                           />
                           {!isX && effectiveEnding && (
                             <div style={{ fontSize: 10, color: '#a78bfa', fontFamily: 'monospace', paddingLeft: 2 }}>
-                              → <span style={{ color: purpleD, fontWeight: 700 }}>{effectiveEnding}</span> {descAdj}
+                              → <span style={{ color: purpleD, fontWeight: 700 }}>{effectiveEnding}</span> {previewDesc}
                             </div>
                           )}
                         </div>
