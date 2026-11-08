@@ -863,7 +863,9 @@ export default function HairAccPage() {
                         const seen2 = new Set<string>()
                         const vidUniq2 = vidStyleRows.filter(r => { if (seen2.has(r.style.toLowerCase())) return false; seen2.add(r.style.toLowerCase()); return true })
                         const allStyleNames2 = vidUniq2.map(r => r.style)
-                        const curPivotStyles2: string[] = pivotStyles[vid] ?? allStyleNames2
+                        // Keep column order matching the toggle chip order (vidUniq2 order)
+                        const savedPivot: string[] = pivotStyles[vid] ?? allStyleNames2
+                        const curPivotStyles2: string[] = allStyleNames2.filter(s => savedPivot.includes(s))
                         const curQty2 = qtyMap[vid] ?? {}
                         const colors2 = resolveColors(vid)
                         if (vidUniq2.length === 0) return null
@@ -896,7 +898,7 @@ export default function HairAccPage() {
                                     <tr>
                                       <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Color</th>
                                       {curPivotStyles2.map(sn => (
-                                        <th key={sn} style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontFamily: 'monospace', fontWeight: 900, fontSize: 11, color: purpleD, whiteSpace: 'nowrap' }}>{vid}{resolveEnding(sn) || '?'}</th>
+                                        <th key={sn} style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontWeight: 700, fontSize: 11, color: purpleD, whiteSpace: 'nowrap' }}>{sn}</th>
                                       ))}
                                       <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sum</th>
                                     </tr>
