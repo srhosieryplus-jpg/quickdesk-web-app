@@ -314,6 +314,7 @@ export default function ErrorFormsPage() {
       ...form,
       season,
       store_id: form.store_id,
+      log_date: today(),
       error_date: form.error_date ? safeDate(form.error_date) : null,
       final_date: form.final_date ? safeDate(form.final_date) : null,
       logged_by: user.userid,
