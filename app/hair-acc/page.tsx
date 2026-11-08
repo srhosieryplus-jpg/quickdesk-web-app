@@ -54,7 +54,7 @@ function guessColRoles(grid: string[][]): ColMapping {
   for (let i = 0; i < n; i++) {
     const vals = grid.map(r => r[i] ?? '').filter(Boolean)
     const numericCount = vals.filter(v => !isNaN(parseFloat(v))).length
-    const shortNumeric = vals.filter(v => /^\d{4,6}$/.test(v)).length
+    const shortNumeric = vals.filter(v => /^\d{3,10}$/.test(v)).length
     if (shortNumeric > 0) mapping[i] = 'styleNum'
     else if (numericCount / (vals.length || 1) > 0.6) mapping[i] = 'price'
     else mapping[i] = 'description'
@@ -81,8 +81,8 @@ function parsePaste(text: string, mapping: ColMapping): RawRow[] {
     const desc      = dIdx   >= 0 ? (cols[dIdx]   ?? '').trim() : ''
     const priceStr  = pIdx   >= 0 ? (cols[pIdx]   ?? '').trim() : ''
 
-    // Update current style # if this row has one
-    if (styleNum && /^\d{4,6}$/.test(styleNum)) {
+    // Update current style # if this row has one (3–10 digits)
+    if (styleNum && /^\d{3,10}$/.test(styleNum)) {
       currentVendorId = styleNum
       if (!desc) continue   // row was just setting the style #, no description yet
     }
@@ -146,6 +146,7 @@ export default function HairAccPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [step, setStep] = useState(0)
+  const [parseError, setParseError] = useState('')
 
   // Step 0 — paste
   const [paste, setPaste] = useState('')
@@ -188,7 +189,11 @@ export default function HairAccPage() {
   function handleColMapping() {
     saveTo(LS_COLMAP_KEY, colMapping)
     const rows = parsePaste(paste, colMapping)
-    if (rows.length === 0) return
+    if (rows.length === 0) {
+      setParseError('No rows could be parsed. Check your column mapping — make sure Style # is a numeric column and Description is set correctly.')
+      return
+    }
+    setParseError('')
     setRawRows(rows)
 
     const styles = Array.from(new Set(rows.map(r => r.style)))
@@ -470,6 +475,11 @@ export default function HairAccPage() {
                 padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
                 boxShadow: '0 2px 10px rgba(124,58,237,0.3)',
               }}>Next: Set Endings →</button>
+              {parseError && (
+                <div style={{ marginTop: 12, padding: '10px 14px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
+                  ⚠️ {parseError}
+                </div>
+              )}
             </div>
           )
         })()}
