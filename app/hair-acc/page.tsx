@@ -183,9 +183,9 @@ export default function HairAccPage() {
     for (const r of parsedRows) {
       if (!orderSet.includes(r.style)) continue
       const ending = abbrevMap[r.style]?.trim() ?? ''
-      // Skip styles whose ending is not in this vendor's pivotStyles (if pivot has been configured)
+      // Skip styles excluded from this vendor's pivot (if pivot has been configured)
       const vPivot = pivotStyles[r.vendorId]
-      if (vPivot && vPivot.length > 0 && ending && !vPivot.includes(ending)) continue
+      if (vPivot && vPivot.length > 0 && !vPivot.includes(r.style)) continue
       const styleCode = ending
         ? (r.vendorId ? `${r.vendorId}${ending}` : ending)
         : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
@@ -500,7 +500,9 @@ export default function HairAccPage() {
                 // Dedupe styles preserving order
                 const seen = new Set<string>()
                 const vidUniq = vidStyleRows.filter(r => { if (seen.has(r.style)) return false; seen.add(r.style); return true })
-                const curPivot = pivotStyles[vid] ?? vidUniq.map(r => abbrevMap[r.style]?.trim()).filter(Boolean) as string[]
+                // pivotStyles[vid] stores selected style names (not endings, to avoid collision)
+                const allStyleNames = vidUniq.map(r => r.style)
+                const curPivotStyles: string[] = pivotStyles[vid] ?? allStyleNames
                 const curQty = qtyMap[vid] ?? {}
 
                 return (
@@ -518,37 +520,45 @@ export default function HairAccPage() {
                         <div style={{ fontSize: 13, color: gray, padding: '20px 0' }}>Add colors to this vendor first in the step above.</div>
                       ) : (
                         <>
-                          {/* Style column toggles */}
+                          {/* Style column toggles — keyed by style name to avoid ending collision */}
                           <div style={{ marginBottom: 12 }}>
                             <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Include styles in order</div>
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                               {vidUniq.map(r => {
                                 const ending = abbrevMap[r.style]?.trim() ?? ''
                                 if (!ending) return null
-                                const on = curPivot.includes(ending)
+                                const on = curPivotStyles.includes(r.style)
                                 return (
                                   <button key={r.style} onClick={() => {
-                                    const next = on ? curPivot.filter(e => e !== ending) : [...curPivot, ending]
+                                    const next = on ? curPivotStyles.filter(s => s !== r.style) : [...curPivotStyles, r.style]
                                     const ps = { ...pivotStyles, [vid]: next }
                                     setPivotStyles(ps); saveTo(LS_PIVOT_STYLES, ps)
-                                  }} style={{ background: on ? purpleD : '#f3f4f6', color: on ? '#fff' : '#374151', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'monospace' }}>
+                                  }} style={{ background: on ? purpleD : '#f3f4f6', color: on ? '#fff' : '#374151', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'monospace' }}
+                                  title={r.style}>
                                     {ending}
+                                    {/* Show style name hint if two endings are the same */}
+                                    {vidUniq.filter(x => abbrevMap[x.style]?.trim() === ending).length > 1 && (
+                                      <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 4, opacity: 0.75 }}>({r.style.slice(0, 8)})</span>
+                                    )}
                                   </button>
                                 )
                               })}
                             </div>
                           </div>
 
-                          {/* Pivot table */}
-                          {curPivot.length > 0 && (
+                          {/* Pivot table — columns keyed by style name */}
+                          {curPivotStyles.length > 0 && (
                             <div style={{ overflowX: 'auto' }}>
                               <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                                 <thead>
                                   <tr>
                                     <th style={{ padding: '6px 10px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Color</th>
-                                    {curPivot.map(ending => (
-                                      <th key={ending} style={{ padding: '6px 10px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontFamily: 'monospace', fontWeight: 900, color: purpleD, whiteSpace: 'nowrap' }}>{vid}{ending}</th>
-                                    ))}
+                                    {curPivotStyles.map(styleName => {
+                                      const ending = abbrevMap[styleName]?.trim() ?? styleName
+                                      return (
+                                        <th key={styleName} style={{ padding: '6px 10px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontFamily: 'monospace', fontWeight: 900, color: purpleD, whiteSpace: 'nowrap' }}>{vid}{ending}</th>
+                                      )
+                                    })}
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -558,10 +568,11 @@ export default function HairAccPage() {
                                     return (
                                       <tr key={ci} style={{ background: ci % 2 === 0 ? '#fff' : '#fafbff' }}>
                                         <td style={{ padding: '5px 10px', borderBottom: `1px solid ${border}`, fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#374151' }}>{label}</td>
-                                        {curPivot.map(ending => {
+                                        {curPivotStyles.map(styleName => {
+                                          const ending = abbrevMap[styleName]?.trim() ?? styleName
                                           const val = curQty[ending]?.[ck] ?? ''
                                           return (
-                                            <td key={ending} style={{ padding: '4px 6px', borderBottom: `1px solid ${border}`, textAlign: 'center' }}>
+                                            <td key={styleName} style={{ padding: '4px 6px', borderBottom: `1px solid ${border}`, textAlign: 'center' }}>
                                               <input
                                                 value={val}
                                                 onChange={ev => {
