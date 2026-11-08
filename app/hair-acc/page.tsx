@@ -18,6 +18,7 @@ const LS_SELECTED_KEY  = 'hairAcc_selected'    // vendorIds selected to order
 const LS_QTY_KEY       = 'hairAcc_qtyMap'      // qty per vendorId→ending→colorKey
 const LS_PIVOT_STYLES  = 'hairAcc_pivotStyles' // per-vendorId set of endings included in pivot
 const LS_ALIAS_KEY     = 'hairAcc_aliasMap'    // style → canonical style name it aliases
+const LS_RETAIL_KEY    = 'hairAcc_retailMap'   // per-vendorId→ending retail price
 
 // Strip parenthetical notes and apply proper title case
 function toTitleCase(s: string): string {
@@ -128,6 +129,8 @@ export default function HairAccPage() {
   // pivotStyles[vendorId] = Set of ending codes included in pivot
   const [pivotStyles, setPivotStyles] = useState<Record<string, string[]>>({})
   const [pivotPopup, setPivotPopup]   = useState<string | null>(null) // vendorId
+  // retailMap[vendorId][ending] = retail price string
+  const [retailMap, setRetailMap]     = useState<Record<string, Record<string, string>>>({})
 
   useEffect(() => {
     const u = getSession()
@@ -141,6 +144,7 @@ export default function HairAccPage() {
     setQtyMap(loadSaved(LS_QTY_KEY, {}))
     setPivotStyles(loadSaved(LS_PIVOT_STYLES, {}))
     setAliasMap(loadSaved(LS_ALIAS_KEY, {}))
+    setRetailMap(loadSaved(LS_RETAIL_KEY, {}))
     const sel: string[] = loadSaved(LS_SELECTED_KEY, [])
     setSelected(new Set(sel))
   }, [router])
@@ -186,7 +190,7 @@ export default function HairAccPage() {
   }, [activeStyles, selected, parsedRows])
 
   // Build output — only active styles, colors from global list
-  interface OutRow { vendorId: string; styleCode: string; styleName: string; color: string; qty: string; price: number; isFirstForVendor: boolean }
+  interface OutRow { vendorId: string; styleCode: string; styleName: string; color: string; qty: string; price: number; retail: string; isFirstForVendor: boolean }
 
   // color key used in qtyMap: "code|name"
   function colorKey(c: ColorEntry) { return `${c.code.trim()}|${c.name.trim()}` }
@@ -221,8 +225,9 @@ export default function HairAccPage() {
       if (r.vendorId) lastVendor = r.vendorId
       const colors = resolveColors(r.vendorId)
 
+      const retail = (retailMap[r.vendorId]?.[ending] ?? '').trim()
       if (colors.length === 0) {
-        out.push({ vendorId: r.vendorId, styleCode, styleName, color: '', qty: '', price: r.price, isFirstForVendor })
+        out.push({ vendorId: r.vendorId, styleCode, styleName, color: '', qty: '', price: r.price, retail, isFirstForVendor })
       } else {
         colors.forEach((c, ci) => {
           const nameProper = c.name.trim().replace(/\b\w/g, l => l.toUpperCase())
@@ -230,21 +235,21 @@ export default function HairAccPage() {
             ? `#${c.code.trim()} ${nameProper}`
             : nameProper || `#${c.code.trim()}`
           const qty = (qtyMap[r.vendorId]?.[ending]?.[colorKey(c)] ?? '').trim()
-          out.push({ vendorId: r.vendorId, styleCode, styleName, color: colorStr, qty, price: r.price, isFirstForVendor: ci === 0 && isFirstForVendor })
+          out.push({ vendorId: r.vendorId, styleCode, styleName, color: colorStr, qty, price: r.price, retail, isFirstForVendor: ci === 0 && isFirstForVendor })
         })
       }
     }
     return out
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, preDesc, selectedStyles, qtyMap, pivotStyles])
+  }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, preDesc, selectedStyles, qtyMap, pivotStyles, retailMap])
 
   function toProper(s: string) {
-    return s.replace(/\b\w/g, l => l.toUpperCase())
+    return s.toLowerCase().replace(/\b\w/g, l => l.toUpperCase())
   }
 
   function copyOutput() {
     const tsv = outRows.map(r => {
-      const hasQty = r.qty.trim() !== ''
+      const hasQty = r.qty.trim() !== '' && parseInt(r.qty, 10) !== 0
       return [
         r.isFirstForVendor ? r.vendorId : '',
         hasQty ? r.styleCode : '',
@@ -252,6 +257,7 @@ export default function HairAccPage() {
         r.color,
         r.qty,
         hasQty && r.price > 0 ? r.price.toFixed(2) : '',
+        hasQty && r.retail ? r.retail : '',
       ].join('\t')
     }).join('\n')
     navigator.clipboard.writeText(tsv)
@@ -828,6 +834,7 @@ export default function HairAccPage() {
                         const savedPivotLower = savedPivot.map(s => s.toLowerCase())
                         const curPivotStyles2: string[] = allStyleNames2.filter(s => savedPivotLower.includes(s.toLowerCase()))
                         const curQty2 = qtyMap[vid] ?? {}
+                        const curRetail2 = retailMap[vid] ?? {}
                         // Use entries (all rows incl. blank) for editing; colors2 for display/calc
                         const numCols = curPivotStyles2.length
                         return (
@@ -836,6 +843,30 @@ export default function HairAccPage() {
                             <div style={{ overflowX: 'auto', padding: '0 14px' }}>
                               <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                                 <thead>
+                                  {/* Retail price row */}
+                                  <tr>
+                                    <th style={{ padding: '5px 8px', background: '#fff7ed', borderBottom: `1px solid #fed7aa`, textAlign: 'left', fontSize: 10, color: '#92400e', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Retail</th>
+                                    {vidUniq2.map(r => {
+                                      const ending2r = resolveEnding(r.style)
+                                      return (
+                                        <th key={r.style} style={{ padding: '3px 4px', background: '#fff7ed', borderBottom: `1px solid #fed7aa`, textAlign: 'center' }}>
+                                          <input
+                                            value={curRetail2[ending2r] ?? ''}
+                                            onChange={ev => {
+                                              const nr = { ...retailMap, [vid]: { ...curRetail2, [ending2r]: ev.target.value } }
+                                              setRetailMap(nr); saveTo(LS_RETAIL_KEY, nr)
+                                            }}
+                                            placeholder="$0.00"
+                                            style={{ ...inp, fontSize: 11, width: 70, textAlign: 'center', background: '#fff7ed' }}
+                                            onFocus={ev => ev.target.style.borderColor = '#f97316'}
+                                            onBlur={ev => ev.target.style.borderColor = border}
+                                          />
+                                        </th>
+                                      )
+                                    })}
+                                    {curPivotStyles2.length > 0 && <th style={{ background: '#fff7ed', borderBottom: `1px solid #fed7aa` }} />}
+                                    <th style={{ background: '#fff7ed', borderBottom: `1px solid #fed7aa` }} />
+                                  </tr>
                                   <tr>
                                     <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: 160 }}>Color</th>
                                     {vidUniq2.map(r => {
@@ -1022,21 +1053,22 @@ export default function HairAccPage() {
 
               {/* Output table */}
               <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '7px 14px', background: '#fafafa', borderBottom: `1px solid ${border}`, gap: 8 }}>
-                  {['Vendor', 'Style Code', 'Style Name', 'Color', 'Qty', 'Price'].map(h => (
+                <div style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px 70px', padding: '7px 14px', background: '#fafafa', borderBottom: `1px solid ${border}`, gap: 8 }}>
+                  {['Vendor', 'Style Code', 'Style Name', 'Color', 'Qty', 'Cost', 'Retail'].map(h => (
                     <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</div>
                   ))}
                 </div>
                 {outRows.map((r, i) => {
-                  const hasQty = r.qty.trim() !== ''
+                  const hasQty = r.qty.trim() !== '' && parseInt(r.qty, 10) !== 0
                   return (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '5px 14px', borderBottom: i < outRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: hasQty ? (i % 2 === 0 ? '#fff' : '#fafbff') : '#fdf2f2', gap: 8, alignItems: 'center' }}>
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px 70px', padding: '5px 14px', borderBottom: i < outRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: hasQty ? (i % 2 === 0 ? '#fff' : '#fafbff') : '#fdf2f2', gap: 8, alignItems: 'center' }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: r.isFirstForVendor && r.vendorId ? purpleD : 'transparent' }}>{r.isFirstForVendor ? r.vendorId : ''}</div>
                       <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: hasQty ? purpleD : '#d1d5db', background: hasQty ? '#f5f3ff' : 'transparent', border: hasQty ? '1px solid #ddd6fe' : 'none', borderRadius: 5, padding: '2px 7px', display: 'inline-block' }}>{hasQty ? r.styleCode : '—'}</div>
                       <div style={{ fontSize: 12, color: hasQty ? '#374151' : '#d1d5db' }}>{hasQty ? toProper(r.styleName) : '—'}</div>
                       <div style={{ fontSize: 12, color: '#374151' }}>{r.color}</div>
                       <div style={{ fontSize: 12, color: hasQty ? '#374151' : '#9ca3af', fontStyle: hasQty ? 'normal' : 'italic' }}>{hasQty ? r.qty : 'no qty'}</div>
                       <div style={{ fontSize: 12, color: hasQty ? '#374151' : '#d1d5db' }}>{hasQty && r.price > 0 ? `$${r.price.toFixed(2)}` : ''}</div>
+                      <div style={{ fontSize: 12, color: hasQty && r.retail ? '#059669' : '#d1d5db', fontWeight: r.retail ? 600 : 400 }}>{hasQty && r.retail ? r.retail : ''}</div>
                     </div>
                   )
                 })}
