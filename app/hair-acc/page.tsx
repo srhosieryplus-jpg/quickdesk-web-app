@@ -17,6 +17,7 @@ const LS_FINALDESC_KEY = 'hairAcc_finalDesc'   // per-style final description (e
 const LS_SELECTED_KEY  = 'hairAcc_selected'    // vendorIds selected to order
 const LS_QTY_KEY       = 'hairAcc_qtyMap'      // qty per vendorId→ending→colorKey
 const LS_PIVOT_STYLES  = 'hairAcc_pivotStyles' // per-vendorId set of endings included in pivot
+const LS_ALIAS_KEY     = 'hairAcc_aliasMap'    // style → canonical style name it aliases
 
 // Strip parenthetical notes and apply proper title case
 function toTitleCase(s: string): string {
@@ -119,6 +120,7 @@ export default function HairAccPage() {
   const [selected, setSelected]     = useState<Set<string>>(new Set())
   const [copied, setCopied]         = useState(false)
   const [sameAsPopup, setSameAsPopup] = useState<{ forVid: string; srcVid: string } | null>(null)
+  const [aliasMap, setAliasMap]       = useState<Record<string, string>>({}) // style → canonical style
   const [backendOpen, setBackendOpen] = useState(false)
   const [backendOpenVids, setBackendOpenVids] = useState<Set<string>>(new Set())
   // qtyMap[vendorId][ending][colorKey] = qty string
@@ -138,6 +140,7 @@ export default function HairAccPage() {
     setFinalDesc(loadSaved(LS_FINALDESC_KEY, {}))
     setQtyMap(loadSaved(LS_QTY_KEY, {}))
     setPivotStyles(loadSaved(LS_PIVOT_STYLES, {}))
+    setAliasMap(loadSaved(LS_ALIAS_KEY, {}))
     const sel: string[] = loadSaved(LS_SELECTED_KEY, [])
     setSelected(new Set(sel))
   }, [router])
@@ -151,10 +154,17 @@ export default function HairAccPage() {
     [parsedRows]
   )
 
-  // Active styles = those whose ending is NOT 'X'
+  // Resolve effective ending for a style, following alias chain
+  function resolveEnding(style: string): string {
+    const canon = aliasMap[style]?.trim()
+    return canon ? (abbrevMap[canon] ?? '') : (abbrevMap[style] ?? '')
+  }
+
+  // Active styles = those whose ending is NOT 'X' (alias-resolved)
   const activeStyles = useMemo(() =>
-    uniqueStyles.filter(s => (abbrevMap[s] ?? '').trim().toUpperCase() !== 'X'),
-    [uniqueStyles, abbrevMap]
+    uniqueStyles.filter(s => resolveEnding(s).toUpperCase() !== 'X'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [uniqueStyles, abbrevMap, aliasMap]
   )
 
   // VendorIds selected to order → derive selected styles
@@ -184,7 +194,7 @@ export default function HairAccPage() {
     const orderSet = selectedStyles.length > 0 ? selectedStyles : activeStyles
     for (const r of parsedRows) {
       if (!orderSet.includes(r.style)) continue
-      const ending = abbrevMap[r.style]?.trim() ?? ''
+      const ending = resolveEnding(r.style)
       // Skip styles excluded from this vendor's pivot (if pivot has been configured)
       const vPivot = pivotStyles[r.vendorId]
       if (vPivot && vPivot.length > 0 && !vPivot.includes(r.style)) continue
@@ -378,66 +388,62 @@ export default function HairAccPage() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
 
-                {/* ── LEFT: Endings editor (grouped by vendor) ── */}
+                {/* ── LEFT: Endings editor (unique styles, with alias) ── */}
                 <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
                   <div style={{ background: '#f5f3ff', borderBottom: `1px solid ${border}`, padding: '12px 16px' }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>Style Endings</div>
-                    <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>VendorID + Ending = Style Code · Type <span style={{ color: '#dc2626', fontWeight: 700 }}>X</span> to hide · Shared across vendors</div>
+                    <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>VendorID + Ending = Style Code · <strong>Same as</strong> merges into another style · Type <span style={{ color: '#dc2626', fontWeight: 700 }}>X</span> to hide</div>
                   </div>
-
-                  {/* Column headers */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px', gap: '0 8px', padding: '5px 14px', borderBottom: `1px solid #f0f0f0` }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 68px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f0f0f0` }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style (from paste)</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Same as</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Ending</div>
                   </div>
-
-                  {/* Grouped by vendor — each vendor is a collapsible section */}
-                  {vendorGroups.map(([vid, vStyles]) => {
-                    const isOpen = !backendOpenVids.has(`end-${vid}`) // default open
+                  {uniqueStyles.map(s => {
+                    const alias = aliasMap[s] ?? ''
+                    const ownEnding = abbrevMap[s] ?? ''
+                    const effectiveEnding = alias ? (abbrevMap[alias] ?? '') : ownEnding
+                    const isX = effectiveEnding.trim().toUpperCase() === 'X'
+                    const isAliased = !!alias
+                    // Other unique styles this one could alias to (not itself, not styles that alias to this one)
+                    const aliasTargets = uniqueStyles.filter(o => o !== s && !aliasMap[o])
                     return (
-                      <div key={vid}>
-                        {/* Vendor group header */}
-                        <div
-                          onClick={() => {
-                            const next = new Set(backendOpenVids)
-                            isOpen ? next.add(`end-${vid}`) : next.delete(`end-${vid}`)
-                            setBackendOpenVids(next)
+                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 68px', gap: '0 6px', padding: '4px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : isAliased ? '#f9f7ff' : 'transparent' }}>
+                        <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
+                        <select
+                          value={alias}
+                          onChange={e => {
+                            const val = e.target.value
+                            const am = { ...aliasMap, [s]: val }
+                            setAliasMap(am); saveTo(LS_ALIAS_KEY, am)
                           }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px', background: '#f9f7ff', borderBottom: `1px solid #ede9fe`, cursor: 'pointer', userSelect: 'none' }}
+                          style={{ ...inp, fontSize: 11, padding: '2px 4px', color: alias ? purpleD : '#9ca3af' }}
                         >
-                          <span style={{ background: purpleD, color: '#fff', borderRadius: 4, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace' }}>{vid || '—'}</span>
-                          <span style={{ fontSize: 10, color: gray }}>{vStyles.length} styles</span>
-                          <span style={{ marginLeft: 'auto', fontSize: 11, color: gray }}>{isOpen ? '▾' : '▸'}</span>
-                        </div>
-                        {isOpen && vStyles.map(s => {
-                          const ending = abbrevMap[s] ?? ''
-                          const isX = ending.trim().toUpperCase() === 'X'
-                          return (
-                            <div key={`${vid}-${s}`} style={{ display: 'grid', gridTemplateColumns: '1fr 72px', gap: '0 8px', padding: '4px 14px 4px 22px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
-                              <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
-                              <input
-                                value={ending}
-                                onChange={e => {
-                                  const val = e.target.value.toUpperCase()
-                                  const updated = { ...abbrevMap, [s]: val }
-                                  setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
-                                  if (val && val !== 'X') {
-                                    const fdUpdated = { ...finalDesc, [s]: buildFinalDesc('', s) }
-                                    setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                                  }
-                                  if (val === 'X') {
-                                    const next = new Set(selected); next.delete(s)
-                                    setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
-                                  }
-                                }}
-                                placeholder="HC"
-                                style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border, width: '100%' }}
-                                onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
-                                onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
-                              />
-                            </div>
-                          )
-                        })}
+                          <option value="">—</option>
+                          {aliasTargets.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                        <input
+                          value={isAliased ? effectiveEnding : ownEnding}
+                          readOnly={isAliased}
+                          onChange={e => {
+                            if (isAliased) return
+                            const val = e.target.value.toUpperCase()
+                            const updated = { ...abbrevMap, [s]: val }
+                            setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
+                            if (val && val !== 'X') {
+                              const fdUpdated = { ...finalDesc, [s]: buildFinalDesc('', s) }
+                              setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                            }
+                            if (val === 'X') {
+                              const next = new Set(selected); next.delete(s)
+                              setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
+                            }
+                          }}
+                          placeholder="HC"
+                          style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isAliased ? '#ede9fe' : isX ? '#fef2f2' : '#fff', color: isAliased ? purpleD : isX ? '#dc2626' : '#111', borderColor: isAliased ? '#c4b5fd' : isX ? '#fca5a5' : border, width: '100%' }}
+                          onFocus={e => { if (!isX && !isAliased) e.target.style.borderColor = purple }}
+                          onBlur={e => { e.target.style.borderColor = isAliased ? '#c4b5fd' : isX ? '#fca5a5' : border }}
+                        />
                       </div>
                     )
                   })}
