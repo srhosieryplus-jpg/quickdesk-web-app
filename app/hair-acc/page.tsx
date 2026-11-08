@@ -390,7 +390,6 @@ export default function HairAccPage() {
                         {/* Style rows */}
                         {styles.map(s => {
                           const ending = abbrevMap[s]?.trim() ?? ''
-                          const code = ending ? (vid ? `${vid}${ending}` : ending) : s.slice(0, 8).replace(/\s+/g, '').toUpperCase()
                           const isSel = selected.has(s)
                           const fd = finalDesc[s] ?? ''
                           return (
@@ -400,7 +399,7 @@ export default function HairAccPage() {
                                 isSel ? next.delete(s) : next.add(s)
                                 setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
                               }} style={{ accentColor: purple, width: 14, height: 14, cursor: 'pointer', flexShrink: 0 }} />
-                              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 800, color: '#fff', background: isSel ? purpleD : '#9ca3af', borderRadius: 4, padding: '2px 8px', flexShrink: 0 }}>{code}</span>
+                              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 800, color: '#fff', background: isSel ? purpleD : '#9ca3af', borderRadius: 4, padding: '2px 8px', flexShrink: 0 }}>{ending || '—'}</span>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <input
                                   value={fd}
