@@ -9,8 +9,9 @@ const purple = '#7c3aed'
 const gray = '#6b7280'
 const border = '#e5e7eb'
 
-const LS_ABBREV_KEY = 'hairAcc_abbrevMap'
-const LS_COLORS_KEY = 'hairAcc_colorMap'
+const LS_ABBREV_KEY  = 'hairAcc_abbrevMap'
+const LS_COLORS_KEY  = 'hairAcc_colorList'   // global color list
+const LS_COLMAP_KEY  = 'hairAcc_colMapping'
 
 function loadSaved<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback } catch { return fallback }
@@ -19,65 +20,41 @@ function saveTo(key: string, val: unknown) {
   try { localStorage.setItem(key, JSON.stringify(val)) } catch {}
 }
 
-interface StyleRow {
-  vendorId: string   // empty string if none
-  style: string      // normalized style name
-  price: number
-}
-
+interface StyleRow { vendorId: string; style: string; price: number }
 interface ColorEntry { code: string; name: string; qty: string }
 
-// ── Parse paste: handles both "vendorId\tstyle\tprice" and plain "style" per line ─
+// ── Parse paste ────────────────────────────────────────────────────────────
 function parsePaste(text: string): StyleRow[] {
   const rows: StyleRow[] = []
   let currentVendorId = ''
 
   for (const rawLine of text.split('\n')) {
     const cols = rawLine.split('\t').map(c => c.trim())
-    // Remove completely empty lines
     if (cols.every(c => !c)) continue
 
     if (cols.length === 1) {
-      // Single column — treat as style name (no vendor, no price)
       const val = cols[0]
       if (!val) continue
-      // Could be a vendor ID line (non-price alphanumeric)
       const looksLikePrice = /^\d+(\.\d+)?$/.test(val) && parseFloat(val) < 500
-      const looksLikeVendorId = !looksLikePrice && /^[A-Za-z0-9]/.test(val) && val.length >= 3
-      if (looksLikeVendorId && !val.includes(' ')) {
-        // Could be vendor ID on its own row — treat as style name anyway since it has spaces or not
-        // If it looks more like a code (short, no spaces) treat as vendor id
-        if (val.length <= 10 && !/\s/.test(val)) {
-          currentVendorId = val
-          continue
-        }
+      if (!looksLikePrice && val.length <= 10 && !/\s/.test(val) && /[A-Za-z0-9]/.test(val)) {
+        currentVendorId = val; continue
       }
-      rows.push({ vendorId: currentVendorId, style: val, price: 0 })
+      if (!looksLikePrice) rows.push({ vendorId: currentVendorId, style: val, price: 0 })
       continue
     }
 
-    // Multi-column
-    const col0 = cols[0]
-    const col1 = cols[1] ?? ''
-    const col2 = cols[2] ?? ''
-
+    const col0 = cols[0], col1 = cols[1] ?? '', col2 = cols[2] ?? ''
     const looksLikePrice0 = /^\d+(\.\d+)?$/.test(col0) && parseFloat(col0) < 500
     const looksLikeVendorId = !!col0 && !looksLikePrice0
 
     if (looksLikeVendorId && col1) {
-      // col0 = vendor ID, col1 = style, col2 = price
       currentVendorId = col0
       const price = parseFloat(col2)
       rows.push({ vendorId: col0, style: col1, price: isNaN(price) ? 0 : price })
     } else if (!col0 && col1) {
-      // col0 blank, col1 = style under previous vendor
       const price = parseFloat(col2)
       rows.push({ vendorId: currentVendorId, style: col1, price: isNaN(price) ? 0 : price })
-    } else if (col0 && !col1 && looksLikeVendorId) {
-      // vendor id alone
-      currentVendorId = col0
     } else if (col0 && !looksLikePrice0) {
-      // treat col0 as style name
       const price = parseFloat(col1) || parseFloat(col2)
       rows.push({ vendorId: currentVendorId, style: col0, price: isNaN(price) ? 0 : price })
     }
@@ -85,24 +62,45 @@ function parsePaste(text: string): StyleRow[] {
   return rows.filter(r => r.style)
 }
 
+// ── Step indicator ─────────────────────────────────────────────────────────
+function Steps({ current }: { current: number }) {
+  const steps = ['Paste', 'Endings', 'Colors & Qty', 'Output']
+  return (
+    <div style={{ display: 'flex', gap: 0, alignItems: 'center', marginBottom: 24 }}>
+      {steps.map((s, i) => {
+        const active = i === current, done = i < current
+        return (
+          <div key={s} style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 14px', borderRadius: 20, background: active ? purpleD : done ? '#d1fae5' : '#f3f4f6', color: active ? '#fff' : done ? '#065f46' : '#9ca3af', fontSize: 12, fontWeight: 700, transition: 'all 0.2s' }}>
+              <span style={{ width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, background: active ? 'rgba(255,255,255,0.2)' : done ? '#6ee7b7' : '#e5e7eb', color: active ? '#fff' : done ? '#065f46' : '#9ca3af' }}>{done ? '✓' : i + 1}</span>
+              {s}
+            </div>
+            {i < steps.length - 1 && <div style={{ width: 24, height: 2, background: done ? '#6ee7b7' : '#e5e7eb' }} />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function HairAccPage() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
-  const [paste, setPaste] = useState('')
+  const [user, setUser]       = useState<User | null>(null)
+  const [step, setStep]       = useState(0)
+  const [paste, setPaste]     = useState('')
   const [abbrevMap, setAbbrevMap] = useState<Record<string, string>>({})
-  const [colorMap, setColorMap] = useState<Record<string, ColorEntry[]>>({})
-  const [copied, setCopied] = useState(false)
-  const [showColors, setShowColors] = useState(false)
+  const [colorList, setColorList] = useState<ColorEntry[]>([{ code: '', name: '', qty: '' }])
+  const [copied, setCopied]   = useState(false)
 
   useEffect(() => {
     const u = getSession()
     if (!u) { router.push('/'); return }
     setUser(u)
     setAbbrevMap(loadSaved(LS_ABBREV_KEY, {}))
-    setColorMap(loadSaved(LS_COLORS_KEY, {}))
+    setColorList(loadSaved(LS_COLORS_KEY, [{ code: '', name: '', qty: '' }]))
   }, [router])
 
-  // Parse paste live
+  // Parse paste
   const parsedRows = useMemo(() => parsePaste(paste), [paste])
 
   // Unique styles in order of first appearance
@@ -111,28 +109,33 @@ export default function HairAccPage() {
     [parsedRows]
   )
 
-  // Build output rows live
-  interface OutRow {
-    vendorId: string; styleCode: string; styleName: string
-    color: string; qty: string; price: number; isFirstForVendor: boolean
-  }
+  // Active styles = those whose ending is NOT 'X'
+  const activeStyles = useMemo(() =>
+    uniqueStyles.filter(s => (abbrevMap[s] ?? '').trim().toUpperCase() !== 'X'),
+    [uniqueStyles, abbrevMap]
+  )
+
+  // Build output — only active styles, colors from global list
+  interface OutRow { vendorId: string; styleCode: string; styleName: string; color: string; qty: string; price: number; isFirstForVendor: boolean }
 
   const outRows = useMemo((): OutRow[] => {
     const out: OutRow[] = []
     let lastVendor = ''
+    const activeColors = colorList.filter(c => c.code.trim() || c.name.trim())
+
     for (const r of parsedRows) {
+      if (!activeStyles.includes(r.style)) continue  // skip X'd styles
       const ending = abbrevMap[r.style]?.trim() ?? ''
       const styleCode = ending
         ? (r.vendorId ? `${r.vendorId}${ending}` : ending)
         : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
-      const colors = (colorMap[r.style] ?? []).filter(c => c.code.trim() || c.name.trim())
       const isFirstForVendor = r.vendorId !== lastVendor
       if (r.vendorId) lastVendor = r.vendorId
 
-      if (colors.length === 0) {
+      if (activeColors.length === 0) {
         out.push({ vendorId: r.vendorId, styleCode, styleName: r.style, color: '', qty: '', price: r.price, isFirstForVendor })
       } else {
-        colors.forEach((c, ci) => {
+        activeColors.forEach((c, ci) => {
           const colorStr = c.code.trim() && c.name.trim()
             ? `#${c.code.trim()} ${c.name.trim()}`
             : c.name.trim() || `#${c.code.trim()}`
@@ -141,7 +144,7 @@ export default function HairAccPage() {
       }
     }
     return out
-  }, [parsedRows, abbrevMap, colorMap])
+  }, [parsedRows, activeStyles, abbrevMap, colorList])
 
   function copyOutput() {
     const tsv = outRows.map(r => [
@@ -154,173 +157,218 @@ export default function HairAccPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  function saveAll() {
-    saveTo(LS_ABBREV_KEY, abbrevMap)
-    saveTo(LS_COLORS_KEY, colorMap)
-  }
-
   if (!user) return null
 
-  const inp: React.CSSProperties = {
-    border: `1.5px solid ${border}`, borderRadius: 6, padding: '4px 8px',
-    fontSize: 12, outline: 'none', background: '#fff', color: '#111',
-  }
+  const inp: React.CSSProperties = { border: `1.5px solid ${border}`, borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', background: '#fff', color: '#111' }
 
   return (
     <div style={{ minHeight: '100vh', background: '#f5f3ff', fontFamily: 'Inter, sans-serif' }}>
       {/* Header */}
       <div style={{ background: '#fff', borderBottom: `1.5px solid ${border}`, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 1px 6px rgba(124,58,237,0.07)' }}>
-        <button onClick={() => router.push('/selector')} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>← Menu</button>
+        <button onClick={() => { if (step > 0) setStep(step - 1); else router.push('/selector') }} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
+          ← {step > 0 ? 'Back' : 'Menu'}
+        </button>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 900, color: purpleD }}>Hair Accessories</div>
           <div style={{ fontSize: 11, color: gray }}>Style code generator</div>
         </div>
-        <button onClick={() => setShowColors(c => !c)} style={{ background: showColors ? purpleD : '#f0ebff', color: showColors ? '#fff' : purple, border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-          🎨 {showColors ? 'Hide Colors' : 'Add Colors'}
-        </button>
-        <button onClick={() => { saveAll(); setCopied(true); setTimeout(() => setCopied(false), 1500) }} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
-          💾 Save
-        </button>
-        {outRows.length > 0 && (
+        {step === 3 && (
           <button onClick={copyOutput} style={{ background: copied ? '#d1fae5' : `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: copied ? '#065f46' : '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             {copied ? '✓ Copied!' : 'Copy TSV'}
           </button>
         )}
-        {paste && (
-          <button onClick={() => { setPaste('') }} style={{ background: '#fee2e2', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#dc2626', cursor: 'pointer' }}>Reset</button>
+        {step > 0 && (
+          <button onClick={() => { setStep(0); setPaste('') }} style={{ background: '#fee2e2', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#dc2626', cursor: 'pointer' }}>Reset</button>
         )}
       </div>
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 16px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
+        <Steps current={step} />
 
-        {/* Top: paste area */}
-        <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 20, marginBottom: 16, boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: purpleD, marginBottom: 6 }}>Paste vendor data</div>
-          <div style={{ fontSize: 11, color: gray, marginBottom: 10 }}>
-            Paste tab-separated rows from Excel. Format: <code style={{ background: '#f5f3ff', padding: '1px 6px', borderRadius: 4 }}>VendorID · Style · Price</code> — or just one style name per line.
-          </div>
-          <textarea
-            value={paste}
-            onChange={e => setPaste(e.target.value)}
-            autoFocus
-            placeholder={'MD27001\tHEADBAND\t1.9\n\tLARGE CLIP\t2.3\n\tor just: SCRUNCHIE\nPLEATED HEADBAND\n…'}
-            style={{ width: '100%', height: 140, fontFamily: 'monospace', fontSize: 12, border: `1.5px solid #d4c8f0`, borderRadius: 8, padding: 10, resize: 'vertical', outline: 'none', color: '#374151', lineHeight: 1.6, boxSizing: 'border-box' }}
-          />
-          {paste && (
-            <div style={{ marginTop: 8, fontSize: 11, color: gray }}>
-              {parsedRows.length} rows · {uniqueStyles.length} unique styles
+        {/* ── STEP 0: Paste ───────────────────────────────────────────── */}
+        {step === 0 && (
+          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 24, boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 6 }}>Paste vendor data</div>
+            <div style={{ fontSize: 12, color: gray, marginBottom: 16, lineHeight: 1.6 }}>
+              Paste tab-separated rows from Excel. Format: <code style={{ background: '#f5f3ff', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>VendorID · Style · Price</code> — or just one style name per line.
             </div>
-          )}
-        </div>
+            <textarea
+              value={paste}
+              onChange={e => setPaste(e.target.value)}
+              autoFocus
+              placeholder={'MD27001\tHEADBAND\t1.9\n\tLARGE CLIP\t2.3\nor plain:\nSCRUNCHY\nPLEATED HEADBAND\nFlat headband'}
+              style={{ width: '100%', height: 280, fontFamily: 'monospace', fontSize: 12, border: `1.5px solid #d4c8f0`, borderRadius: 8, padding: 12, resize: 'vertical', outline: 'none', color: '#374151', lineHeight: 1.6, boxSizing: 'border-box' }}
+            />
+            {paste && parsedRows.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 11, color: gray }}>{parsedRows.length} rows · {uniqueStyles.length} unique styles</div>
+            )}
+            <button
+              onClick={() => {
+                if (!paste.trim() || uniqueStyles.length === 0) return
+                // Load saved endings
+                const saved = loadSaved<Record<string, string>>(LS_ABBREV_KEY, {})
+                const merged: Record<string, string> = {}
+                for (const s of uniqueStyles) merged[s] = saved[s] ?? ''
+                setAbbrevMap(merged)
+                setStep(1)
+              }}
+              disabled={!paste.trim() || uniqueStyles.length === 0}
+              style={{ marginTop: 16, background: paste.trim() && uniqueStyles.length > 0 ? `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)` : '#e5e7eb', color: paste.trim() && uniqueStyles.length > 0 ? '#fff' : '#9ca3af', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: paste.trim() ? 'pointer' : 'not-allowed', boxShadow: paste.trim() ? '0 2px 10px rgba(124,58,237,0.3)' : 'none' }}
+            >Next: Set Endings →</button>
+          </div>
+        )}
 
-        {/* Bottom: side by side — endings + output */}
-        {uniqueStyles.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: showColors ? '1fr' : '340px 1fr', gap: 16, alignItems: 'start' }}>
+        {/* ── STEP 1: Endings ─────────────────────────────────────────── */}
+        {step === 1 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
+            {/* Left: endings input */}
+            <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 20, boxShadow: '0 2px 12px rgba(124,58,237,0.07)', position: 'sticky', top: 70 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Set style code endings</div>
+              <div style={{ fontSize: 12, color: gray, marginBottom: 4 }}>
+                Code = VendorID + ending &nbsp;·&nbsp; e.g. <code>MD27001</code> + <code>HC</code> → <code>MD27001HC</code>
+              </div>
+              <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 16, fontWeight: 600 }}>
+                Type <code style={{ background: '#fef2f2', padding: '1px 5px', borderRadius: 4 }}>X</code> to hide a style (not carried).
+              </div>
 
-            {/* Left: unique styles + endings */}
-            {!showColors && (
-              <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 16, boxShadow: '0 2px 12px rgba(124,58,237,0.07)', position: 'sticky', top: 70 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Set style code endings</div>
-                <div style={{ fontSize: 11, color: gray, marginBottom: 14 }}>Code = VendorID + ending (e.g. <code>MD27001</code> + <code>HC</code> → <code>MD27001HC</code>). Saved automatically.</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '0 12px', alignItems: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', paddingBottom: 6, borderBottom: `1px solid #f0f0f0` }}>Style Name</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', paddingBottom: 6, borderBottom: `1px solid #f0f0f0` }}>Ending</div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '0 12px', alignItems: 'center' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', paddingBottom: 6, borderBottom: `1px solid #f0f0f0` }}>Style Name</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', paddingBottom: 6, borderBottom: `1px solid #f0f0f0` }}>Ending</div>
-
-                  {uniqueStyles.map(s => (
+                {uniqueStyles.map(s => {
+                  const ending = abbrevMap[s] ?? ''
+                  const isX = ending.trim().toUpperCase() === 'X'
+                  return (
                     <>
-                      <div key={s + '_l'} style={{ fontSize: 12, color: '#374151', padding: '6px 0', borderBottom: `1px solid #f9f9f9`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s}>{s}</div>
+                      <div key={s + '_l'} style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', padding: '6px 0', borderBottom: `1px solid #f9f9f9`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
                       <div key={s + '_i'} style={{ padding: '4px 0', borderBottom: `1px solid #f9f9f9` }}>
                         <input
-                          value={abbrevMap[s] ?? ''}
+                          value={ending}
                           onChange={e => {
                             const val = e.target.value.toUpperCase()
-                            setAbbrevMap(prev => ({ ...prev, [s]: val }))
-                            saveTo(LS_ABBREV_KEY, { ...abbrevMap, [s]: val })
+                            const updated = { ...abbrevMap, [s]: val }
+                            setAbbrevMap(updated)
+                            saveTo(LS_ABBREV_KEY, updated)
                           }}
                           placeholder="e.g. HC"
-                          style={{ ...inp, width: '100%', fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}
-                          onFocus={e => e.target.style.borderColor = purple}
-                          onBlur={e => e.target.style.borderColor = border}
+                          style={{ ...inp, width: '100%', fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border }}
+                          onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
+                          onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
                         />
                       </div>
                     </>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Colors view (expanded) */}
-            {showColors && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-                {uniqueStyles.map(s => {
-                  const entries = colorMap[s] ?? [{ code: '', name: '', qty: '' }]
-                  const ending = abbrevMap[s]?.trim()
-                  const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
-                  const code = ending ? (vid ? `${vid}${ending}` : ending) : s.slice(0, 8).replace(/\s+/g, '').toUpperCase()
-                  return (
-                    <div key={s} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
-                      <div style={{ background: 'linear-gradient(90deg, #f5f3ff 0%, #fff 100%)', borderBottom: `1px solid ${border}`, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ background: purpleD, color: '#fff', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 800 }}>{code}</span>
-                        <span style={{ fontSize: 12, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s}</span>
-                        <button onClick={() => {
-                          const updated = { ...colorMap, [s]: [...(colorMap[s] ?? []), { code: '', name: '', qty: '' }] }
-                          setColorMap(updated); saveTo(LS_COLORS_KEY, updated)
-                        }} style={{ background: '#f0ebff', border: 'none', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer' }}>+ Color</button>
-                      </div>
-                      <div style={{ padding: '8px 12px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr 52px 20px', gap: 4, marginBottom: 4 }}>
-                          {['Code', 'Name', 'Qty', ''].map(h => <div key={h} style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>{h}</div>)}
-                        </div>
-                        {entries.map((e, ei) => (
-                          <div key={ei} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 52px 20px', gap: 4, marginBottom: 4, alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <span style={{ color: '#9ca3af', fontSize: 12 }}>#</span>
-                              <input value={e.code} onChange={ev => { const u = [...entries]; u[ei] = { ...e, code: ev.target.value }; const cm = { ...colorMap, [s]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="001" style={{ ...inp, fontFamily: 'monospace', fontSize: 11, width: '100%' }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                            </div>
-                            <input value={e.name} onChange={ev => { const u = [...entries]; u[ei] = { ...e, name: ev.target.value }; const cm = { ...colorMap, [s]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="Black" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                            <input value={e.qty} onChange={ev => { const u = [...entries]; u[ei] = { ...e, qty: ev.target.value }; const cm = { ...colorMap, [s]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="12" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                            <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [s]: u.length ? u : [{ code: '', name: '', qty: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 14, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   )
                 })}
               </div>
-            )}
 
-            {/* Right: live output preview */}
-            {!showColors && (
-              <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
-                <div style={{ padding: '10px 14px', background: '#f8f7ff', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: purpleD, flex: 1 }}>Live Preview</div>
-                  <button onClick={copyOutput} style={{ background: copied ? '#d1fae5' : `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: copied ? '#065f46' : '#fff', border: 'none', borderRadius: 7, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    {copied ? '✓ Copied!' : 'Copy TSV'}
-                  </button>
-                </div>
+              <button onClick={() => { saveTo(LS_ABBREV_KEY, abbrevMap); setStep(2) }} style={{ marginTop: 20, background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
+                Next: Colors & Qty →
+              </button>
+            </div>
 
-                {/* Table header */}
-                <div style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 120px 50px 60px', padding: '6px 14px', background: '#fafafa', borderBottom: `1px solid ${border}`, gap: 8 }}>
-                  {['Vendor', 'Style Code', 'Style Name', 'Color', 'Qty', 'Price'].map(h => (
-                    <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
-                  ))}
-                </div>
-
-                <div style={{ maxHeight: 'calc(100vh - 240px)', overflowY: 'auto' }}>
-                  {outRows.map((r, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 120px 50px 60px', padding: '5px 14px', borderBottom: i < outRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff', gap: 8, alignItems: 'center' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: r.isFirstForVendor && r.vendorId ? purpleD : 'transparent' }}>{r.isFirstForVendor ? r.vendorId : ''}</div>
-                      <div style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 700, color: purpleD, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 4, padding: '2px 6px', display: 'inline-block' }}>{r.styleCode}</div>
-                      <div style={{ fontSize: 11, color: '#374151' }}>{r.styleName}</div>
-                      <div style={{ fontSize: 11, color: '#374151' }}>{r.color}</div>
-                      <div style={{ fontSize: 11, color: '#374151' }}>{r.qty}</div>
-                      <div style={{ fontSize: 11, color: '#374151' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : ''}</div>
-                    </div>
-                  ))}
-                </div>
+            {/* Right: live preview */}
+            <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
+              <div style={{ padding: '10px 14px', background: '#f8f7ff', borderBottom: `1px solid ${border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: purpleD }}>Live Preview</div>
+                <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>{activeStyles.length} active · {uniqueStyles.length - activeStyles.length} hidden</div>
               </div>
-            )}
+              <div style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 60px', padding: '6px 14px', background: '#fafafa', borderBottom: `1px solid ${border}`, gap: 8 }}>
+                {['Vendor', 'Style Code', 'Style Name', 'Price'].map(h => (
+                  <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
+                ))}
+              </div>
+              <div style={{ maxHeight: 480, overflowY: 'auto' }}>
+                {parsedRows
+                  .filter(r => activeStyles.includes(r.style))
+                  .map((r, i) => {
+                    const ending = abbrevMap[r.style]?.trim() ?? ''
+                    const styleCode = ending
+                      ? (r.vendorId ? `${r.vendorId}${ending}` : ending)
+                      : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
+                    return (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 60px', padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, background: i % 2 === 0 ? '#fff' : '#fafbff', gap: 8, alignItems: 'center' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>{r.vendorId}</div>
+                        <div style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 700, color: purpleD, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 4, padding: '2px 6px' }}>{styleCode}</div>
+                        <div style={{ fontSize: 11, color: '#374151' }}>{r.style}</div>
+                        <div style={{ fontSize: 11, color: '#374151' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : ''}</div>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 2: Colors & Qty (global list) ──────────────────────── */}
+        {step === 2 && (
+          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 20, boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Colors & Qty</div>
+            <div style={{ fontSize: 12, color: gray, marginBottom: 18 }}>
+              This color list applies to <strong>all</strong> styles. Enter as <code style={{ background: '#f5f3ff', padding: '1px 5px', borderRadius: 4 }}>code name</code> (e.g. <code>001 Black</code>) — shows as <strong>#001 Black</strong>. Saved for next time.
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 28px', gap: 8, marginBottom: 8, maxWidth: 500 }}>
+              {['Code', 'Color Name', 'Qty', ''].map(h => (
+                <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
+              ))}
+            </div>
+
+            {colorList.map((e, ei) => (
+              <div key={ei} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 28px', gap: 8, marginBottom: 8, alignItems: 'center', maxWidth: 500 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: '#9ca3af', fontSize: 13, fontWeight: 700 }}>#</span>
+                  <input value={e.code} onChange={ev => { const u = [...colorList]; u[ei] = { ...e, code: ev.target.value }; setColorList(u); saveTo(LS_COLORS_KEY, u) }} placeholder="001" style={{ ...inp, fontFamily: 'monospace', fontSize: 12, width: '100%' }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                </div>
+                <input value={e.name} onChange={ev => { const u = [...colorList]; u[ei] = { ...e, name: ev.target.value }; setColorList(u); saveTo(LS_COLORS_KEY, u) }} placeholder="Black" style={{ ...inp, fontSize: 12 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                <input value={e.qty} onChange={ev => { const u = [...colorList]; u[ei] = { ...e, qty: ev.target.value }; setColorList(u); saveTo(LS_COLORS_KEY, u) }} placeholder="12" style={{ ...inp, fontSize: 12 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                <button onClick={() => { const u = colorList.filter((_, i) => i !== ei); const final = u.length ? u : [{ code: '', name: '', qty: '' }]; setColorList(final); saveTo(LS_COLORS_KEY, final) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 16, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
+              </div>
+            ))}
+
+            <button onClick={() => { const u = [...colorList, { code: '', name: '', qty: '' }]; setColorList(u); saveTo(LS_COLORS_KEY, u) }} style={{ background: '#f0ebff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer', marginTop: 4 }}>
+              + Add Color
+            </button>
+
+            <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
+              <button onClick={() => { saveTo(LS_COLORS_KEY, colorList); setStep(3) }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
+                Next: See Output →
+              </button>
+              <button onClick={() => setStep(3)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
+                Skip (no colors)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 3: Output ──────────────────────────────────────────── */}
+        {step === 3 && (
+          <div>
+            <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
+              Table is formatted like your original paste — copy and paste straight into your sheet.
+            </div>
+            <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '7px 14px', background: '#fafafa', borderBottom: `1px solid ${border}`, gap: 8 }}>
+                {['Vendor', 'Style Code', 'Style Name', 'Color', 'Qty', 'Price'].map(h => (
+                  <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</div>
+                ))}
+              </div>
+              {outRows.map((r, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '5px 14px', borderBottom: i < outRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff', gap: 8, alignItems: 'center' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: r.isFirstForVendor && r.vendorId ? purpleD : 'transparent' }}>{r.isFirstForVendor ? r.vendorId : ''}</div>
+                  <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: purpleD, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '2px 7px', display: 'inline-block' }}>{r.styleCode}</div>
+                  <div style={{ fontSize: 12, color: '#374151' }}>{r.styleName}</div>
+                  <div style={{ fontSize: 12, color: '#374151' }}>{r.color}</div>
+                  <div style={{ fontSize: 12, color: '#374151' }}>{r.qty}</div>
+                  <div style={{ fontSize: 12, color: '#374151' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : ''}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
+              <button onClick={copyOutput} style={{ background: copied ? '#d1fae5' : `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: copied ? '#065f46' : '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: copied ? 'none' : '0 2px 10px rgba(124,58,237,0.3)' }}>
+                {copied ? '✓ Copied to clipboard!' : 'Copy Table (TSV)'}
+              </button>
+              <button onClick={() => setStep(2)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>← Edit Colors</button>
+            </div>
           </div>
         )}
       </div>
