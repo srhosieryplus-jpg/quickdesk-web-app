@@ -706,16 +706,16 @@ export default function ErrorFormsPage() {
               {/* Modal header */}
               <div style={{ background: redD, color: '#fff', padding: '14px 20px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>{isEdit ? `Edit — ${ef!.brand}` : '+ New Error Form'}</div>
-                  {isEdit && <div style={{ fontSize: 10, opacity: 0.75 }}>{ef!.store_id} · by {displayUser(ef!.logged_by)}</div>}
+                  <div style={{ fontWeight: 900, fontSize: 20, letterSpacing: '-0.01em' }}>{isEdit ? ef!.brand : '+ New Error Form'}</div>
+                  {isEdit && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 2 }}>{ef!.store_id} · by {displayUser(ef!.logged_by)}</div>}
                 </div>
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
 
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-                {/* Row 0: Store + Error Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12, alignItems: 'start' }}>
+                {/* Row 0: Store + Invoice # + Error Date */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 160px', gap: 12, alignItems: 'start' }}>
                 <div>
                   <label style={lbl}>Store ID *</label>
                   {(!isAdmin && modal === 'edit') ? (
@@ -770,6 +770,11 @@ export default function ErrorFormsPage() {
                     <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Defaults to your store</div>
                   )}
                 </div>
+                  {/* Invoice # — same row as Store */}
+                  <div>
+                    <label style={lbl}>Invoice #</label>
+                    <input value={vals.invoice_number ?? ''} onChange={e => upd({ invoice_number: e.target.value || null })} placeholder="Optional" style={inp} />
+                  </div>
                   {/* Error Date — same row as Store */}
                   <div>
                     <label style={lbl}>Error Date</label>
@@ -777,8 +782,8 @@ export default function ErrorFormsPage() {
                   </div>
                 </div>
 
-                {/* Row 1: Brand + Invoice# + Amount */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
+                {/* Row 1: Brand + Amount */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
                   <div style={{ position: 'relative' }}>
                     <label style={lbl}>Brand *</label>
                     <input value={isEdit ? vals.brand : brandInput}
@@ -806,10 +811,6 @@ export default function ErrorFormsPage() {
                         ))}
                       </div>
                     )}
-                  </div>
-                  <div>
-                    <label style={lbl}>Invoice #</label>
-                    <input value={vals.invoice_number ?? ''} onChange={e => upd({ invoice_number: e.target.value || null })} placeholder="Optional" style={inp} />
                   </div>
                   <div>
                     <label style={lbl}>Amount ($)</label>
