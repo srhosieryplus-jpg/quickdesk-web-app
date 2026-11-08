@@ -40,7 +40,7 @@ function saveTo(key: string, val: unknown) {
 }
 
 interface StyleRow { vendorId: string; style: string; price: number }
-interface ColorEntry { code: string; name: string; qty: string }
+interface ColorEntry { code: string; name: string; qty?: string }
 
 // ── Parse paste ────────────────────────────────────────────────────────────
 function parsePaste(text: string): StyleRow[] {
@@ -116,6 +116,7 @@ export default function HairAccPage() {
   const [finalDesc, setFinalDesc]   = useState<Record<string, string>>({})
   const [selected, setSelected]     = useState<Set<string>>(new Set())
   const [copied, setCopied]         = useState(false)
+  const [sameAsPopup, setSameAsPopup] = useState<{ forVid: string; srcVid: string } | null>(null)
 
   useEffect(() => {
     const u = getSession()
@@ -186,7 +187,7 @@ export default function HairAccPage() {
           const colorStr = c.code.trim() && c.name.trim()
             ? `#${c.code.trim()} ${c.name.trim()}`
             : c.name.trim() || `#${c.code.trim()}`
-          out.push({ vendorId: r.vendorId, styleCode, styleName, color: colorStr, qty: c.qty.trim(), price: r.price, isFirstForVendor: ci === 0 && isFirstForVendor })
+          out.push({ vendorId: r.vendorId, styleCode, styleName, color: colorStr, qty: (c.qty ?? '').trim(), price: r.price, isFirstForVendor: ci === 0 && isFirstForVendor })
         })
       }
     }
@@ -429,40 +430,134 @@ export default function HairAccPage() {
                 <span style={{ fontSize: 12, color: gray }}>Set colors per vendor — shared across all selected styles of that vendor.</span>
               </div>
 
+              {/* Same-as popup */}
+              {sameAsPopup && (() => {
+                const srcEntries = (colorMap[sameAsPopup.srcVid] ?? []).filter(c => c.code.trim() || c.name.trim())
+                return (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setSameAsPopup(null)}>
+                    <div style={{ background: '#fff', borderRadius: 14, padding: 20, minWidth: 320, maxWidth: 440, boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }} onClick={ev => ev.stopPropagation()}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Copy colors from {sameAsPopup.srcVid}</div>
+                      <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>Select which colors to auto-fill into <strong>{sameAsPopup.forVid}</strong></div>
+                      {srcEntries.length === 0 ? (
+                        <div style={{ fontSize: 12, color: gray }}>No colors set for {sameAsPopup.srcVid} yet.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+                          {srcEntries.map((c, ci) => {
+                            const label = c.code.trim() && c.name.trim() ? `#${c.code.trim()} ${c.name.trim()}` : c.name.trim() || `#${c.code.trim()}`
+                            return (
+                              <label key={ci} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '5px 8px', borderRadius: 7, background: '#f9f7ff' }}>
+                                <input type="checkbox" defaultChecked style={{ accentColor: purple, width: 15, height: 15 }} id={`saPopup-${ci}`} />
+                                <span style={{ fontSize: 13, color: '#374151', fontFamily: 'monospace' }}>{label}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button onClick={() => setSameAsPopup(null)} style={{ background: '#f3f4f6', border: 'none', borderRadius: 7, padding: '7px 16px', fontSize: 12, fontWeight: 700, color: gray, cursor: 'pointer' }}>Cancel</button>
+                        {srcEntries.length > 0 && (
+                          <button onClick={() => {
+                            const checks = srcEntries.map((_, ci) => (document.getElementById(`saPopup-${ci}`) as HTMLInputElement)?.checked ?? true)
+                            const picked = srcEntries.filter((_, ci) => checks[ci])
+                            if (picked.length === 0) { setSameAsPopup(null); return }
+                            const existing = (colorMap[sameAsPopup!.forVid] ?? []).filter(c => c.code.trim() || c.name.trim())
+                            // Merge: add only colors not already present by code
+                            const toAdd = picked.filter(p => !existing.some(e => e.code.trim() === p.code.trim() && e.name.trim() === p.name.trim()))
+                            const merged = [...existing, ...toAdd.map(c => ({ code: c.code, name: c.name }))]
+                            const cm = { ...colorMap, [sameAsPopup!.forVid]: merged.length ? merged : [{ code: '', name: '' }] }
+                            setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
+                            setSameAsPopup(null)
+                          }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 7, padding: '7px 18px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            Copy Selected →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {orderVids.map(vid => {
-                  const entries: ColorEntry[] = colorMap[vid] ?? [{ code: '', name: '', qty: '' }]
+                {orderVids.map((vid, vidIdx) => {
+                  const entries: ColorEntry[] = colorMap[vid] ?? [{ code: '', name: '' }]
                   const vidStyles = activeStyles.filter(s => parsedRows.some(r => r.style === s && r.vendorId === vid))
+                  // Other vendor cards that have colors set — for "same as" source
+                  const otherVidsWithColors = orderVids.filter((v, i) => i !== vidIdx && (colorMap[v] ?? []).some(c => c.code.trim() || c.name.trim()))
+
+                  const addRow = () => {
+                    const cm = { ...colorMap, [vid]: [...entries, { code: '', name: '' }] }
+                    setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
+                  }
+
                   return (
-                    <div key={vid} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
+                    <div key={vid} data-vid={vid} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
                       {/* Vendor header */}
-                      <div style={{ background: 'linear-gradient(90deg, #f5f3ff 0%, #fff 100%)', borderBottom: `1px solid ${border}`, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ background: 'linear-gradient(90deg, #f5f3ff 0%, #fff 100%)', borderBottom: `1px solid ${border}`, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         <span style={{ background: purpleD, color: '#fff', borderRadius: 5, padding: '2px 10px', fontSize: 12, fontWeight: 900, fontFamily: 'monospace' }}>{vid || '—'}</span>
                         <span style={{ fontSize: 11, color: gray }}>
                           {vidStyles.map(s => abbrevMap[s]?.trim() ?? s).join(' · ')}
                         </span>
-                        <button onClick={() => {
-                          const cm = { ...colorMap, [vid]: [...entries, { code: '', name: '', qty: '' }] }
-                          setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
-                        }} style={{ background: '#f0ebff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer', marginLeft: 'auto' }}>+ Color</button>
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+                          {otherVidsWithColors.length > 0 && (
+                            <select
+                              value=""
+                              onChange={e => { if (e.target.value) setSameAsPopup({ forVid: vid, srcVid: e.target.value }) }}
+                              style={{ ...inp, fontSize: 11, padding: '3px 7px', maxWidth: 160 }}
+                            >
+                              <option value="">Same as…</option>
+                              {otherVidsWithColors.map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          )}
+                          <button onClick={addRow} style={{ background: '#f0ebff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer' }}>+ Color</button>
+                        </div>
                       </div>
 
-                      {/* Color rows */}
+                      {/* Color rows — no qty column */}
                       <div style={{ padding: '8px 14px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '74px 1fr 70px 24px', gap: 6, marginBottom: 4 }}>
-                          {['Code', 'Color Name', 'Qty', ''].map(h => (
+                        <div style={{ display: 'grid', gridTemplateColumns: '74px 1fr 24px', gap: 6, marginBottom: 4 }}>
+                          {['Code', 'Color Name', ''].map(h => (
                             <div key={h} style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
                           ))}
                         </div>
                         {entries.map((e, ei) => (
-                          <div key={ei} style={{ display: 'grid', gridTemplateColumns: '74px 1fr 70px 24px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                          <div key={ei} className="color-row" style={{ display: 'grid', gridTemplateColumns: '74px 1fr 24px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                               <span style={{ color: '#9ca3af', fontSize: 12, fontWeight: 700 }}>#</span>
-                              <input value={e.code} onChange={ev => { const u = [...entries]; u[ei] = { ...e, code: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="001" style={{ ...inp, fontFamily: 'monospace', fontSize: 11, width: '100%' }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                              <input
+                                value={e.code}
+                                onChange={ev => { const u = [...entries]; u[ei] = { ...e, code: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }}
+                                onKeyDown={ev => { if (ev.key === 'Enter') { ev.preventDefault(); (ev.currentTarget.closest('.color-row')?.querySelector('.name-inp') as HTMLInputElement)?.focus() } }}
+                                placeholder="001"
+                                style={{ ...inp, fontFamily: 'monospace', fontSize: 11, width: '100%' }}
+                                onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border}
+                              />
                             </div>
-                            <input value={e.name} onChange={ev => { const u = [...entries]; u[ei] = { ...e, name: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="Black" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                            <input value={e.qty} onChange={ev => { const u = [...entries]; u[ei] = { ...e, qty: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="12" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                            <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [vid]: u.length ? u : [{ code: '', name: '', qty: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 15, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
+                            <input
+                              className="name-inp"
+                              value={e.name}
+                              onChange={ev => { const u = [...entries]; u[ei] = { ...e, name: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }}
+                              onKeyDown={ev => {
+                                if (ev.key === 'Enter') {
+                                  ev.preventDefault()
+                                  if (ei === entries.length - 1) {
+                                    addRow()
+                                    setTimeout(() => {
+                                      const rows = document.querySelectorAll(`[data-vid="${vid}"] .color-row`)
+                                      const next = rows[ei + 1]?.querySelector('input') as HTMLInputElement
+                                      next?.focus()
+                                    }, 30)
+                                  } else {
+                                    const rows = document.querySelectorAll(`[data-vid="${vid}"] .color-row`)
+                                    const next = rows[ei + 1]?.querySelector('input') as HTMLInputElement
+                                    next?.focus()
+                                  }
+                                }
+                              }}
+                              placeholder="Black"
+                              style={{ ...inp, fontSize: 11 }}
+                              onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border}
+                            />
+                            <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [vid]: u.length ? u : [{ code: '', name: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 15, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
                           </div>
                         ))}
                       </div>
