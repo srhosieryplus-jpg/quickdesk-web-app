@@ -10,8 +10,8 @@ const gray = '#6b7280'
 const border = '#e5e7eb'
 
 const LS_ABBREV_KEY  = 'hairAcc_abbrevMap'
-const LS_COLORS_KEY  = 'hairAcc_colorList'   // global color list
-const LS_COLMAP_KEY  = 'hairAcc_colMapping'
+const LS_COLORS_KEY  = 'hairAcc_colorMap'    // per-style color map
+const LS_SAMEAS_KEY  = 'hairAcc_sameAs'      // per-style "same as" link
 
 function loadSaved<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback } catch { return fallback }
@@ -89,7 +89,10 @@ export default function HairAccPage() {
   const [step, setStep]       = useState(0)
   const [paste, setPaste]     = useState('')
   const [abbrevMap, setAbbrevMap] = useState<Record<string, string>>({})
-  const [colorList, setColorList] = useState<ColorEntry[]>([{ code: '', name: '', qty: '' }])
+  // Per-style color map: style → ColorEntry[]
+  const [colorMap, setColorMap] = useState<Record<string, ColorEntry[]>>({})
+  // Per-style "same as" link: style → other style name (resolve colors from that style)
+  const [sameAs, setSameAs] = useState<Record<string, string>>({})
   const [copied, setCopied]   = useState(false)
 
   useEffect(() => {
@@ -97,7 +100,8 @@ export default function HairAccPage() {
     if (!u) { router.push('/'); return }
     setUser(u)
     setAbbrevMap(loadSaved(LS_ABBREV_KEY, {}))
-    setColorList(loadSaved(LS_COLORS_KEY, [{ code: '', name: '', qty: '' }]))
+    setColorMap(loadSaved(LS_COLORS_KEY, {}))
+    setSameAs(loadSaved(LS_SAMEAS_KEY, {}))
   }, [router])
 
   // Parse paste
@@ -118,24 +122,31 @@ export default function HairAccPage() {
   // Build output — only active styles, colors from global list
   interface OutRow { vendorId: string; styleCode: string; styleName: string; color: string; qty: string; price: number; isFirstForVendor: boolean }
 
+  // Resolve colors for a style: follow sameAs chain (max 1 hop to avoid cycles)
+  function resolveColors(style: string): ColorEntry[] {
+    const linked = sameAs[style]?.trim()
+    const source = linked ? (colorMap[linked] ?? []) : (colorMap[style] ?? [])
+    return source.filter(c => c.code.trim() || c.name.trim())
+  }
+
   const outRows = useMemo((): OutRow[] => {
     const out: OutRow[] = []
     let lastVendor = ''
-    const activeColors = colorList.filter(c => c.code.trim() || c.name.trim())
 
     for (const r of parsedRows) {
-      if (!activeStyles.includes(r.style)) continue  // skip X'd styles
+      if (!activeStyles.includes(r.style)) continue
       const ending = abbrevMap[r.style]?.trim() ?? ''
       const styleCode = ending
         ? (r.vendorId ? `${r.vendorId}${ending}` : ending)
         : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
       const isFirstForVendor = r.vendorId !== lastVendor
       if (r.vendorId) lastVendor = r.vendorId
+      const colors = resolveColors(r.style)
 
-      if (activeColors.length === 0) {
+      if (colors.length === 0) {
         out.push({ vendorId: r.vendorId, styleCode, styleName: r.style, color: '', qty: '', price: r.price, isFirstForVendor })
       } else {
-        activeColors.forEach((c, ci) => {
+        colors.forEach((c, ci) => {
           const colorStr = c.code.trim() && c.name.trim()
             ? `#${c.code.trim()} ${c.name.trim()}`
             : c.name.trim() || `#${c.code.trim()}`
@@ -144,7 +155,8 @@ export default function HairAccPage() {
       }
     }
     return out
-  }, [parsedRows, activeStyles, abbrevMap, colorList])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsedRows, activeStyles, abbrevMap, colorMap, sameAs])
 
   function copyOutput() {
     const tsv = outRows.map(r => [
@@ -261,7 +273,15 @@ export default function HairAccPage() {
                 })}
               </div>
 
-              <button onClick={() => { saveTo(LS_ABBREV_KEY, abbrevMap); setStep(2) }} style={{ marginTop: 20, background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
+              <button onClick={() => {
+                saveTo(LS_ABBREV_KEY, abbrevMap)
+                // Ensure every active style has an entry in colorMap
+                const saved = loadSaved<Record<string, ColorEntry[]>>(LS_COLORS_KEY, {})
+                const merged: Record<string, ColorEntry[]> = {}
+                for (const s of activeStyles) merged[s] = saved[s] ?? [{ code: '', name: '', qty: '' }]
+                setColorMap(merged)
+                setStep(2)
+              }} style={{ marginTop: 20, background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
                 Next: Colors & Qty →
               </button>
             </div>
@@ -299,38 +319,93 @@ export default function HairAccPage() {
           </div>
         )}
 
-        {/* ── STEP 2: Colors & Qty (global list) ──────────────────────── */}
+        {/* ── STEP 2: Colors & Qty (per style) ────────────────────────── */}
         {step === 2 && (
-          <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 20, boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Colors & Qty</div>
-            <div style={{ fontSize: 12, color: gray, marginBottom: 18 }}>
-              This color list applies to <strong>all</strong> styles. Enter as <code style={{ background: '#f5f3ff', padding: '1px 5px', borderRadius: 4 }}>code name</code> (e.g. <code>001 Black</code>) — shows as <strong>#001 Black</strong>. Saved for next time.
+          <div>
+            <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
+              Set colors per style. Use <strong>Same as…</strong> to copy another style's colors. Enter as <code style={{ background: '#f5f3ff', padding: '1px 5px', borderRadius: 4 }}>code name</code> (e.g. <code>001 Black</code>). Saved for next time.
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 28px', gap: 8, marginBottom: 8, maxWidth: 500 }}>
-              {['Code', 'Color Name', 'Qty', ''].map(h => (
-                <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {activeStyles.map(s => {
+                const linked = sameAs[s]?.trim() ?? ''
+                const isLinked = !!linked
+                const entries = colorMap[s] ?? [{ code: '', name: '', qty: '' }]
+                const ending = abbrevMap[s]?.trim()
+                const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
+                const code = ending ? (vid ? `${vid}${ending}` : ending) : s.slice(0, 8).replace(/\s+/g, '').toUpperCase()
+                // Other active styles that have their own colors (not linked themselves) — for sameAs picker
+                const linkTargets = activeStyles.filter(o => o !== s && !sameAs[o])
+
+                return (
+                  <div key={s} style={{ background: '#fff', border: `1.5px solid ${isLinked ? '#c4b5fd' : border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
+                    {/* Style header */}
+                    <div style={{ background: isLinked ? '#f5f3ff' : 'linear-gradient(90deg, #f5f3ff 0%, #fff 100%)', borderBottom: `1px solid ${border}`, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <span style={{ background: purpleD, color: '#fff', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 800, flexShrink: 0 }}>{code}</span>
+                      <span style={{ fontSize: 13, color: '#374151', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s}</span>
+
+                      {/* Same as picker */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>Same as:</span>
+                        <select
+                          value={linked}
+                          onChange={e => {
+                            const val = e.target.value
+                            const updated = { ...sameAs, [s]: val }
+                            setSameAs(updated); saveTo(LS_SAMEAS_KEY, updated)
+                          }}
+                          style={{ ...inp, fontSize: 11, padding: '3px 7px', maxWidth: 160 }}
+                        >
+                          <option value="">— own colors —</option>
+                          {linkTargets.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </div>
+
+                      {!isLinked && (
+                        <button onClick={() => {
+                          const updated = { ...colorMap, [s]: [...entries, { code: '', name: '', qty: '' }] }
+                          setColorMap(updated); saveTo(LS_COLORS_KEY, updated)
+                        }} style={{ background: '#f0ebff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer', flexShrink: 0 }}>+ Color</button>
+                      )}
+                    </div>
+
+                    {/* Color rows */}
+                    {isLinked ? (
+                      <div style={{ padding: '8px 14px', fontSize: 12, color: purpleD, fontWeight: 600 }}>
+                        🔗 Using colors from <strong>{linked}</strong>
+                        {colorMap[linked] && (
+                          <span style={{ color: gray, fontWeight: 400, marginLeft: 8 }}>
+                            ({colorMap[linked].filter(c => c.code || c.name).length} colors)
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ padding: '8px 14px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '74px 1fr 70px 24px', gap: 6, marginBottom: 4 }}>
+                          {['Code', 'Color Name', 'Qty', ''].map(h => (
+                            <div key={h} style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
+                          ))}
+                        </div>
+                        {entries.map((e, ei) => (
+                          <div key={ei} style={{ display: 'grid', gridTemplateColumns: '74px 1fr 70px 24px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <span style={{ color: '#9ca3af', fontSize: 12, fontWeight: 700 }}>#</span>
+                              <input value={e.code} onChange={ev => { const u = [...entries]; u[ei] = { ...e, code: ev.target.value }; const cm = { ...colorMap, [s]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="001" style={{ ...inp, fontFamily: 'monospace', fontSize: 11, width: '100%' }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                            </div>
+                            <input value={e.name} onChange={ev => { const u = [...entries]; u[ei] = { ...e, name: ev.target.value }; const cm = { ...colorMap, [s]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="Black" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                            <input value={e.qty} onChange={ev => { const u = [...entries]; u[ei] = { ...e, qty: ev.target.value }; const cm = { ...colorMap, [s]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="12" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                            <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [s]: u.length ? u : [{ code: '', name: '', qty: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 15, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-
-            {colorList.map((e, ei) => (
-              <div key={ei} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 28px', gap: 8, marginBottom: 8, alignItems: 'center', maxWidth: 500 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ color: '#9ca3af', fontSize: 13, fontWeight: 700 }}>#</span>
-                  <input value={e.code} onChange={ev => { const u = [...colorList]; u[ei] = { ...e, code: ev.target.value }; setColorList(u); saveTo(LS_COLORS_KEY, u) }} placeholder="001" style={{ ...inp, fontFamily: 'monospace', fontSize: 12, width: '100%' }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                </div>
-                <input value={e.name} onChange={ev => { const u = [...colorList]; u[ei] = { ...e, name: ev.target.value }; setColorList(u); saveTo(LS_COLORS_KEY, u) }} placeholder="Black" style={{ ...inp, fontSize: 12 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                <input value={e.qty} onChange={ev => { const u = [...colorList]; u[ei] = { ...e, qty: ev.target.value }; setColorList(u); saveTo(LS_COLORS_KEY, u) }} placeholder="12" style={{ ...inp, fontSize: 12 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                <button onClick={() => { const u = colorList.filter((_, i) => i !== ei); const final = u.length ? u : [{ code: '', name: '', qty: '' }]; setColorList(final); saveTo(LS_COLORS_KEY, final) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 16, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
-              </div>
-            ))}
-
-            <button onClick={() => { const u = [...colorList, { code: '', name: '', qty: '' }]; setColorList(u); saveTo(LS_COLORS_KEY, u) }} style={{ background: '#f0ebff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer', marginTop: 4 }}>
-              + Add Color
-            </button>
 
             <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
-              <button onClick={() => { saveTo(LS_COLORS_KEY, colorList); setStep(3) }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
+              <button onClick={() => { saveTo(LS_COLORS_KEY, colorMap); saveTo(LS_SAMEAS_KEY, sameAs); setStep(3) }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
                 Next: See Output →
               </button>
               <button onClick={() => setStep(3)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
