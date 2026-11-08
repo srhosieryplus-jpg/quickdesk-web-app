@@ -17,8 +17,9 @@ const LS_FINALDESC_KEY = 'hairAcc_finalDesc'   // per-style final description (e
 const LS_SELECTED_KEY  = 'hairAcc_selected'    // vendorIds selected to order
 const LS_QTY_KEY       = 'hairAcc_qtyMap'      // qty per vendorId→ending→colorKey
 const LS_PIVOT_STYLES  = 'hairAcc_pivotStyles' // per-vendorId set of endings included in pivot
-const LS_ALIAS_KEY     = 'hairAcc_aliasMap'    // style → canonical style name it aliases
-const LS_RETAIL_KEY    = 'hairAcc_retailMap'   // per-vendorId→ending retail price
+const LS_ALIAS_KEY        = 'hairAcc_aliasMap'      // style → canonical style name it aliases
+const LS_RETAIL_KEY       = 'hairAcc_retailMap'     // per-vendorId→ending retail price (manual overrides)
+const LS_DEFAULT_RETAIL   = 'hairAcc_defaultRetail' // per-style default retail price
 
 // Strip parenthetical notes and apply proper title case
 function toTitleCase(s: string): string {
@@ -129,8 +130,10 @@ export default function HairAccPage() {
   // pivotStyles[vendorId] = Set of ending codes included in pivot
   const [pivotStyles, setPivotStyles] = useState<Record<string, string[]>>({})
   const [pivotPopup, setPivotPopup]   = useState<string | null>(null) // vendorId
-  // retailMap[vendorId][ending] = retail price string
+  // retailMap[vendorId][ending] = retail price string (manual override)
   const [retailMap, setRetailMap]     = useState<Record<string, Record<string, string>>>({})
+  // defaultRetail[style] = default retail price for all vendors (set in Style Endings)
+  const [defaultRetail, setDefaultRetail] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const u = getSession()
@@ -145,6 +148,7 @@ export default function HairAccPage() {
     setPivotStyles(loadSaved(LS_PIVOT_STYLES, {}))
     setAliasMap(loadSaved(LS_ALIAS_KEY, {}))
     setRetailMap(loadSaved(LS_RETAIL_KEY, {}))
+    setDefaultRetail(loadSaved(LS_DEFAULT_RETAIL, {}))
     const sel: string[] = loadSaved(LS_SELECTED_KEY, [])
     setSelected(new Set(sel))
   }, [router])
@@ -225,7 +229,9 @@ export default function HairAccPage() {
       if (r.vendorId) lastVendor = r.vendorId
       const colors = resolveColors(r.vendorId)
 
-      const retail = (retailMap[r.vendorId]?.[ending] ?? '').trim()
+      const manualRetail = retailMap[r.vendorId]?.[ending]
+      const drKey = Object.keys(defaultRetail).find(k => k.toLowerCase() === r.style.toLowerCase())
+      const retail = (manualRetail !== undefined ? manualRetail : (drKey ? defaultRetail[drKey] : '')).trim()
       if (colors.length === 0) {
         out.push({ vendorId: r.vendorId, styleCode, styleName, color: '', qty: '', price: r.price, retail, isFirstForVendor })
       } else {
@@ -241,7 +247,7 @@ export default function HairAccPage() {
     }
     return out
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, preDesc, selectedStyles, qtyMap, pivotStyles, retailMap])
+  }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, preDesc, selectedStyles, qtyMap, pivotStyles, retailMap, defaultRetail])
 
   function toProper(s: string) {
     return s.toLowerCase().replace(/\b\w/g, l => l.toUpperCase())
@@ -485,10 +491,11 @@ export default function HairAccPage() {
                     <div style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>Style Endings</div>
                     <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>VendorID + Ending = Style Code · Adjust description text · Type <span style={{ color: '#dc2626', fontWeight: 700 }}>X</span> to hide</div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f0f0f0` }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 80px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f0f0f0` }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Item Name</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Description Ending</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Code</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Default Retail</div>
                   </div>
                   {uniqueStyles.map(s => {
                     const ownEnding = abbrevMap[s] ?? ''
@@ -500,7 +507,7 @@ export default function HairAccPage() {
                     const savedDesc = rawSaved === toTitleCase(s) ? '' : rawSaved
                     const previewDesc = savedDesc || toTitleCase(s)
                     return (
-                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
+                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 80px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
                         <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <input
@@ -536,6 +543,19 @@ export default function HairAccPage() {
                           style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border, width: '100%' }}
                           onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
                           onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
+                        />
+                        {/* Default retail price — auto-fills vendor retail row, editable per vendor */}
+                        <input
+                          value={defaultRetail[s] ?? ''}
+                          disabled={isX}
+                          onChange={e => {
+                            const dr = { ...defaultRetail, [s]: e.target.value }
+                            setDefaultRetail(dr); saveTo(LS_DEFAULT_RETAIL, dr)
+                          }}
+                          placeholder="$0.00"
+                          style={{ ...inp, fontSize: 11, background: isX ? '#f9fafb' : '#f0fdf4', color: '#059669', borderColor: '#a7f3d0', width: '100%' }}
+                          onFocus={e => { if (!isX) e.target.style.borderColor = '#059669' }}
+                          onBlur={e => { e.target.style.borderColor = '#a7f3d0' }}
                         />
                       </div>
                     )
@@ -848,18 +868,25 @@ export default function HairAccPage() {
                                     <th style={{ padding: '5px 8px', background: '#fff7ed', borderBottom: `1px solid #fed7aa`, textAlign: 'left', fontSize: 10, color: '#92400e', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Retail</th>
                                     {vidUniq2.map(r => {
                                       const ending2r = resolveEnding(r.style)
+                                      // Find default retail: look up by style name (case-insensitive) in defaultRetail
+                                      const drKey = Object.keys(defaultRetail).find(k => k.toLowerCase() === r.style.toLowerCase())
+                                      const defaultVal = drKey ? (defaultRetail[drKey] ?? '') : ''
+                                      const manualVal = curRetail2[ending2r]
+                                      // Show manual if set, else auto-fill from default
+                                      const retailVal = manualVal !== undefined ? manualVal : defaultVal
+                                      const isDefault = manualVal === undefined && !!defaultVal
                                       return (
                                         <th key={r.style} style={{ padding: '3px 4px', background: '#fff7ed', borderBottom: `1px solid #fed7aa`, textAlign: 'center' }}>
                                           <input
-                                            value={curRetail2[ending2r] ?? ''}
+                                            value={retailVal}
                                             onChange={ev => {
                                               const nr = { ...retailMap, [vid]: { ...curRetail2, [ending2r]: ev.target.value } }
                                               setRetailMap(nr); saveTo(LS_RETAIL_KEY, nr)
                                             }}
-                                            placeholder="$0.00"
-                                            style={{ ...inp, fontSize: 11, width: 70, textAlign: 'center', background: '#fff7ed' }}
+                                            placeholder={defaultVal || '$0.00'}
+                                            style={{ ...inp, fontSize: 11, width: 70, textAlign: 'center', background: isDefault ? '#f0fdf4' : '#fff7ed', color: isDefault ? '#059669' : '#374151', borderColor: isDefault ? '#a7f3d0' : border }}
                                             onFocus={ev => ev.target.style.borderColor = '#f97316'}
-                                            onBlur={ev => ev.target.style.borderColor = border}
+                                            onBlur={ev => ev.target.style.borderColor = isDefault ? '#a7f3d0' : border}
                                           />
                                         </th>
                                       )
