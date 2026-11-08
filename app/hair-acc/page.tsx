@@ -266,16 +266,15 @@ export default function HairAccPage() {
 
         {/* ── STEP 1: Endings & Order (two-panel) ─────────────────────── */}
         {step === 1 && (() => {
-          // Build vendor groups from uniqueStyles (all, including X'd)
-          const vendorGroups = Array.from(
-            uniqueStyles.reduce((m, s) => {
-              const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
-              if (!m.has(vid)) m.set(vid, [])
-              m.get(vid)!.push(s)
-              return m
-            }, new Map<string, string[]>())
-          )
-          // Active vendor groups (no X) for right panel
+          // Build vendor groups directly from parsedRows to preserve all vendor→style mappings
+          const vendorGroupMap = new Map<string, string[]>()
+          for (const r of parsedRows) {
+            if (!vendorGroupMap.has(r.vendorId)) vendorGroupMap.set(r.vendorId, [])
+            const arr = vendorGroupMap.get(r.vendorId)!
+            if (!arr.includes(r.style)) arr.push(r.style)
+          }
+          const vendorGroups = Array.from(vendorGroupMap)
+          // Right panel: all vendors, keeping only non-X styles
           const activeVendorGroups = vendorGroups.map(([vid, styles]) => ({
             vid,
             styles: styles.filter(s => (abbrevMap[s] ?? '').trim().toUpperCase() !== 'X')
