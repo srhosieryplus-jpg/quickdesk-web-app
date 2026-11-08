@@ -10,11 +10,13 @@ const gray = '#6b7280'
 const border = '#e5e7eb'
 
 const LS_ABBREV_KEY    = 'hairAcc_abbrevMap'
-const LS_COLORS_KEY    = 'hairAcc_colorMap'    // per-style color map
+const LS_COLORS_KEY    = 'hairAcc_colorMap'    // per-vendorId color list
 const LS_SAMEAS_KEY    = 'hairAcc_sameAs'      // per-style "same as" link
 const LS_PREDESC_KEY   = 'hairAcc_preDesc'     // per-vendorId pre-description
 const LS_FINALDESC_KEY = 'hairAcc_finalDesc'   // per-style final description (editable)
 const LS_SELECTED_KEY  = 'hairAcc_selected'    // vendorIds selected to order
+const LS_QTY_KEY       = 'hairAcc_qtyMap'      // qty per vendorId→ending→colorKey
+const LS_PIVOT_STYLES  = 'hairAcc_pivotStyles' // per-vendorId set of endings included in pivot
 
 // Strip parenthetical notes and apply proper title case
 function toTitleCase(s: string): string {
@@ -117,6 +119,11 @@ export default function HairAccPage() {
   const [selected, setSelected]     = useState<Set<string>>(new Set())
   const [copied, setCopied]         = useState(false)
   const [sameAsPopup, setSameAsPopup] = useState<{ forVid: string; srcVid: string } | null>(null)
+  // qtyMap[vendorId][ending][colorKey] = qty string
+  const [qtyMap, setQtyMap]         = useState<Record<string, Record<string, Record<string, string>>>>({})
+  // pivotStyles[vendorId] = Set of ending codes included in pivot
+  const [pivotStyles, setPivotStyles] = useState<Record<string, string[]>>({})
+  const [pivotPopup, setPivotPopup]   = useState<string | null>(null) // vendorId
 
   useEffect(() => {
     const u = getSession()
@@ -127,6 +134,8 @@ export default function HairAccPage() {
     setSameAs(loadSaved(LS_SAMEAS_KEY, {}))
     setPreDesc(loadSaved(LS_PREDESC_KEY, {}))
     setFinalDesc(loadSaved(LS_FINALDESC_KEY, {}))
+    setQtyMap(loadSaved(LS_QTY_KEY, {}))
+    setPivotStyles(loadSaved(LS_PIVOT_STYLES, {}))
     const sel: string[] = loadSaved(LS_SELECTED_KEY, [])
     setSelected(new Set(sel))
   }, [router])
@@ -158,10 +167,12 @@ export default function HairAccPage() {
   // Build output — only active styles, colors from global list
   interface OutRow { vendorId: string; styleCode: string; styleName: string; color: string; qty: string; price: number; isFirstForVendor: boolean }
 
-  // Resolve colors for a style: look up by vendorId (colors shared across all styles of a vendor)
+  // color key used in qtyMap: "code|name"
+  function colorKey(c: ColorEntry) { return `${c.code.trim()}|${c.name.trim()}` }
+
+  // Resolve colors for a vendorId
   function resolveColors(vendorId: string): ColorEntry[] {
-    const source = colorMap[vendorId] ?? []
-    return source.filter(c => c.code.trim() || c.name.trim())
+    return (colorMap[vendorId] ?? []).filter(c => c.code.trim() || c.name.trim())
   }
 
   const outRows = useMemo((): OutRow[] => {
@@ -172,6 +183,9 @@ export default function HairAccPage() {
     for (const r of parsedRows) {
       if (!orderSet.includes(r.style)) continue
       const ending = abbrevMap[r.style]?.trim() ?? ''
+      // Skip styles whose ending is not in this vendor's pivotStyles (if pivot has been configured)
+      const vPivot = pivotStyles[r.vendorId]
+      if (vPivot && vPivot.length > 0 && ending && !vPivot.includes(ending)) continue
       const styleCode = ending
         ? (r.vendorId ? `${r.vendorId}${ending}` : ending)
         : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
@@ -187,13 +201,14 @@ export default function HairAccPage() {
           const colorStr = c.code.trim() && c.name.trim()
             ? `#${c.code.trim()} ${c.name.trim()}`
             : c.name.trim() || `#${c.code.trim()}`
-          out.push({ vendorId: r.vendorId, styleCode, styleName, color: colorStr, qty: (c.qty ?? '').trim(), price: r.price, isFirstForVendor: ci === 0 && isFirstForVendor })
+          const qty = (qtyMap[r.vendorId]?.[ending]?.[colorKey(c)] ?? '').trim()
+          out.push({ vendorId: r.vendorId, styleCode, styleName, color: colorStr, qty, price: r.price, isFirstForVendor: ci === 0 && isFirstForVendor })
         })
       }
     }
     return out
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, selectedStyles])
+  }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, selectedStyles, qtyMap, pivotStyles])
 
   function copyOutput() {
     const tsv = outRows.map(r => [
@@ -477,6 +492,117 @@ export default function HairAccPage() {
                 )
               })()}
 
+              {/* ── Pivot popup ── */}
+              {pivotPopup && (() => {
+                const vid = pivotPopup
+                const colors = resolveColors(vid)
+                const vidStyleRows = parsedRows.filter(r => r.vendorId === vid && activeStyles.includes(r.style))
+                // Dedupe styles preserving order
+                const seen = new Set<string>()
+                const vidUniq = vidStyleRows.filter(r => { if (seen.has(r.style)) return false; seen.add(r.style); return true })
+                const curPivot = pivotStyles[vid] ?? vidUniq.map(r => abbrevMap[r.style]?.trim()).filter(Boolean) as string[]
+                const curQty = qtyMap[vid] ?? {}
+
+                return (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setPivotPopup(null)}>
+                    <div style={{ background: '#fff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 680, maxHeight: '85vh', overflow: 'auto', boxShadow: '0 12px 48px rgba(0,0,0,0.22)' }} onClick={e => e.stopPropagation()}>
+
+                      {/* Header */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                        <span style={{ background: purpleD, color: '#fff', borderRadius: 6, padding: '3px 12px', fontSize: 13, fontWeight: 900, fontFamily: 'monospace' }}>{vid}</span>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>Qty per Color × Style</span>
+                        <button onClick={() => setPivotPopup(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: gray, lineHeight: 1 }}>×</button>
+                      </div>
+
+                      {colors.length === 0 ? (
+                        <div style={{ fontSize: 13, color: gray, padding: '20px 0' }}>Add colors to this vendor first in the step above.</div>
+                      ) : (
+                        <>
+                          {/* Style column toggles */}
+                          <div style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Include styles in order</div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              {vidUniq.map(r => {
+                                const ending = abbrevMap[r.style]?.trim() ?? ''
+                                if (!ending) return null
+                                const on = curPivot.includes(ending)
+                                return (
+                                  <button key={r.style} onClick={() => {
+                                    const next = on ? curPivot.filter(e => e !== ending) : [...curPivot, ending]
+                                    const ps = { ...pivotStyles, [vid]: next }
+                                    setPivotStyles(ps); saveTo(LS_PIVOT_STYLES, ps)
+                                  }} style={{ background: on ? purpleD : '#f3f4f6', color: on ? '#fff' : '#374151', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'monospace' }}>
+                                    {ending}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Pivot table */}
+                          {curPivot.length > 0 && (
+                            <div style={{ overflowX: 'auto' }}>
+                              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ padding: '6px 10px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Color</th>
+                                    {curPivot.map(ending => (
+                                      <th key={ending} style={{ padding: '6px 10px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontFamily: 'monospace', fontWeight: 900, color: purpleD, whiteSpace: 'nowrap' }}>{vid}{ending}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {colors.map((c, ci) => {
+                                    const ck = colorKey(c)
+                                    const label = c.code.trim() && c.name.trim() ? `#${c.code} ${c.name}` : c.name.trim() || `#${c.code.trim()}`
+                                    return (
+                                      <tr key={ci} style={{ background: ci % 2 === 0 ? '#fff' : '#fafbff' }}>
+                                        <td style={{ padding: '5px 10px', borderBottom: `1px solid ${border}`, fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#374151' }}>{label}</td>
+                                        {curPivot.map(ending => {
+                                          const val = curQty[ending]?.[ck] ?? ''
+                                          return (
+                                            <td key={ending} style={{ padding: '4px 6px', borderBottom: `1px solid ${border}`, textAlign: 'center' }}>
+                                              <input
+                                                value={val}
+                                                onChange={ev => {
+                                                  const nq = { ...qtyMap, [vid]: { ...curQty, [ending]: { ...(curQty[ending] ?? {}), [ck]: ev.target.value } } }
+                                                  setQtyMap(nq); saveTo(LS_QTY_KEY, nq)
+                                                }}
+                                                onKeyDown={ev => {
+                                                  if (ev.key === 'Enter' || ev.key === 'Tab') {
+                                                    ev.preventDefault()
+                                                    const inputs = Array.from(document.querySelectorAll('.pivot-qty-input')) as HTMLInputElement[]
+                                                    const idx = inputs.indexOf(ev.currentTarget as HTMLInputElement)
+                                                    if (idx >= 0 && idx < inputs.length - 1) inputs[idx + 1].focus()
+                                                  }
+                                                }}
+                                                className="pivot-qty-input"
+                                                placeholder="—"
+                                                style={{ width: 52, textAlign: 'center', border: `1.5px solid ${border}`, borderRadius: 5, padding: '3px 6px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }}
+                                                onFocus={ev => ev.target.style.borderColor = purple}
+                                                onBlur={ev => ev.target.style.borderColor = border}
+                                              />
+                                            </td>
+                                          )
+                                        })}
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                        <button onClick={() => setPivotPopup(null)} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Done</button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {orderVids.map((vid, vidIdx) => {
                   const entries: ColorEntry[] = colorMap[vid] ?? [{ code: '', name: '' }]
@@ -509,6 +635,7 @@ export default function HairAccPage() {
                             </select>
                           )}
                           <button onClick={addRow} style={{ background: '#f0ebff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer' }}>+ Color</button>
+                          <button onClick={() => setPivotPopup(vid)} style={{ background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Set Qty →</button>
                         </div>
                       </div>
 
