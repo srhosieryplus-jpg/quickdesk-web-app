@@ -1999,16 +1999,21 @@ export default function SeasonBookPage() {
                             })}
 
                             {/* Store total footer */}
-                            <div style={{ background: '#f5f3ff', borderTop: `1.5px solid ${border}`, padding: '7px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                              <div style={{ fontSize: 11, color: gray, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                <span>Total: <strong style={{ color: purpleD }}>{fmt$(storeTotInit)}</strong></span>
-                                <span>Deposit: <strong style={{ color: '#166534' }}>{fmt$(storeDeposit)}</strong></span>
-                                {storeDuties > 0 && <span>Duties: <strong style={{ color: '#92400e' }}>{fmt$(storeDuties)}</strong></span>}
-                              </div>
-                              <span style={{ fontSize: 13, fontWeight: 800, color: storeBal > 0.001 ? '#dc2626' : '#166534' }}>
-                                {storeBal > 0.001 ? `Owe ${fmt$(storeBal)}` : '✓ Clear'}
-                              </span>
-                            </div>
+                            {(() => {
+                              const storeCurrency = (sRows[0]?.currency as Currency) ?? 'USD'
+                              return (
+                                <div style={{ background: '#f5f3ff', borderTop: `1.5px solid ${border}`, padding: '7px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                                  <div style={{ fontSize: 11, color: gray, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                                    <span>Total: <strong style={{ color: purpleD }}>{fmt$(storeTotInit, storeCurrency)}</strong></span>
+                                    <span>Deposit: <strong style={{ color: '#166534' }}>{fmt$(storeDeposit, storeCurrency)}</strong></span>
+                                    {storeDuties > 0 && <span>Duties: <strong style={{ color: '#92400e' }}>{fmt$(storeDuties, storeCurrency)}</strong></span>}
+                                  </div>
+                                  <span style={{ fontSize: 13, fontWeight: 800, color: storeBal > 0.001 ? '#dc2626' : '#166534' }}>
+                                    {storeBal > 0.001 ? `Owe ${fmt$(storeBal, storeCurrency)}` : '✓ Clear'}
+                                  </span>
+                                </div>
+                              )
+                            })()}
                           </div>
                         )}
                       </div>
@@ -2021,14 +2026,15 @@ export default function SeasonBookPage() {
                   const grandBal  = iRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
                   const grandInit = iRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
                   const grandDep  = iRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
+                  const grandCurrency = (iRows[0]?.currency as Currency) ?? 'USD'
                   return (
                     <div style={{ marginTop: 14, background: purpleD, borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                       <div style={{ fontSize: 12, color: '#e9d5ff', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                        <span>Grand Total: <strong style={{ color: '#fff' }}>{fmt$(grandInit)}</strong></span>
-                        <span>Deposits: <strong style={{ color: '#a7f3d0' }}>{fmt$(grandDep)}</strong></span>
+                        <span>Grand Total: <strong style={{ color: '#fff' }}>{fmt$(grandInit, grandCurrency)}</strong></span>
+                        <span>Deposits: <strong style={{ color: '#a7f3d0' }}>{fmt$(grandDep, grandCurrency)}</strong></span>
                       </div>
                       <span style={{ fontSize: 14, fontWeight: 900, color: grandBal > 0.001 ? '#fca5a5' : '#a7f3d0' }}>
-                        {grandBal > 0.001 ? `Balance: ${fmt$(grandBal)}` : '✓ Fully Paid'}
+                        {grandBal > 0.001 ? `Balance: ${fmt$(grandBal, grandCurrency)}` : '✓ Fully Paid'}
                       </span>
                     </div>
                   )
