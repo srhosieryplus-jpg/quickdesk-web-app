@@ -288,6 +288,25 @@ export default function HairAccPage() {
 
           return (
             <div>
+              {/* Top nav */}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+                <button onClick={() => {
+                  saveTo(LS_ABBREV_KEY, abbrevMap)
+                  saveTo(LS_FINALDESC_KEY, finalDesc)
+                  saveTo(LS_SELECTED_KEY, Array.from(selected))
+                  const orderStyles = selCount > 0 ? activeStyles.filter(s => selected.has(s)) : activeStyles
+                  const saved = loadSaved<Record<string, ColorEntry[]>>(LS_COLORS_KEY, {})
+                  const merged: Record<string, ColorEntry[]> = {}
+                  for (const s of orderStyles) merged[s] = saved[s] ?? [{ code: '', name: '', qty: '' }]
+                  setColorMap(merged)
+                  setStep(2)
+                }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
+                  Next: Colors & Qty →
+                </button>
+                <span style={{ fontSize: 12, color: gray }}>
+                  {selCount > 0 ? `${selCount} vendor${selCount !== 1 ? 's' : ''} selected` : `All ${activeVendorGroups.length} vendors`}
+                </span>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
 
                 {/* ── LEFT: Endings editor ── */}
@@ -387,40 +406,17 @@ export default function HairAccPage() {
                 </div>
               </div>
 
-              {/* Footer */}
-              <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
-                <button onClick={() => {
-                  saveTo(LS_ABBREV_KEY, abbrevMap)
-                  saveTo(LS_FINALDESC_KEY, finalDesc)
-                  saveTo(LS_SELECTED_KEY, Array.from(selected))
-                  const orderStyles = selCount > 0 ? activeStyles.filter(s => selected.has(s)) : activeStyles
-                  const saved = loadSaved<Record<string, ColorEntry[]>>(LS_COLORS_KEY, {})
-                  const merged: Record<string, ColorEntry[]> = {}
-                  for (const s of orderStyles) merged[s] = saved[s] ?? [{ code: '', name: '', qty: '' }]
-                  setColorMap(merged)
-                  setStep(2)
-                }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
-                  Next: Colors & Qty →
-                </button>
-                <span style={{ fontSize: 12, color: gray }}>
-                  {selCount > 0 ? `${selCount} vendor${selCount !== 1 ? 's' : ''} selected` : `All ${activeVendorGroups.length} vendors`}
-                </span>
-              </div>
             </div>
           )
         })()}
 
         {/* ── STEP 2: Colors & Qty (per vendor) ───────────────────────── */}
         {step === 2 && (() => {
-          // Use selected styles, fall back to all active styles if none selected
-          const colorStepStyles = selectedStyles.length > 0 ? selectedStyles : activeStyles
-          // Get ordered unique vendors from those styles
-          const orderVids = Array.from(
-            new Map(colorStepStyles.map(s => {
-              const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
-              return [vid, vid]
-            })).keys()
-          ).filter(v => v !== '')
+          // Show exactly the checked vendors; fall back to all active vendors if none checked
+          const allActiveVids = Array.from(new Set(
+            parsedRows.filter(r => activeStyles.includes(r.style)).map(r => r.vendorId).filter(Boolean)
+          ))
+          const orderVids = selected.size > 0 ? Array.from(selected).filter(v => allActiveVids.includes(v)) : allActiveVids
           return (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -436,7 +432,7 @@ export default function HairAccPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {orderVids.map(vid => {
                   const entries: ColorEntry[] = colorMap[vid] ?? [{ code: '', name: '', qty: '' }]
-                  const vidStyles = colorStepStyles.filter(s => (parsedRows.find(r => r.style === s)?.vendorId ?? '') === vid)
+                  const vidStyles = activeStyles.filter(s => parsedRows.some(r => r.style === s && r.vendorId === vid))
                   return (
                     <div key={vid} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
                       {/* Vendor header */}
@@ -480,36 +476,72 @@ export default function HairAccPage() {
         })()}
 
         {/* ── STEP 3: Output ──────────────────────────────────────────── */}
-        {step === 3 && (
-          <div>
-            <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
-              Table is formatted like your original paste — copy and paste straight into your sheet.
-            </div>
-            <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '7px 14px', background: '#fafafa', borderBottom: `1px solid ${border}`, gap: 8 }}>
-                {['Vendor', 'Style Code', 'Style Name', 'Color', 'Qty', 'Price'].map(h => (
-                  <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</div>
+        {step === 3 && (() => {
+          // Unique vendors in output
+          const outVids = Array.from(new Set(outRows.map(r => r.vendorId).filter(Boolean)))
+          return (
+            <div>
+              {/* Top actions */}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+                <button onClick={copyOutput} style={{ background: copied ? '#d1fae5' : `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: copied ? '#065f46' : '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: copied ? 'none' : '0 2px 10px rgba(124,58,237,0.3)' }}>
+                  {copied ? '✓ Copied!' : 'Copy Table (TSV)'}
+                </button>
+                <button onClick={() => setStep(2)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>← Edit Colors</button>
+                <span style={{ fontSize: 12, color: gray }}>Copy and paste straight into your sheet.</span>
+              </div>
+
+              {/* Pre description editor per vendor */}
+              {outVids.length > 0 && (
+                <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14, boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Pre Description (per vendor)</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {outVids.map(vid => (
+                      <div key={vid} style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 8, alignItems: 'center' }}>
+                        <span style={{ background: purpleD, color: '#fff', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'monospace', textAlign: 'center' }}>{vid}</span>
+                        <input
+                          value={preDesc[vid] ?? ''}
+                          onChange={e => {
+                            const updated = { ...preDesc, [vid]: e.target.value }
+                            setPreDesc(updated); saveTo(LS_PREDESC_KEY, updated)
+                            // Rebuild final desc for all styles under this vendor
+                            const fdUpdated = { ...finalDesc }
+                            parsedRows.filter(r => r.vendorId === vid && activeStyles.includes(r.style)).forEach(r => {
+                              fdUpdated[r.style] = buildFinalDesc(e.target.value, r.style)
+                            })
+                            setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                          }}
+                          placeholder="e.g. Floral Crochet"
+                          style={{ ...inp, fontSize: 12 }}
+                          onFocus={ev => ev.target.style.borderColor = purple}
+                          onBlur={ev => ev.target.style.borderColor = border}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Output table */}
+              <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '7px 14px', background: '#fafafa', borderBottom: `1px solid ${border}`, gap: 8 }}>
+                  {['Vendor', 'Style Code', 'Style Name', 'Color', 'Qty', 'Price'].map(h => (
+                    <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</div>
+                  ))}
+                </div>
+                {outRows.map((r, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '5px 14px', borderBottom: i < outRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: r.isFirstForVendor && r.vendorId ? purpleD : 'transparent' }}>{r.isFirstForVendor ? r.vendorId : ''}</div>
+                    <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: purpleD, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '2px 7px', display: 'inline-block' }}>{r.styleCode}</div>
+                    <div style={{ fontSize: 12, color: '#374151' }}>{r.styleName}</div>
+                    <div style={{ fontSize: 12, color: '#374151' }}>{r.color}</div>
+                    <div style={{ fontSize: 12, color: '#374151' }}>{r.qty}</div>
+                    <div style={{ fontSize: 12, color: '#374151' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : ''}</div>
+                  </div>
                 ))}
               </div>
-              {outRows.map((r, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '5px 14px', borderBottom: i < outRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff', gap: 8, alignItems: 'center' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: r.isFirstForVendor && r.vendorId ? purpleD : 'transparent' }}>{r.isFirstForVendor ? r.vendorId : ''}</div>
-                  <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: purpleD, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '2px 7px', display: 'inline-block' }}>{r.styleCode}</div>
-                  <div style={{ fontSize: 12, color: '#374151' }}>{r.styleName}</div>
-                  <div style={{ fontSize: 12, color: '#374151' }}>{r.color}</div>
-                  <div style={{ fontSize: 12, color: '#374151' }}>{r.qty}</div>
-                  <div style={{ fontSize: 12, color: '#374151' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : ''}</div>
-                </div>
-              ))}
             </div>
-            <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
-              <button onClick={copyOutput} style={{ background: copied ? '#d1fae5' : `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: copied ? '#065f46' : '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: copied ? 'none' : '0 2px 10px rgba(124,58,237,0.3)' }}>
-                {copied ? '✓ Copied to clipboard!' : 'Copy Table (TSV)'}
-              </button>
-              <button onClick={() => setStep(2)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>← Edit Colors</button>
-            </div>
-          </div>
-        )}
+          )
+        })()}
       </div>
     </div>
   )
