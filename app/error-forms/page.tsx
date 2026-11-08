@@ -701,86 +701,94 @@ export default function ErrorFormsPage() {
         const fileBase = isEdit ? ef!.id : 'new-' + Date.now()
 
         return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 600, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
-
-              {/* ── Card header (like the purple store header) ── */}
-              <div style={{ background: redD, color: '#fff', padding: '16px 20px', borderRadius: '14px 14px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+              {/* Modal header */}
+              <div style={{ background: redD, color: '#fff', padding: '14px 20px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontWeight: 900, fontSize: 17, letterSpacing: '0.03em' }}>
-                    {isEdit ? (vals.store_id || '—') : (vals.store_id || 'New Error Form')}
-                  </div>
-                  {isEdit && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 1 }}>{season} · by {displayUser(ef!.logged_by)}</div>}
+                  <div style={{ fontWeight: 800, fontSize: 15 }}>{isEdit ? `Edit — ${ef!.brand}` : '+ New Error Form'}</div>
+                  {isEdit && <div style={{ fontSize: 10, opacity: 0.75 }}>{ef!.store_id} · by {displayUser(ef!.logged_by)}</div>}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {isEdit && vals.status && (
-                    <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20,
-                      background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>
-                      {STATUS_LABELS[vals.status]}
-                    </span>
-                  )}
-                  <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, opacity: 0.8 }}>✕</button>
-                </div>
+                <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
 
-              {/* ── Main card body ── */}
-              <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-                {/* Store + Brand row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
-                  {/* Store picker */}
-                  <div>
-                    <label style={lbl}>Store ID *</label>
-                    {(!isAdmin && modal === 'edit') ? (
-                      <div style={{ ...inp, background: '#f9fafb', color: gray }}>{vals.store_id || '—'}</div>
-                    ) : (() => {
-                      const filteredStores = storeIds.filter(s => !storeSearch || s.toLowerCase().includes(storeSearch.toLowerCase()))
-                      return (
-                        <div style={{ position: 'relative' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${vals.store_id ? redD : '#d1d5db'}`, borderRadius: 6, background: '#fff', overflow: 'hidden' }}>
-                            <input
-                              value={showStoreDrop ? storeSearch : (vals.store_id || '')}
-                              onChange={e => { setStoreSearch(e.target.value); setShowStoreDrop(true); if (!e.target.value) upd({ store_id: '' }) }}
-                              onFocus={() => { setStoreSearch(''); setShowStoreDrop(true) }}
-                              onBlur={() => setTimeout(() => setShowStoreDrop(false), 150)}
-                              placeholder="Search store…"
-                              style={{ flex: 1, border: 'none', outline: 'none', padding: '5px 8px', fontSize: 12, fontFamily: 'Inter, sans-serif', color: '#111', background: 'transparent' }}
-                            />
-                            {vals.store_id && (
-                              <button onClick={() => { upd({ store_id: '' }); setStoreSearch('') }}
-                                style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', padding: '0 6px', fontSize: 14, lineHeight: 1 }}>✕</button>
-                            )}
-                          </div>
-                          {showStoreDrop && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1px solid ${border}`, borderRadius: 6, zIndex: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 200, overflowY: 'auto', marginTop: 2 }}>
-                              {filteredStores.length === 0
-                                ? <div style={{ padding: '8px 12px', fontSize: 12, color: gray }}>No stores found</div>
-                                : filteredStores.map(s => (
-                                  <div key={s} onMouseDown={() => { upd({ store_id: s }); setStoreSearch(''); setShowStoreDrop(false) }}
-                                    style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer', background: vals.store_id === s ? '#fef2f2' : '#fff', color: vals.store_id === s ? redD : '#111', fontWeight: vals.store_id === s ? 700 : 400, borderBottom: `1px solid #f3f4f6` }}
-                                    onMouseEnter={e => { if (vals.store_id !== s) e.currentTarget.style.background = '#f9fafb' }}
-                                    onMouseLeave={e => { if (vals.store_id !== s) e.currentTarget.style.background = '#fff' }}>
-                                    {s}
-                                  </div>
-                                ))}
-                            </div>
+                {/* Row 0: Store */}
+                <div>
+                  <label style={lbl}>Store ID *</label>
+                  {(!isAdmin && modal === 'edit') ? (
+                    <div style={{ ...inp, width: 220, background: '#f9fafb', color: gray }}>{vals.store_id || '—'}</div>
+                  ) : (() => {
+                    const filteredStores = storeIds.filter(s =>
+                      !storeSearch || s.toLowerCase().includes(storeSearch.toLowerCase())
+                    )
+                    return (
+                      <div style={{ position: 'relative', width: 220 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${vals.store_id ? redD : '#d1d5db'}`,
+                          borderRadius: 6, background: '#fff', overflow: 'hidden' }}>
+                          <input
+                            value={showStoreDrop ? storeSearch : (vals.store_id || '')}
+                            onChange={e => { setStoreSearch(e.target.value); setShowStoreDrop(true); if (!e.target.value) upd({ store_id: '' }) }}
+                            onFocus={() => { setStoreSearch(''); setShowStoreDrop(true) }}
+                            onBlur={() => setTimeout(() => setShowStoreDrop(false), 150)}
+                            placeholder="Search store…"
+                            style={{ flex: 1, border: 'none', outline: 'none', padding: '5px 8px', fontSize: 12,
+                              fontFamily: 'Inter, sans-serif', color: '#111', background: 'transparent' }}
+                          />
+                          {vals.store_id && (
+                            <button onClick={() => { upd({ store_id: '' }); setStoreSearch('') }}
+                              style={{ background: 'none', border: 'none', color: gray, cursor: 'pointer', padding: '0 6px', fontSize: 14, lineHeight: 1 }}>✕</button>
                           )}
                         </div>
-                      )
-                    })()}
-                  </div>
-                  {/* Brand */}
+                        {showStoreDrop && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff',
+                            border: `1px solid ${border}`, borderRadius: 6, zIndex: 20,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 200, overflowY: 'auto', marginTop: 2 }}>
+                            {filteredStores.length === 0 ? (
+                              <div style={{ padding: '8px 12px', fontSize: 12, color: gray }}>No stores found</div>
+                            ) : filteredStores.map(s => (
+                              <div key={s}
+                                onMouseDown={() => { upd({ store_id: s }); setStoreSearch(''); setShowStoreDrop(false) }}
+                                style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer',
+                                  background: vals.store_id === s ? '#fef2f2' : '#fff',
+                                  color: vals.store_id === s ? redD : '#111',
+                                  fontWeight: vals.store_id === s ? 700 : 400,
+                                  borderBottom: `1px solid #f3f4f6` }}
+                                onMouseEnter={e => { if (vals.store_id !== s) e.currentTarget.style.background = '#f9fafb' }}
+                                onMouseLeave={e => { if (vals.store_id !== s) e.currentTarget.style.background = '#fff' }}>
+                                {s}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+                  {!isAdmin && modal === 'new' && (
+                    <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Defaults to your store</div>
+                  )}
+                </div>
+
+                {/* Row 1: Brand + Amount + Date */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 12 }}>
                   <div style={{ position: 'relative' }}>
                     <label style={lbl}>Brand *</label>
                     <input value={isEdit ? vals.brand : brandInput}
                       onChange={e => {
                         const v = e.target.value
                         if (isEdit) upd({ brand: v })
-                        else { setBrandInput(v); upd({ brand: v }); setBrandSuggestions(v.length > 0 ? BRAND_LIST.filter(b => b.toLowerCase().includes(v.toLowerCase())).slice(0, 8) : []) }
+                        else {
+                          setBrandInput(v)
+                          upd({ brand: v })
+                          setBrandSuggestions(v.length > 0 ? BRAND_LIST.filter(b => b.toLowerCase().includes(v.toLowerCase())).slice(0, 8) : [])
+                        }
                       }}
-                      placeholder="Type brand name…" style={inp} autoFocus={!isEdit} />
+                      placeholder="Type brand name…"
+                      style={inp} autoFocus={!isEdit} />
                     {!isEdit && brandSuggestions.length > 0 && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1px solid ${border}`, borderRadius: 6, zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 180, overflowY: 'auto' }}>
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff',
+                        border: `1px solid ${border}`, borderRadius: 6, zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 180, overflowY: 'auto' }}>
                         {brandSuggestions.map(b => (
                           <div key={b} onClick={() => { setBrandInput(b); upd({ brand: b }); setBrandSuggestions([]) }}
                             style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', borderBottom: `1px solid #f3f4f6` }}
@@ -792,13 +800,13 @@ export default function ErrorFormsPage() {
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* Invoice# + Date row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <label style={lbl}>Invoice #</label>
                     <input value={vals.invoice_number ?? ''} onChange={e => upd({ invoice_number: e.target.value || null })} placeholder="Optional" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Amount ($)</label>
+                    <input type="number" step="0.01" value={vals.amount ?? ''} onChange={e => upd({ amount: e.target.value ? parseFloat(e.target.value) : null })} placeholder="0.00" style={inp} />
                   </div>
                   <div>
                     <label style={lbl}>Error Date</label>
@@ -806,23 +814,7 @@ export default function ErrorFormsPage() {
                   </div>
                 </div>
 
-                {/* Amount display (like Balance card) */}
-                <div style={{ background: '#f9fafb', border: `1px solid ${border}`, borderRadius: 10, padding: '14px 18px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: gray, fontWeight: 600, marginBottom: 4 }}>AMOUNT</div>
-                      <input type="number" step="0.01" value={vals.amount ?? ''} onChange={e => upd({ amount: e.target.value ? parseFloat(e.target.value) : null })} placeholder="0.00"
-                        style={{ border: 'none', outline: 'none', fontSize: 22, fontWeight: 800, color: vals.amount ? redD : '#9ca3af', background: 'transparent', width: 140, fontFamily: 'Inter, sans-serif' }} />
-                    </div>
-                    {vals.amount != null && (
-                      <div style={{ background: redL, border: `1.5px solid #fca5a5`, borderRadius: 8, padding: '8px 18px', fontSize: 15, fontWeight: 800, color: redD }}>
-                        Balance: {fmt$(vals.amount)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Status + Email row */}
+                {/* Row 2: Status + Email Sent */}
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
                   <div>
                     <label style={lbl}>Resolution Status</label>
@@ -836,74 +828,64 @@ export default function ErrorFormsPage() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                     <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
-                      <input type="checkbox" checked={vals.email_sent} onChange={e => upd({ email_sent: e.target.checked })} style={{ width: 16, height: 16, accentColor: redD }} />
+                      <input type="checkbox" checked={vals.email_sent} onChange={e => upd({ email_sent: e.target.checked })}
+                        style={{ width: 16, height: 16, accentColor: redD }} />
                       Email Sent
                     </label>
                   </div>
                 </div>
 
-                {/* Final date + Comments */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
+                {/* Row 3: Final date */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={lbl}>Final Date</label>
+                    <label style={lbl}>Final Date (Finalized)</label>
                     <input type="date" value={vals.final_date ?? ''} onChange={e => upd({ final_date: e.target.value || null })} style={inp} />
-                    <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Set to mark finalized</div>
-                  </div>
-                  <div>
-                    <label style={lbl}>Comments</label>
-                    <textarea value={vals.comments ?? ''} onChange={e => upd({ comments: e.target.value || null })}
-                      placeholder="Add any notes…" rows={2} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} />
+                    <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Set a date to mark as finalized</div>
                   </div>
                 </div>
 
-                {/* Attachments — styled like Attach Invoice button */}
-                <div style={{ borderTop: `1px solid ${border}`, paddingTop: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: gray, marginBottom: 10, letterSpacing: '0.05em' }}>ATTACHMENTS</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {/* Row 4: Comments */}
+                <div>
+                  <label style={lbl}>Comments</label>
+                  <textarea value={vals.comments ?? ''} onChange={e => upd({ comments: e.target.value || null })}
+                    placeholder="Add any notes…" rows={2}
+                    style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} />
+                </div>
+
+                {/* Row 5: Attachments */}
+                <div style={{ background: '#f9fafb', border: `1px solid ${border}`, borderRadius: 8, padding: '12px 16px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 10 }}>📎 Attachments</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
                     {[
-                      { label: 'Invoice', key: 'invoice_file_url' as const, slot: 'inv', icon: '🧾' },
-                      { label: 'Error Form', key: 'error_file_url' as const, slot: 'err', icon: '📋' },
-                      { label: 'Credit Note', key: 'credit_note_url' as const, slot: 'cn1', icon: '📄' },
-                    ].map(({ label, key, slot, icon }) => (
-                      <div key={key} style={{ background: '#f9fafb', border: `1px solid ${border}`, borderRadius: 8, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          {icon} {label.toUpperCase()}
-                        </div>
-                        {vals[key] && (
-                          <a href={vals[key]!} target="_blank" rel="noopener noreferrer"
-                            style={{ display: 'block', fontSize: 11, color: purple, fontWeight: 600, marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            View file ↗
-                          </a>
-                        )}
+                      { label: 'Invoice', key: 'invoice_file_url' as const, slot: 'inv' },
+                      { label: 'Error Form', key: 'error_file_url' as const, slot: 'err' },
+                      { label: 'Credit Note', key: 'credit_note_url' as const, slot: 'cn1' },
+                    ].map(({ label, key, slot }) => (
+                      <div key={key} style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '8px 10px' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: gray, marginBottom: 5 }}>{label}</div>
                         {isEdit ? (
-                          <FileAttach label={label} url={vals[key] as string | null}
+                          <FileAttach
+                            label={label} url={vals[key] as string | null}
                             bucket="invoices" path={`ef-${fileBase}-${slot}`}
                             onUpdated={async url => {
                               upd({ [key]: url } as any)
-                              await supabase.from('error_forms').update({ [key]: url }).eq('id', ef!.id)
-                              showToast(url ? '📎 Attached' : '🗑 Removed')
-                            }} />
+                              if (isEdit) {
+                                await supabase.from('error_forms').update({ [key]: url }).eq('id', ef!.id)
+                                showToast(url ? '📎 Attached' : '🗑 Removed')
+                              }
+                            }}
+                          />
                         ) : (
-                          <FileAttach label={label} url={vals[key] as string | null}
+                          <FileAttach
+                            label={label} url={vals[key] as string | null}
                             bucket="invoices" path={`ef-${fileBase}-${slot}`}
-                            onUpdated={url => upd({ [key]: url } as any)} />
+                            onUpdated={url => upd({ [key]: url } as any)}
+                          />
                         )}
                       </div>
                     ))}
                   </div>
                 </div>
-
-                {/* Footer summary bar (like Total / Deposit / Owe) */}
-                {isEdit && (
-                  <div style={{ background: '#f9fafb', border: `1px solid ${border}`, borderRadius: 8, padding: '10px 16px',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-                    <span style={{ color: gray }}>Error Date: <strong style={{ color: '#374151' }}>{fmtDate(vals.error_date)}</strong></span>
-                    <span style={{ color: gray }}>Status: <strong style={{ color: STATUS_COLORS[vals.status].color }}>{STATUS_LABELS[vals.status]}</strong></span>
-                    <span style={{ fontWeight: 800, fontSize: 14, color: vals.amount ? redD : gray }}>
-                      {vals.amount != null ? fmt$(vals.amount) : '—'}
-                    </span>
-                  </div>
-                )}
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
