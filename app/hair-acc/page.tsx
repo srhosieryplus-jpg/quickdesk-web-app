@@ -303,40 +303,35 @@ export default function HairAccPage() {
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Ending</div>
                   </div>
 
-                  {vendorGroups.map(([vid, styles]) => (
-                    <div key={vid}>
-                      {styles.map(s => {
-                        const ending = abbrevMap[s] ?? ''
-                        const isX = ending.trim().toUpperCase() === 'X'
-                        return (
-                          <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 72px', gap: '0 8px', padding: '4px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
-                            <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
-                            <input
-                              value={ending}
-                              onChange={e => {
-                                const val = e.target.value.toUpperCase()
-                                const updated = { ...abbrevMap, [s]: val }
-                                setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
-                                if (val && val !== 'X') {
-                                  const pre = preDesc[vid] ?? ''
-                                  const fdUpdated = { ...finalDesc, [s]: buildFinalDesc(pre, s) }
-                                  setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                                }
-                                if (val === 'X') {
-                                  const next = new Set(selected); next.delete(s)
-                                  setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
-                                }
-                              }}
-                              placeholder="HC"
-                              style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border, width: '100%' }}
-                              onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
-                              onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
-                            />
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))}
+                  {uniqueStyles.map(s => {
+                    const ending = abbrevMap[s] ?? ''
+                    const isX = ending.trim().toUpperCase() === 'X'
+                    return (
+                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 72px', gap: '0 8px', padding: '4px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
+                        <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
+                        <input
+                          value={ending}
+                          onChange={e => {
+                            const val = e.target.value.toUpperCase()
+                            const updated = { ...abbrevMap, [s]: val }
+                            setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
+                            if (val && val !== 'X') {
+                              const fdUpdated = { ...finalDesc, [s]: buildFinalDesc('', s) }
+                              setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                            }
+                            if (val === 'X') {
+                              const next = new Set(selected); next.delete(s)
+                              setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
+                            }
+                          }}
+                          placeholder="HC"
+                          style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border, width: '100%' }}
+                          onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
+                          onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
+                        />
+                      </div>
+                    )
+                  })}
                 </div>
 
                 {/* ── RIGHT: Order checklist ── */}
