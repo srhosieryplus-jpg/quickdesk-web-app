@@ -816,39 +816,39 @@ export default function HairAccPage() {
                         const numCols = curPivotStyles2.length
                         return (
                           <div style={{ borderTop: `1px solid ${border}`, padding: '0 0 8px' }}>
-                            {/* Style toggles */}
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 14px 6px' }}>
-                              {vidUniq2.map(r => {
-                                const ending2 = resolveEnding(r.style)
-                                const on2 = curPivotStyles2.includes(r.style)
-                                return (
-                                  <button key={r.style} onClick={() => {
-                                    const next2 = on2 ? curPivotStyles2.filter(s => s !== r.style) : [...curPivotStyles2, r.style]
-                                    const ps = { ...pivotStyles, [vid]: next2 }
-                                    setPivotStyles(ps); saveTo(LS_PIVOT_STYLES, ps)
-                                  }} style={{ background: on2 ? purpleD : '#f3f4f6', color: on2 ? '#fff' : '#374151', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
-                                    <span>{r.style}</span>
-                                    {ending2 && <span style={{ fontSize: 9, fontWeight: 900, fontFamily: 'monospace', background: on2 ? 'rgba(255,255,255,0.25)' : '#e5e7eb', borderRadius: 3, padding: '1px 4px' }}>{ending2}</span>}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                            {/* Combined color+qty table */}
+                            {/* Combined color+qty table — chips in header */}
                             <div style={{ overflowX: 'auto', padding: '0 14px' }}>
                               <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                                 <thead>
                                   <tr>
                                     <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: 160 }}>Color</th>
-                                    {curPivotStyles2.map((_, si) => (
-                                      <th key={si} style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, width: 56 }} />
-                                    ))}
+                                    {vidUniq2.map(r => {
+                                      const ending2 = resolveEnding(r.style)
+                                      const on2 = curPivotStyles2.includes(r.style)
+                                      return (
+                                        <th key={r.style} style={{ padding: '5px 6px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                                            <button onClick={() => {
+                                              const next2 = on2 ? curPivotStyles2.filter(s => s !== r.style) : [...curPivotStyles2, r.style]
+                                              const ps = { ...pivotStyles, [vid]: next2 }
+                                              setPivotStyles(ps); saveTo(LS_PIVOT_STYLES, ps)
+                                            }} style={{ background: on2 ? purpleD : '#e5e7eb', color: on2 ? '#fff' : '#6b7280', border: 'none', borderRadius: 5, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                                              {ending2 && <span style={{ fontSize: 9, fontWeight: 900, fontFamily: 'monospace' }}>{ending2}</span>}
+                                            </button>
+                                            <span style={{ fontSize: 9, color: '#6b7280', maxWidth: 90, textAlign: 'center', whiteSpace: 'normal', lineHeight: 1.2 }}>{r.style}</span>
+                                          </div>
+                                        </th>
+                                      )
+                                    })}
                                     {curPivotStyles2.length > 0 && <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sum</th>}
                                     <th style={{ padding: '5px 4px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, width: 20 }} />
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {entries.map((e, ei) => {
-                                    const combined = [e.code.trim(), e.name.trim()].filter(Boolean).join(' ')
+                                    // Store raw text in `name`, code empty — split only on blur
+                                    // If code is empty, name holds the raw typed string; if code is set, reconstruct display
+                                    const combined = e.code.trim() ? `${e.code.trim()} ${e.name.trim()}`.trim() : e.name
                                     const ck2 = colorKey(e)
                                     const hasColor = e.code.trim() || e.name.trim()
                                     const rowSum = hasColor ? curPivotStyles2.reduce((acc, sn) => {
@@ -864,16 +864,29 @@ export default function HairAccPage() {
                                             data-ei={ei}
                                             value={combined}
                                             onChange={ev => {
-                                              const val = ev.target.value
-                                              const m = val.match(/^(\d+)\s*(.*)$/)
+                                              // Store raw value in name field, code empty — parse on blur
+                                              const u = [...entries]; u[ei] = { ...e, code: '', name: ev.target.value }
+                                              const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
+                                            }}
+                                            onBlur={ev => {
+                                              // Parse on blur: leading digits = code, rest = name
+                                              const val = ev.target.value.trim()
+                                              const m = val.match(/^(\d+)\s+(.+)$/)
                                               const code = m ? m[1] : ''
                                               const name = m ? m[2] : val
                                               const u = [...entries]; u[ei] = { ...e, code, name }
                                               const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
+                                              ev.target.style.borderColor = border
                                             }}
                                             onKeyDown={ev => {
                                               if (ev.key === 'Enter') {
                                                 ev.preventDefault()
+                                                // Parse current value before moving
+                                                const val = ev.currentTarget.value.trim()
+                                                const m = val.match(/^(\d+)\s+(.+)$/)
+                                                const code = m ? m[1] : ''; const name = m ? m[2] : val
+                                                const u = [...entries]; u[ei] = { ...e, code, name }
+                                                const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
                                                 if (ei === entries.length - 1) {
                                                   addRow()
                                                   setTimeout(() => {
@@ -889,7 +902,6 @@ export default function HairAccPage() {
                                             placeholder="001 Black"
                                             style={{ ...inp, fontSize: 11, width: '100%', minWidth: 140 }}
                                             onFocus={ev => ev.target.style.borderColor = purple}
-                                            onBlur={ev => ev.target.style.borderColor = border}
                                           />
                                         </td>
                                         {curPivotStyles2.map((sn, si) => {
