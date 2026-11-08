@@ -473,14 +473,6 @@ export default function ErrorFormsPage() {
               borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.05em' }}>
             {season}
           </button>
-          {/* Status filter dropdown */}
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as 'all'|'open'|'finalized')}
-            style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.4)',
-              background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', outline: 'none' }}>
-            <option value="open" style={{ color: '#1f2937', background: '#fff' }}>Open</option>
-            <option value="all" style={{ color: '#1f2937', background: '#fff' }}>All</option>
-            <option value="finalized" style={{ color: '#1f2937', background: '#fff' }}>Finalized</option>
-          </select>
           <button onClick={openNew}
             style={{ background: '#fff', color: redD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             + New
@@ -490,9 +482,16 @@ export default function ErrorFormsPage() {
 
       {/* ── Filters bar ── */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '10px 20px' }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', maxWidth: 960, margin: '0 auto' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', maxWidth: 960, margin: '0 auto', justifyContent: 'center' }}>
+          {/* Status dropdown — first */}
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as 'all'|'open'|'finalized')}
+            style={{ ...inp, width: 120, flex: '0 0 auto', fontWeight: 700 }}>
+            <option value="open">Open</option>
+            <option value="all">All</option>
+            <option value="finalized">Finalized</option>
+          </select>
           {/* Search — season-book style */}
-          <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 280 }}>
+          <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 260 }}>
             <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 13, pointerEvents: 'none' }}>🔍</span>
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search brand, store, comments…"
@@ -517,21 +516,13 @@ export default function ErrorFormsPage() {
               ))}
             </select>
           )}
-          {/* Show closed checkbox */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
-            <input type="checkbox"
-              checked={filterStatus !== 'open'}
-              onChange={e => setFilterStatus(e.target.checked ? 'all' : 'open')}
-              style={{ width: 15, height: 15, accentColor: redD }} />
-            Show Closed
-          </label>
           {(filterBrand || filterStore) && (
             <button onClick={() => { setFilterBrand(''); setFilterStore('') }}
               style={{ fontSize: 11, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
               Clear
             </button>
           )}
-          <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>
+          <span style={{ fontSize: 11, color: gray }}>
             {filtered.length} form{filtered.length !== 1 ? 's' : ''}
           </span>
         </div>
