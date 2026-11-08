@@ -9,9 +9,11 @@ const purple = '#7c3aed'
 const gray = '#6b7280'
 const border = '#e5e7eb'
 
-const LS_ABBREV_KEY  = 'hairAcc_abbrevMap'
-const LS_COLORS_KEY  = 'hairAcc_colorMap'    // per-style color map
-const LS_SAMEAS_KEY  = 'hairAcc_sameAs'      // per-style "same as" link
+const LS_ABBREV_KEY   = 'hairAcc_abbrevMap'
+const LS_COLORS_KEY   = 'hairAcc_colorMap'    // per-style color map
+const LS_SAMEAS_KEY   = 'hairAcc_sameAs'      // per-style "same as" link
+const LS_PREDESC_KEY  = 'hairAcc_preDesc'     // per-vendorId pre-description
+const LS_FINALDESC_KEY = 'hairAcc_finalDesc'  // per-style final description (editable)
 
 function loadSaved<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback } catch { return fallback }
@@ -88,12 +90,14 @@ export default function HairAccPage() {
   const [user, setUser]       = useState<User | null>(null)
   const [step, setStep]       = useState(0)
   const [paste, setPaste]     = useState('')
-  const [abbrevMap, setAbbrevMap] = useState<Record<string, string>>({})
-  // Per-style color map: style → ColorEntry[]
-  const [colorMap, setColorMap] = useState<Record<string, ColorEntry[]>>({})
-  // Per-style "same as" link: style → other style name (resolve colors from that style)
-  const [sameAs, setSameAs] = useState<Record<string, string>>({})
-  const [copied, setCopied]   = useState(false)
+  const [abbrevMap, setAbbrevMap]   = useState<Record<string, string>>({})
+  const [colorMap, setColorMap]     = useState<Record<string, ColorEntry[]>>({})
+  const [sameAs, setSameAs]         = useState<Record<string, string>>({})
+  // Per-vendorId pre-description (e.g. "Floral Crochet Lace" for MD27003)
+  const [preDesc, setPreDesc]       = useState<Record<string, string>>({})
+  // Per-style final description — auto-built but user-editable
+  const [finalDesc, setFinalDesc]   = useState<Record<string, string>>({})
+  const [copied, setCopied]         = useState(false)
 
   useEffect(() => {
     const u = getSession()
@@ -102,6 +106,8 @@ export default function HairAccPage() {
     setAbbrevMap(loadSaved(LS_ABBREV_KEY, {}))
     setColorMap(loadSaved(LS_COLORS_KEY, {}))
     setSameAs(loadSaved(LS_SAMEAS_KEY, {}))
+    setPreDesc(loadSaved(LS_PREDESC_KEY, {}))
+    setFinalDesc(loadSaved(LS_FINALDESC_KEY, {}))
   }, [router])
 
   // Parse paste
@@ -139,18 +145,19 @@ export default function HairAccPage() {
       const styleCode = ending
         ? (r.vendorId ? `${r.vendorId}${ending}` : ending)
         : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
+      const styleName = finalDesc[r.style]?.trim() || r.style
       const isFirstForVendor = r.vendorId !== lastVendor
       if (r.vendorId) lastVendor = r.vendorId
       const colors = resolveColors(r.style)
 
       if (colors.length === 0) {
-        out.push({ vendorId: r.vendorId, styleCode, styleName: r.style, color: '', qty: '', price: r.price, isFirstForVendor })
+        out.push({ vendorId: r.vendorId, styleCode, styleName, color: '', qty: '', price: r.price, isFirstForVendor })
       } else {
         colors.forEach((c, ci) => {
           const colorStr = c.code.trim() && c.name.trim()
             ? `#${c.code.trim()} ${c.name.trim()}`
             : c.name.trim() || `#${c.code.trim()}`
-          out.push({ vendorId: r.vendorId, styleCode, styleName: r.style, color: colorStr, qty: c.qty.trim(), price: r.price, isFirstForVendor: ci === 0 && isFirstForVendor })
+          out.push({ vendorId: r.vendorId, styleCode, styleName, color: colorStr, qty: c.qty.trim(), price: r.price, isFirstForVendor: ci === 0 && isFirstForVendor })
         })
       }
     }
@@ -231,93 +238,124 @@ export default function HairAccPage() {
         )}
 
         {/* ── STEP 1: Endings ─────────────────────────────────────────── */}
-        {step === 1 && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
-            {/* Left: endings input */}
-            <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 20, boxShadow: '0 2px 12px rgba(124,58,237,0.07)', position: 'sticky', top: 70 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Set style code endings</div>
-              <div style={{ fontSize: 12, color: gray, marginBottom: 4 }}>
-                Code = VendorID + ending &nbsp;·&nbsp; e.g. <code>MD27001</code> + <code>HC</code> → <code>MD27001HC</code>
-              </div>
-              <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 16, fontWeight: 600 }}>
-                Type <code style={{ background: '#fef2f2', padding: '1px 5px', borderRadius: 4 }}>X</code> to hide a style (not carried).
+        {step === 1 && (() => {
+          // Group unique styles by vendorId so we can show one Pre Desc input per vendor
+          const vendorGroups = Array.from(
+            uniqueStyles.reduce((m, s) => {
+              const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
+              if (!m.has(vid)) m.set(vid, [])
+              m.get(vid)!.push(s)
+              return m
+            }, new Map<string, string[]>())
+          )
+          return (
+            <div>
+              <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 20, marginBottom: 16, boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Set style code endings</div>
+                <div style={{ fontSize: 12, color: gray, marginBottom: 4 }}>
+                  Code = VendorID + Ending &nbsp;·&nbsp; Final Description = Pre Description + Ending word (editable).
+                </div>
+                <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 0, fontWeight: 600 }}>
+                  Type <code style={{ background: '#fef2f2', padding: '1px 5px', borderRadius: 4 }}>X</code> to hide a style (not carried).
+                </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '0 12px', alignItems: 'center' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', paddingBottom: 6, borderBottom: `1px solid #f0f0f0` }}>Style Name</div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', paddingBottom: 6, borderBottom: `1px solid #f0f0f0` }}>Ending</div>
+              {vendorGroups.map(([vid, styles]) => (
+                <div key={vid} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, marginBottom: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
+                  {/* Vendor header + Pre Description */}
+                  <div style={{ background: '#f5f3ff', borderBottom: `1px solid ${border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    {vid && <span style={{ fontSize: 13, fontWeight: 900, color: purpleD, fontFamily: 'monospace' }}>{vid}</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 220 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: gray, whiteSpace: 'nowrap' }}>Pre Description:</span>
+                      <input
+                        value={preDesc[vid] ?? ''}
+                        onChange={e => {
+                          const updated = { ...preDesc, [vid]: e.target.value }
+                          setPreDesc(updated); saveTo(LS_PREDESC_KEY, updated)
+                          // Auto-rebuild finalDesc for all styles under this vendor
+                          const fdUpdated = { ...finalDesc }
+                          for (const s of styles) {
+                            const ending = abbrevMap[s]?.trim() ?? ''
+                            if (ending && ending !== 'X') {
+                              fdUpdated[s] = [e.target.value.trim(), ending].filter(Boolean).join(' ')
+                            }
+                          }
+                          setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                        }}
+                        placeholder={vid ? `e.g. Floral Crochet Lace` : 'e.g. Scrunchie'}
+                        style={{ ...inp, flex: 1, fontSize: 12 }}
+                        onFocus={e => e.target.style.borderColor = purple}
+                        onBlur={e => e.target.style.borderColor = border}
+                      />
+                    </div>
+                  </div>
 
-                {uniqueStyles.map(s => {
-                  const ending = abbrevMap[s] ?? ''
-                  const isX = ending.trim().toUpperCase() === 'X'
-                  return (
-                    <>
-                      <div key={s + '_l'} style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', padding: '6px 0', borderBottom: `1px solid #f9f9f9`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
-                      <div key={s + '_i'} style={{ padding: '4px 0', borderBottom: `1px solid #f9f9f9` }}>
+                  {/* Column headers */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: '0 12px', padding: '6px 16px', borderBottom: `1px solid #f0f0f0`, alignItems: 'center' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style (from paste)</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Ending</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Final Description</div>
+                  </div>
+
+                  {/* Style rows */}
+                  {styles.map(s => {
+                    const ending = abbrevMap[s] ?? ''
+                    const isX = ending.trim().toUpperCase() === 'X'
+                    const fd = finalDesc[s] ?? ''
+                    return (
+                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: '0 12px', padding: '5px 16px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
+                        <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
                         <input
                           value={ending}
                           onChange={e => {
                             const val = e.target.value.toUpperCase()
                             const updated = { ...abbrevMap, [s]: val }
-                            setAbbrevMap(updated)
-                            saveTo(LS_ABBREV_KEY, updated)
+                            setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
+                            // Auto-build finalDesc if not manually edited
+                            if (val && val !== 'X') {
+                              const pre = preDesc[vid]?.trim() ?? ''
+                              const auto = [pre, val].filter(Boolean).join(' ')
+                              const fdUpdated = { ...finalDesc, [s]: auto }
+                              setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                            }
                           }}
                           placeholder="e.g. HC"
-                          style={{ ...inp, width: '100%', fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border }}
+                          style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border }}
                           onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
                           onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
                         />
+                        <input
+                          value={isX ? '' : fd}
+                          onChange={e => {
+                            const fdUpdated = { ...finalDesc, [s]: e.target.value }
+                            setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                          }}
+                          disabled={isX}
+                          placeholder={isX ? '(hidden)' : 'Final description…'}
+                          style={{ ...inp, fontSize: 12, color: '#374151', background: isX ? '#f9fafb' : '#fff' }}
+                          onFocus={e => e.target.style.borderColor = purple}
+                          onBlur={e => e.target.style.borderColor = border}
+                        />
                       </div>
-                    </>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
+              ))}
 
               <button onClick={() => {
                 saveTo(LS_ABBREV_KEY, abbrevMap)
-                // Ensure every active style has an entry in colorMap
+                saveTo(LS_FINALDESC_KEY, finalDesc)
                 const saved = loadSaved<Record<string, ColorEntry[]>>(LS_COLORS_KEY, {})
                 const merged: Record<string, ColorEntry[]> = {}
                 for (const s of activeStyles) merged[s] = saved[s] ?? [{ code: '', name: '', qty: '' }]
                 setColorMap(merged)
                 setStep(2)
-              }} style={{ marginTop: 20, background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
+              }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
                 Next: Colors & Qty →
               </button>
             </div>
-
-            {/* Right: live preview */}
-            <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
-              <div style={{ padding: '10px 14px', background: '#f8f7ff', borderBottom: `1px solid ${border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: purpleD }}>Live Preview</div>
-                <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>{activeStyles.length} active · {uniqueStyles.length - activeStyles.length} hidden</div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 60px', padding: '6px 14px', background: '#fafafa', borderBottom: `1px solid ${border}`, gap: 8 }}>
-                {['Vendor', 'Style Code', 'Style Name', 'Price'].map(h => (
-                  <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
-                ))}
-              </div>
-              <div style={{ maxHeight: 480, overflowY: 'auto' }}>
-                {parsedRows
-                  .filter(r => activeStyles.includes(r.style))
-                  .map((r, i) => {
-                    const ending = abbrevMap[r.style]?.trim() ?? ''
-                    const styleCode = ending
-                      ? (r.vendorId ? `${r.vendorId}${ending}` : ending)
-                      : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
-                    return (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 60px', padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, background: i % 2 === 0 ? '#fff' : '#fafbff', gap: 8, alignItems: 'center' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>{r.vendorId}</div>
-                        <div style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 700, color: purpleD, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 4, padding: '2px 6px' }}>{styleCode}</div>
-                        <div style={{ fontSize: 11, color: '#374151' }}>{r.style}</div>
-                        <div style={{ fontSize: 11, color: '#374151' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : ''}</div>
-                      </div>
-                    )
-                  })}
-              </div>
-            </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* ── STEP 2: Colors & Qty (per style) ────────────────────────── */}
         {step === 2 && (
@@ -335,7 +373,15 @@ export default function HairAccPage() {
                 const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
                 const code = ending ? (vid ? `${vid}${ending}` : ending) : s.slice(0, 8).replace(/\s+/g, '').toUpperCase()
                 // Other active styles that have their own colors (not linked themselves) — for sameAs picker
-                const linkTargets = activeStyles.filter(o => o !== s && !sameAs[o])
+                // Show as style codes (e.g. MD27001HC) not raw style names
+                const linkTargets = activeStyles
+                  .filter(o => o !== s && !sameAs[o])
+                  .map(o => {
+                    const oEnding = abbrevMap[o]?.trim()
+                    const oVid = parsedRows.find(r => r.style === o)?.vendorId ?? ''
+                    const oCode = oEnding ? (oVid ? `${oVid}${oEnding}` : oEnding) : o.slice(0, 8).replace(/\s+/g, '').toUpperCase()
+                    return { style: o, code: oCode }
+                  })
 
                 return (
                   <div key={s} style={{ background: '#fff', border: `1.5px solid ${isLinked ? '#c4b5fd' : border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
@@ -357,7 +403,7 @@ export default function HairAccPage() {
                           style={{ ...inp, fontSize: 11, padding: '3px 7px', maxWidth: 160 }}
                         >
                           <option value="">— own colors —</option>
-                          {linkTargets.map(o => <option key={o} value={o}>{o}</option>)}
+                          {linkTargets.map(({ style: o, code: oCode }) => <option key={o} value={o}>{oCode}</option>)}
                         </select>
                       </div>
 
@@ -372,7 +418,11 @@ export default function HairAccPage() {
                     {/* Color rows */}
                     {isLinked ? (
                       <div style={{ padding: '8px 14px', fontSize: 12, color: purpleD, fontWeight: 600 }}>
-                        🔗 Using colors from <strong>{linked}</strong>
+                        🔗 Using colors from <strong>{(() => {
+                          const lEnding = abbrevMap[linked]?.trim()
+                          const lVid = parsedRows.find(r => r.style === linked)?.vendorId ?? ''
+                          return lEnding ? (lVid ? `${lVid}${lEnding}` : lEnding) : linked.slice(0, 8).replace(/\s+/g, '').toUpperCase()
+                        })()}</strong>
                         {colorMap[linked] && (
                           <span style={{ color: gray, fontWeight: 400, marginLeft: 8 }}>
                             ({colorMap[linked].filter(c => c.code || c.name).length} colors)
