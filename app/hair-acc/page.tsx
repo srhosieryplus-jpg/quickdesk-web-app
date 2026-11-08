@@ -178,10 +178,11 @@ export default function HairAccPage() {
   // VendorIds selected to order → derive selected styles
   const selectedStyles = useMemo(() => {
     if (selected.size === 0) return activeStyles
+    const activeLower = activeStyles.map(s => s.toLowerCase())
     return parsedRows
-      .filter(r => selected.has(r.vendorId) && activeStyles.includes(r.style))
+      .filter(r => selected.has(r.vendorId) && activeLower.includes(r.style.toLowerCase()))
       .map(r => r.style)
-      .filter((s, i, arr) => arr.indexOf(s) === i)
+      .filter((s, i, arr) => arr.findIndex(x => x.toLowerCase() === s.toLowerCase()) === i)
   }, [activeStyles, selected, parsedRows])
 
   // Build output — only active styles, colors from global list
@@ -584,7 +585,7 @@ export default function HairAccPage() {
         {step === 2 && (() => {
           // Show exactly the checked vendors; fall back to all active vendors if none checked
           const allActiveVids = Array.from(new Set(
-            parsedRows.filter(r => activeStyles.includes(r.style)).map(r => r.vendorId).filter(Boolean)
+            parsedRows.filter(r => activeStyles.some(a => a.toLowerCase() === r.style.toLowerCase())).map(r => r.vendorId).filter(Boolean)
           ))
           const orderVids = selected.size > 0 ? Array.from(selected).filter(v => allActiveVids.includes(v)) : allActiveVids
           return (
@@ -812,7 +813,8 @@ export default function HairAccPage() {
                         const vidUniq2 = vidStyleRows.filter(r => { if (seen2.has(r.style.toLowerCase())) return false; seen2.add(r.style.toLowerCase()); return true })
                         const allStyleNames2 = vidUniq2.map(r => r.style)
                         const savedPivot: string[] = pivotStyles[vid] ?? allStyleNames2
-                        const curPivotStyles2: string[] = allStyleNames2.filter(s => savedPivot.includes(s))
+                        const savedPivotLower = savedPivot.map(s => s.toLowerCase())
+                        const curPivotStyles2: string[] = allStyleNames2.filter(s => savedPivotLower.includes(s.toLowerCase()))
                         const curQty2 = qtyMap[vid] ?? {}
                         // Use entries (all rows incl. blank) for editing; colors2 for display/calc
                         const numCols = curPivotStyles2.length
