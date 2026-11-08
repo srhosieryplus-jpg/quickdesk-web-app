@@ -200,12 +200,14 @@ export default function HairAccPage() {
     let lastVendor = ''
 
     const orderSet = selectedStyles.length > 0 ? selectedStyles : activeStyles
+    const orderSetLower = orderSet.map(s => s.toLowerCase())
     for (const r of parsedRows) {
-      if (!orderSet.includes(r.style)) continue
+      if (!orderSetLower.includes(r.style.toLowerCase())) continue
       const ending = resolveEnding(r.style)
       // Skip styles excluded from this vendor's pivot (if pivot has been configured)
+      // Use case-insensitive comparison so "Bow HEADBAND" matches "bow headband" in saved pivot
       const vPivot = pivotStyles[r.vendorId]
-      if (vPivot && vPivot.length > 0 && !vPivot.includes(r.style)) continue
+      if (vPivot && vPivot.length > 0 && !vPivot.some(s => s.toLowerCase() === r.style.toLowerCase())) continue
       const styleCode = ending
         ? (r.vendorId ? `${r.vendorId}${ending}` : ending)
         : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
