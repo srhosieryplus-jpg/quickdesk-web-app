@@ -1307,6 +1307,7 @@ export default function SeasonBookPage() {
                             const rowCurrency = (activeRows[0]?.currency as Currency) ?? 'USD'
                             // Collect unique invoice #s for this store (active only)
                             const invoiceNums = Array.from(new Set(activeRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
+                            const invoiceFileUrls = Array.from(new Set(activeRows.map(r => r.invoice_file_url).filter((u): u is string => !!u)))
                             return (
                               <tr key={store}
                                 onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
@@ -1329,8 +1330,17 @@ export default function SeasonBookPage() {
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit, rowCurrency)}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep, rowCurrency)}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: sBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(sBal, rowCurrency)}</td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right' }}>
-                                  <span style={{ fontSize: 10, color: gray }}>view →</span>
+                                <td style={{ padding: '8px 10px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                                  {invoiceFileUrls.length > 0
+                                    ? invoiceFileUrls.map((url, i) => (
+                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                          style={{ color: purpleD, fontWeight: 700, fontSize: 11, textDecoration: 'none', display: 'inline-block', marginLeft: i > 0 ? 4 : 0 }}
+                                          title="View PDF invoice">
+                                          📄{invoiceFileUrls.length > 1 ? ` ${i+1}` : ''}
+                                        </a>
+                                      ))
+                                    : <span style={{ fontSize: 10, color: gray }}>view →</span>
+                                  }
                                 </td>
                               </tr>
                             )
@@ -2085,10 +2095,10 @@ export default function SeasonBookPage() {
                 {/* Brand / vendor search */}
                 {(() => {
                   const q = payBrandSearch.trim().toLowerCase()
-                  const allBrandsWithBal = Array.from(new Set(allBalanceRows.map(r => r.brand))).sort()
-                  const allVendorIdsWithBal = Array.from(new Set(allBalanceRows.map(r => r.vendor_id).filter(Boolean))).sort() as string[]
-                  const brandResults = q ? allBrandsWithBal.filter(b => b.toLowerCase().includes(q)) : []
-                  const vendorResults = q ? allVendorIdsWithBal.filter(v => v.toLowerCase().includes(q)) : []
+                  const allBrandsInSeason = Array.from(new Set(rows.map(r => r.brand))).sort()
+                  const allVendorIdsInSeason = Array.from(new Set(rows.map(r => r.vendor_id).filter(Boolean))).sort() as string[]
+                  const brandResults = q ? allBrandsInSeason.filter(b => b.toLowerCase().includes(q)) : []
+                  const vendorResults = q ? allVendorIdsInSeason.filter(v => v.toLowerCase().includes(q)) : []
                   const hasResults = brandResults.length > 0 || vendorResults.length > 0
                   const hasFilter = quickPayBrand || quickPayVendorId
                   return (
