@@ -239,7 +239,7 @@ export default function ErrorFormsPage() {
   }, [showSeasonPanel])
 
   // Filter state
-  const [filterStatus, setFilterStatus] = useState<'all'|'open'|'finalized'>('open')
+  const [filterStatus, setFilterStatus] = useState<'all'|'open'|'finalized'>('all')
   const [filterBrand, setFilterBrand] = useState('')
   const [filterStore, setFilterStore] = useState('')
   const [search, setSearch] = useState('')
@@ -613,7 +613,7 @@ export default function ErrorFormsPage() {
           <div style={{ textAlign: 'center', color: gray, padding: 40, fontSize: 13 }}>Loading…</div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', color: gray, padding: 40, fontSize: 13 }}>
-            {filterStatus === 'open' ? 'No open error forms.' : 'No forms found.'}
+            {filtered.length === 0 ? 'No forms found.' : ''}
           </div>
         ) : (
           <table style={{ width: '100%', maxWidth: 960, margin: '0 auto', borderCollapse: 'collapse', fontSize: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderRadius: 10, overflow: 'hidden' }}>
@@ -712,10 +712,10 @@ export default function ErrorFormsPage() {
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
 
-              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 22 }}>
 
                 {/* Row 0: Store + Invoice # + Error Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 160px', gap: 12, alignItems: 'start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 160px', gap: 16, alignItems: 'start' }}>
                 <div>
                   <label style={lbl}>Store ID *</label>
                   {(!isAdmin && modal === 'edit') ? (
@@ -771,9 +771,9 @@ export default function ErrorFormsPage() {
                   )}
                 </div>
                   {/* Invoice # — same row as Store */}
-                  <div>
-                    <label style={lbl}>Invoice #</label>
-                    <input value={vals.invoice_number ?? ''} onChange={e => upd({ invoice_number: e.target.value || null })} placeholder="Optional" style={inp} />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <label style={{ ...lbl, alignSelf: 'flex-start' }}>Invoice #</label>
+                    <input value={vals.invoice_number ?? ''} onChange={e => upd({ invoice_number: e.target.value || null })} placeholder="Optional" style={{ ...inp, textAlign: 'center' }} />
                   </div>
                   {/* Error Date — same row as Store */}
                   <div>
@@ -783,7 +783,7 @@ export default function ErrorFormsPage() {
                 </div>
 
                 {/* Row 1: Brand + Amount */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
                   <div style={{ position: 'relative' }}>
                     <label style={lbl}>Brand *</label>
                     <input value={isEdit ? vals.brand : brandInput}
@@ -819,7 +819,7 @@ export default function ErrorFormsPage() {
                 </div>
 
                 {/* Row 2: Status + Email Sent + Final Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '160px 120px 160px', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '160px 120px 160px', gap: 16 }}>
                   <div>
                     <label style={lbl}>Resolution Status</label>
                     <select value={vals.status} onChange={e => upd({ status: e.target.value as EFStatus })} style={inp}>
