@@ -209,7 +209,9 @@ export default function HairAccPage() {
       const styleCode = ending
         ? (r.vendorId ? `${r.vendorId}${ending}` : ending)
         : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
-      const styleName = finalDesc[r.style]?.trim() || r.style
+      // Case-insensitive finalDesc lookup so "flat headband" key matches "flat headband" raw style
+      const fdKey = Object.keys(finalDesc).find(k => k.toLowerCase() === r.style.toLowerCase()) ?? r.style
+      const styleName = finalDesc[fdKey]?.trim() || r.style
       const isFirstForVendor = r.vendorId !== lastVendor
       if (r.vendorId) lastVendor = r.vendorId
       const colors = resolveColors(r.vendorId)
@@ -801,12 +803,11 @@ export default function HairAccPage() {
                             </select>
                           )}
                           <button onClick={addRow} style={{ background: '#f0ebff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer' }}>+ Color</button>
-                          <button onClick={() => setPivotPopup(vid)} style={{ background: purpleD, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Set Qty →</button>
                         </div>
                       </div>
 
-                      {/* Color rows — no qty column */}
-                      <div style={{ padding: '8px 14px' }}>
+                      {/* Color rows */}
+                      <div style={{ padding: '8px 14px 4px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '74px 1fr 24px', gap: 6, marginBottom: 4 }}>
                           {['Code', 'Color Name', ''].map(h => (
                             <div key={h} style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
@@ -854,6 +855,128 @@ export default function HairAccPage() {
                           </div>
                         ))}
                       </div>
+
+                      {/* Inline pivot table */}
+                      {(() => {
+                        const xEndings = new Set(Object.entries(abbrevMap).filter(([,v]) => v.trim().toUpperCase() === 'X').map(([k]) => k.toLowerCase()))
+                        const vidStyleRows = parsedRows.filter(r => r.vendorId === vid && !xEndings.has(r.style.toLowerCase()))
+                        const seen2 = new Set<string>()
+                        const vidUniq2 = vidStyleRows.filter(r => { if (seen2.has(r.style.toLowerCase())) return false; seen2.add(r.style.toLowerCase()); return true })
+                        const allStyleNames2 = vidUniq2.map(r => r.style)
+                        const curPivotStyles2: string[] = pivotStyles[vid] ?? allStyleNames2
+                        const curQty2 = qtyMap[vid] ?? {}
+                        const colors2 = resolveColors(vid)
+                        if (vidUniq2.length === 0) return null
+                        // col count = styles + 1 (color label) + 1 (sum)
+                        const numCols = curPivotStyles2.length
+                        return (
+                          <div style={{ borderTop: `1px solid ${border}`, padding: '0 0 8px' }}>
+                            {/* Style toggles */}
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 14px 6px' }}>
+                              {vidUniq2.map(r => {
+                                const ending2 = resolveEnding(r.style)
+                                const on2 = curPivotStyles2.includes(r.style)
+                                return (
+                                  <button key={r.style} onClick={() => {
+                                    const next2 = on2 ? curPivotStyles2.filter(s => s !== r.style) : [...curPivotStyles2, r.style]
+                                    const ps = { ...pivotStyles, [vid]: next2 }
+                                    setPivotStyles(ps); saveTo(LS_PIVOT_STYLES, ps)
+                                  }} style={{ background: on2 ? purpleD : '#f3f4f6', color: on2 ? '#fff' : '#374151', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <span>{r.style}</span>
+                                    {ending2 && <span style={{ fontSize: 9, fontWeight: 900, fontFamily: 'monospace', background: on2 ? 'rgba(255,255,255,0.25)' : '#e5e7eb', borderRadius: 3, padding: '1px 4px' }}>{ending2}</span>}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            {/* Pivot table */}
+                            {numCols > 0 && colors2.length > 0 && (
+                              <div style={{ overflowX: 'auto', padding: '0 14px' }}>
+                                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }} className={`pivot-table-${vid}`}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Color</th>
+                                      {curPivotStyles2.map(sn => (
+                                        <th key={sn} style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontFamily: 'monospace', fontWeight: 900, fontSize: 11, color: purpleD, whiteSpace: 'nowrap' }}>{vid}{resolveEnding(sn) || '?'}</th>
+                                      ))}
+                                      <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sum</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {colors2.map((c, ci) => {
+                                      const ck2 = colorKey(c)
+                                      const label2 = c.code.trim() && c.name.trim() ? `#${c.code} ${c.name}` : c.name.trim() || `#${c.code.trim()}`
+                                      const rowSum = curPivotStyles2.reduce((acc, sn) => {
+                                        const ending2 = resolveEnding(sn) || '?'
+                                        const v = parseInt(curQty2[ending2]?.[ck2] ?? '0', 10)
+                                        return acc + (isNaN(v) ? 0 : v)
+                                      }, 0)
+                                      return (
+                                        <tr key={ci} style={{ background: ci % 2 === 0 ? '#fff' : '#fafbff' }}>
+                                          <td style={{ padding: '4px 8px', borderBottom: `1px solid ${border}`, fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#374151', fontSize: 11 }}>{label2}</td>
+                                          {curPivotStyles2.map((sn, si) => {
+                                            const ending2 = resolveEnding(sn) || '?'
+                                            const val2 = curQty2[ending2]?.[ck2] ?? ''
+                                            return (
+                                              <td key={sn} style={{ padding: '3px 4px', borderBottom: `1px solid ${border}`, textAlign: 'center' }}>
+                                                <input
+                                                  data-row={ci} data-col={si}
+                                                  value={val2}
+                                                  onChange={ev => {
+                                                    const nq = { ...qtyMap, [vid]: { ...curQty2, [ending2]: { ...(curQty2[ending2] ?? {}), [ck2]: ev.target.value } } }
+                                                    setQtyMap(nq); saveTo(LS_QTY_KEY, nq)
+                                                  }}
+                                                  onKeyDown={ev => {
+                                                    const tbl = ev.currentTarget.closest('table')
+                                                    if (!tbl) return
+                                                    const all = Array.from(tbl.querySelectorAll('input[data-row][data-col]')) as HTMLInputElement[]
+                                                    const curR = ci, curC = si
+                                                    const rows2 = colors2.length, cols2 = numCols
+                                                    let nr = curR, nc = curC
+                                                    if (ev.key === 'ArrowRight' || ev.key === 'Tab') { ev.preventDefault(); nc = curC + 1; if (nc >= cols2) { nc = 0; nr = (curR + 1) % rows2 } }
+                                                    else if (ev.key === 'ArrowLeft') { ev.preventDefault(); nc = curC - 1; if (nc < 0) { nc = cols2 - 1; nr = (curR - 1 + rows2) % rows2 } }
+                                                    else if (ev.key === 'ArrowDown' || ev.key === 'Enter') { ev.preventDefault(); nr = (curR + 1) % rows2 }
+                                                    else if (ev.key === 'ArrowUp') { ev.preventDefault(); nr = (curR - 1 + rows2) % rows2 }
+                                                    else return
+                                                    const target = all.find(el => el.dataset.row === String(nr) && el.dataset.col === String(nc))
+                                                    target?.focus()
+                                                  }}
+                                                  placeholder="—"
+                                                  style={{ width: 48, textAlign: 'center', border: `1.5px solid ${border}`, borderRadius: 4, padding: '2px 4px', fontSize: 11, fontFamily: 'monospace', outline: 'none' }}
+                                                  onFocus={ev => ev.target.style.borderColor = purple}
+                                                  onBlur={ev => ev.target.style.borderColor = border}
+                                                />
+                                              </td>
+                                            )
+                                          })}
+                                          <td style={{ padding: '4px 8px', borderBottom: `1px solid ${border}`, textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: rowSum > 0 ? purpleD : '#d1d5db', fontSize: 11 }}>{rowSum > 0 ? rowSum : '—'}</td>
+                                        </tr>
+                                      )
+                                    })}
+                                    {/* Col sum row */}
+                                    <tr style={{ background: '#f5f3ff' }}>
+                                      <td style={{ padding: '4px 8px', fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Total</td>
+                                      {curPivotStyles2.map(sn => {
+                                        const ending2 = resolveEnding(sn) || '?'
+                                        const colSum = colors2.reduce((acc, c) => {
+                                          const v = parseInt(curQty2[ending2]?.[colorKey(c)] ?? '0', 10)
+                                          return acc + (isNaN(v) ? 0 : v)
+                                        }, 0)
+                                        return <td key={sn} style={{ padding: '4px 8px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: colSum > 0 ? purpleD : '#d1d5db', fontSize: 11 }}>{colSum > 0 ? colSum : '—'}</td>
+                                      })}
+                                      <td style={{ padding: '4px 8px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 900, color: purpleD, fontSize: 11 }}>
+                                        {curPivotStyles2.reduce((acc, sn) => {
+                                          const ending2 = resolveEnding(sn) || '?'
+                                          return acc + colors2.reduce((a, c) => { const v = parseInt(curQty2[ending2]?.[colorKey(c)] ?? '0', 10); return a + (isNaN(v) ? 0 : v) }, 0)
+                                        }, 0) || '—'}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
                   )
                 })}
@@ -878,36 +1001,6 @@ export default function HairAccPage() {
                 <span style={{ fontSize: 12, color: gray }}>Copy and paste straight into your sheet.</span>
               </div>
 
-              {/* Pre description editor per vendor */}
-              {outVids.length > 0 && (
-                <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14, boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Pre Description (per vendor)</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {outVids.map(vid => (
-                      <div key={vid} style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 8, alignItems: 'center' }}>
-                        <span style={{ background: purpleD, color: '#fff', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'monospace', textAlign: 'center' }}>{vid}</span>
-                        <input
-                          value={preDesc[vid] ?? ''}
-                          onChange={e => {
-                            const updated = { ...preDesc, [vid]: e.target.value }
-                            setPreDesc(updated); saveTo(LS_PREDESC_KEY, updated)
-                            // Rebuild final desc for all styles under this vendor
-                            const fdUpdated = { ...finalDesc }
-                            parsedRows.filter(r => r.vendorId === vid && activeStyles.includes(r.style)).forEach(r => {
-                              fdUpdated[r.style] = buildFinalDesc(e.target.value, r.style)
-                            })
-                            setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                          }}
-                          placeholder="e.g. Floral Crochet"
-                          style={{ ...inp, fontSize: 12 }}
-                          onFocus={ev => ev.target.style.borderColor = purple}
-                          onBlur={ev => ev.target.style.borderColor = border}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Output table */}
               <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
