@@ -119,6 +119,8 @@ export default function HairAccPage() {
   const [selected, setSelected]     = useState<Set<string>>(new Set())
   const [copied, setCopied]         = useState(false)
   const [sameAsPopup, setSameAsPopup] = useState<{ forVid: string; srcVid: string } | null>(null)
+  const [backendOpen, setBackendOpen] = useState(false)
+  const [backendOpenVids, setBackendOpenVids] = useState<Set<string>>(new Set())
   // qtyMap[vendorId][ending][colorKey] = qty string
   const [qtyMap, setQtyMap]         = useState<Record<string, Record<string, Record<string, string>>>>({})
   // pivotStyles[vendorId] = Set of ending codes included in pivot
@@ -241,10 +243,61 @@ export default function HairAccPage() {
             {copied ? '✓ Copied!' : 'Copy TSV'}
           </button>
         )}
+        {step > 0 && parsedRows.length > 0 && (
+          <button onClick={() => setBackendOpen(true)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>Backend</button>
+        )}
         {step > 0 && (
           <button onClick={() => { setStep(0); setPaste('') }} style={{ background: '#fee2e2', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#dc2626', cursor: 'pointer' }}>Reset</button>
         )}
       </div>
+
+      {/* ── Backend drawer ── */}
+      {backendOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', justifyContent: 'flex-end' }} onClick={() => setBackendOpen(false)}>
+          <div style={{ background: '#fff', width: '100%', maxWidth: 420, height: '100%', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '16px 20px', borderBottom: `1.5px solid ${border}`, display: 'flex', alignItems: 'center', gap: 10, position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 900, color: purpleD, flex: 1 }}>Backend — Raw Paste Data</div>
+              <button onClick={() => setBackendOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: gray }}>×</button>
+            </div>
+            <div style={{ padding: '12px 20px', flex: 1 }}>
+              {Array.from(new Map(parsedRows.map(r => [r.vendorId, r.vendorId])).keys()).map(vid => {
+                const vidRows = parsedRows.filter(r => r.vendorId === vid)
+                const isOpen = !backendOpenVids.has(`be-${vid}`)
+                return (
+                  <div key={vid} style={{ marginBottom: 8, border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                    <div
+                      onClick={() => {
+                        const next = new Set(backendOpenVids)
+                        isOpen ? next.add(`be-${vid}`) : next.delete(`be-${vid}`)
+                        setBackendOpenVids(next)
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: '#f9f7ff', cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <span style={{ background: purpleD, color: '#fff', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'monospace' }}>{vid || '(no vendor)'}</span>
+                      <span style={{ fontSize: 11, color: gray }}>{vidRows.length} rows</span>
+                      <span style={{ marginLeft: 'auto', color: gray }}>{isOpen ? '▾' : '▸'}</span>
+                    </div>
+                    {isOpen && (
+                      <div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0 12px', padding: '4px 14px', background: '#f5f3ff', borderBottom: `1px solid ${border}` }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Price</div>
+                        </div>
+                        {vidRows.map((r, i) => (
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0 12px', padding: '5px 14px', borderBottom: i < vidRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff' }}>
+                            <span style={{ fontSize: 12, color: '#374151' }}>{r.style}</span>
+                            <span style={{ fontSize: 12, color: gray, fontFamily: 'monospace' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : '—'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
         <Steps current={step} />
@@ -325,45 +378,66 @@ export default function HairAccPage() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
 
-                {/* ── LEFT: Endings editor ── */}
+                {/* ── LEFT: Endings editor (grouped by vendor) ── */}
                 <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
                   <div style={{ background: '#f5f3ff', borderBottom: `1px solid ${border}`, padding: '12px 16px' }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>Style Endings</div>
-                    <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>VendorID + Ending = Style Code · Type <span style={{ color: '#dc2626', fontWeight: 700 }}>X</span> to hide</div>
+                    <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>VendorID + Ending = Style Code · Type <span style={{ color: '#dc2626', fontWeight: 700 }}>X</span> to hide · Shared across vendors</div>
                   </div>
 
                   {/* Column headers */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px', gap: '0 8px', padding: '5px 14px', borderBottom: `1px solid #f0f0f0` }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style (from paste)</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Ending</div>
                   </div>
 
-                  {uniqueStyles.map(s => {
-                    const ending = abbrevMap[s] ?? ''
-                    const isX = ending.trim().toUpperCase() === 'X'
+                  {/* Grouped by vendor — each vendor is a collapsible section */}
+                  {vendorGroups.map(([vid, vStyles]) => {
+                    const isOpen = !backendOpenVids.has(`end-${vid}`) // default open
                     return (
-                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 72px', gap: '0 8px', padding: '4px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
-                        <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
-                        <input
-                          value={ending}
-                          onChange={e => {
-                            const val = e.target.value.toUpperCase()
-                            const updated = { ...abbrevMap, [s]: val }
-                            setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
-                            if (val && val !== 'X') {
-                              const fdUpdated = { ...finalDesc, [s]: buildFinalDesc('', s) }
-                              setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                            }
-                            if (val === 'X') {
-                              const next = new Set(selected); next.delete(s)
-                              setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
-                            }
+                      <div key={vid}>
+                        {/* Vendor group header */}
+                        <div
+                          onClick={() => {
+                            const next = new Set(backendOpenVids)
+                            isOpen ? next.add(`end-${vid}`) : next.delete(`end-${vid}`)
+                            setBackendOpenVids(next)
                           }}
-                          placeholder="HC"
-                          style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border, width: '100%' }}
-                          onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
-                          onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
-                        />
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px', background: '#f9f7ff', borderBottom: `1px solid #ede9fe`, cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <span style={{ background: purpleD, color: '#fff', borderRadius: 4, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace' }}>{vid || '—'}</span>
+                          <span style={{ fontSize: 10, color: gray }}>{vStyles.length} styles</span>
+                          <span style={{ marginLeft: 'auto', fontSize: 11, color: gray }}>{isOpen ? '▾' : '▸'}</span>
+                        </div>
+                        {isOpen && vStyles.map(s => {
+                          const ending = abbrevMap[s] ?? ''
+                          const isX = ending.trim().toUpperCase() === 'X'
+                          return (
+                            <div key={`${vid}-${s}`} style={{ display: 'grid', gridTemplateColumns: '1fr 72px', gap: '0 8px', padding: '4px 14px 4px 22px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
+                              <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
+                              <input
+                                value={ending}
+                                onChange={e => {
+                                  const val = e.target.value.toUpperCase()
+                                  const updated = { ...abbrevMap, [s]: val }
+                                  setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
+                                  if (val && val !== 'X') {
+                                    const fdUpdated = { ...finalDesc, [s]: buildFinalDesc('', s) }
+                                    setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                                  }
+                                  if (val === 'X') {
+                                    const next = new Set(selected); next.delete(s)
+                                    setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
+                                  }
+                                }}
+                                placeholder="HC"
+                                style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border, width: '100%' }}
+                                onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
+                                onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
+                              />
+                            </div>
+                          )
+                        })}
                       </div>
                     )
                   })}
