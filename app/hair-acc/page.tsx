@@ -262,52 +262,112 @@ export default function HairAccPage() {
       </div>
 
       {/* ── Backend drawer ── */}
-      {backendOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', justifyContent: 'flex-end' }} onClick={() => setBackendOpen(false)}>
-          <div style={{ background: '#fff', width: '100%', maxWidth: 420, height: '100%', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '16px 20px', borderBottom: `1.5px solid ${border}`, display: 'flex', alignItems: 'center', gap: 10, position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
-              <div style={{ fontSize: 15, fontWeight: 900, color: purpleD, flex: 1 }}>Backend — Raw Paste Data</div>
-              <button onClick={() => setBackendOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: gray }}>×</button>
-            </div>
-            <div style={{ padding: '12px 20px', flex: 1 }}>
-              {Array.from(new Map(parsedRows.map(r => [r.vendorId, r.vendorId])).keys()).map(vid => {
-                const vidRows = parsedRows.filter(r => r.vendorId === vid)
-                const isOpen = !backendOpenVids.has(`be-${vid}`)
-                return (
-                  <div key={vid} style={{ marginBottom: 8, border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-                    <div
-                      onClick={() => {
-                        const next = new Set(backendOpenVids)
-                        isOpen ? next.add(`be-${vid}`) : next.delete(`be-${vid}`)
-                        setBackendOpenVids(next)
-                      }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: '#f9f7ff', cursor: 'pointer', userSelect: 'none' }}
-                    >
-                      <span style={{ background: purpleD, color: '#fff', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'monospace' }}>{vid || '(no vendor)'}</span>
-                      <span style={{ fontSize: 11, color: gray }}>{vidRows.length} rows</span>
-                      <span style={{ marginLeft: 'auto', color: gray }}>{isOpen ? '▾' : '▸'}</span>
+      {backendOpen && (() => {
+        const beTab = backendOpenVids.has('__tab_vendors') ? 'vendors' : 'items'
+        const allVids = Array.from(new Map(parsedRows.map(r => [r.vendorId, r.vendorId])).keys())
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', justifyContent: 'flex-end' }} onClick={() => setBackendOpen(false)}>
+            <div style={{ background: '#fff', width: '100%', maxWidth: 440, height: '100%', display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div style={{ padding: '14px 20px', borderBottom: `1.5px solid ${border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: purpleD, flex: 1 }}>Backend</div>
+                <button onClick={() => setBackendOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: gray, lineHeight: 1 }}>×</button>
+              </div>
+
+              {/* Tabs */}
+              <div style={{ display: 'flex', borderBottom: `1.5px solid ${border}`, background: '#fafafa' }}>
+                {[{ key: 'items', label: 'Item Names' }, { key: 'vendors', label: 'Vendor Cards' }].map(t => (
+                  <button key={t.key} onClick={() => {
+                    const next = new Set(backendOpenVids)
+                    t.key === 'vendors' ? next.add('__tab_vendors') : next.delete('__tab_vendors')
+                    setBackendOpenVids(next)
+                  }} style={{ flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 700, border: 'none', borderBottom: beTab === t.key ? `2.5px solid ${purple}` : '2.5px solid transparent', background: 'none', color: beTab === t.key ? purple : gray, cursor: 'pointer' }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Content */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+
+                {/* ── Item Names tab ── */}
+                {beTab === 'items' && (
+                  <div>
+                    <div style={{ fontSize: 11, color: gray, marginBottom: 10 }}>All unique item names parsed from your paste, with their ending code and which vendor cards carry them.</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 44px 1fr', gap: '0 8px', padding: '4px 10px', background: '#f5f3ff', borderRadius: '6px 6px 0 0', borderBottom: `1px solid ${border}` }}>
+                      {['Item Name', 'Code', 'Vendor Cards'].map(h => (
+                        <div key={h} style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</div>
+                      ))}
                     </div>
-                    {isOpen && (
-                      <div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0 12px', padding: '4px 14px', background: '#f5f3ff', borderBottom: `1px solid ${border}` }}>
-                          <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style</div>
-                          <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Price</div>
-                        </div>
-                        {vidRows.map((r, i) => (
-                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0 12px', padding: '5px 14px', borderBottom: i < vidRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff' }}>
-                            <span style={{ fontSize: 12, color: '#374151' }}>{r.style}</span>
-                            <span style={{ fontSize: 12, color: gray, fontFamily: 'monospace' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : '—'}</span>
+                    <div style={{ border: `1px solid ${border}`, borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                      {uniqueStyles.map((s, i) => {
+                        const ending = resolveEnding(s)
+                        const isX = ending.toUpperCase() === 'X'
+                        const alias = aliasMap[s]
+                        const carriers = Array.from(new Set(parsedRows.filter(r => r.style.toLowerCase() === s.toLowerCase()).map(r => r.vendorId).filter(Boolean)))
+                        return (
+                          <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 44px 1fr', gap: '0 8px', padding: '6px 10px', borderBottom: i < uniqueStyles.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff', alignItems: 'center' }}>
+                            <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', textDecoration: isX ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s}>
+                              {s}
+                              {alias && <span style={{ fontSize: 10, color: '#a78bfa', marginLeft: 4 }}>→ {alias}</span>}
+                            </div>
+                            <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: isX ? '#fca5a5' : purpleD }}>{ending || '—'}</div>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {carriers.map(v => (
+                                <span key={v} style={{ background: '#f0ebff', color: purpleD, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, fontFamily: 'monospace' }}>{v}</span>
+                              ))}
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        )
+                      })}
+                    </div>
                   </div>
-                )
-              })}
+                )}
+
+                {/* ── Vendor Cards tab ── */}
+                {beTab === 'vendors' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ fontSize: 11, color: gray, marginBottom: 2 }}>Raw paste data grouped by vendor card.</div>
+                    {allVids.map(vid => {
+                      const vidRows = parsedRows.filter(r => r.vendorId === vid)
+                      const isOpen = !backendOpenVids.has(`be-${vid}`)
+                      return (
+                        <div key={vid} style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                          <div onClick={() => {
+                            const next = new Set(backendOpenVids)
+                            isOpen ? next.add(`be-${vid}`) : next.delete(`be-${vid}`)
+                            setBackendOpenVids(next)
+                          }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: '#f9f7ff', cursor: 'pointer', userSelect: 'none' }}>
+                            <span style={{ background: purpleD, color: '#fff', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'monospace' }}>{vid || '(no vendor)'}</span>
+                            <span style={{ fontSize: 11, color: gray }}>{vidRows.length} item{vidRows.length !== 1 ? 's' : ''}</span>
+                            <span style={{ marginLeft: 'auto', color: gray }}>{isOpen ? '▾' : '▸'}</span>
+                          </div>
+                          {isOpen && (
+                            <div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0 12px', padding: '4px 14px', background: '#f5f3ff', borderBottom: `1px solid ${border}` }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Item Name</div>
+                                <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Price</div>
+                              </div>
+                              {vidRows.map((r, i) => (
+                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0 12px', padding: '5px 14px', borderBottom: i < vidRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff' }}>
+                                  <span style={{ fontSize: 12, color: '#374151' }}>{r.style}</span>
+                                  <span style={{ fontSize: 12, color: gray, fontFamily: 'monospace' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : '—'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
         <Steps current={step} />
