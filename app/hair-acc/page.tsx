@@ -354,13 +354,18 @@ export default function HairAccPage() {
                     </button>
                   </div>
 
-                  {activeVendorGroups.map(({ vid, styles }) => {
-                    const allVidSel = styles.every(s => selected.has(s))
-                    return (
-                      <div key={vid}>
-                        {/* Vendor sub-header with Pre Desc + select toggle */}
-                        <div style={{ background: '#fafafa', borderBottom: `1px solid #f0f0f0`, borderTop: `1px solid #f0f0f0`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          {vid && <span style={{ fontSize: 11, fontWeight: 900, color: purpleD, fontFamily: 'monospace', flexShrink: 0 }}>{vid}</span>}
+                  {/* One row per vendor: checkbox | vendor ID | pre description */}
+                  <div style={{ padding: '6px 0' }}>
+                    {activeVendorGroups.map(({ vid, styles }) => {
+                      const allVidSel = styles.every(s => selected.has(s))
+                      return (
+                        <div key={vid} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, background: allVidSel ? '#f8f7ff' : 'transparent' }}>
+                          <input type="checkbox" checked={allVidSel} onChange={() => {
+                            const next = new Set(selected)
+                            styles.forEach(s => allVidSel ? next.delete(s) : next.add(s))
+                            setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
+                          }} style={{ accentColor: purple, width: 15, height: 15, cursor: 'pointer', flexShrink: 0 }} />
+                          <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 900, color: allVidSel ? purpleD : '#6b7280', minWidth: 72, flexShrink: 0 }}>{vid || '—'}</span>
                           <input
                             value={preDesc[vid] ?? ''}
                             onChange={e => {
@@ -374,51 +379,14 @@ export default function HairAccPage() {
                               setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
                             }}
                             placeholder="Pre description…"
-                            style={{ ...inp, flex: 1, fontSize: 11, minWidth: 100 }}
+                            style={{ ...inp, flex: 1, fontSize: 12 }}
                             onFocus={e => e.target.style.borderColor = purple}
                             onBlur={e => e.target.style.borderColor = border}
                           />
-                          <button onClick={() => {
-                            const next = new Set(selected)
-                            styles.forEach(s => allVidSel ? next.delete(s) : next.add(s))
-                            setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
-                          }} style={{ fontSize: 10, background: 'none', border: `1px solid #c4b5fd`, borderRadius: 5, padding: '2px 8px', color: purple, cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {allVidSel ? '−all' : '+all'}
-                          </button>
                         </div>
-
-                        {/* Style rows */}
-                        {styles.map(s => {
-                          const ending = abbrevMap[s]?.trim() ?? ''
-                          const isSel = selected.has(s)
-                          const fd = finalDesc[s] ?? ''
-                          return (
-                            <label key={s} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, background: isSel ? '#f8f7ff' : 'transparent', cursor: 'pointer' }}>
-                              <input type="checkbox" checked={isSel} onChange={() => {
-                                const next = new Set(selected)
-                                isSel ? next.delete(s) : next.add(s)
-                                setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
-                              }} style={{ accentColor: purple, width: 14, height: 14, cursor: 'pointer', flexShrink: 0 }} />
-                              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 800, color: '#fff', background: isSel ? purpleD : '#9ca3af', borderRadius: 4, padding: '2px 8px', flexShrink: 0 }}>{ending || '—'}</span>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <input
-                                  value={fd}
-                                  onChange={e => {
-                                    const fdUpdated = { ...finalDesc, [s]: e.target.value }
-                                    setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                                  }}
-                                  placeholder="Final description…"
-                                  style={{ ...inp, fontSize: 11, width: '100%', background: isSel ? '#fff' : '#f9fafb' }}
-                                  onFocus={e => e.target.style.borderColor = purple}
-                                  onBlur={e => e.target.style.borderColor = border}
-                                />
-                              </div>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
 
