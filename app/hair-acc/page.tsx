@@ -292,15 +292,41 @@ export default function HairAccPage() {
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
 
                 {/* ── Item Names tab ── */}
-                {beTab === 'items' && (
-                  <div style={{ border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
-                    {uniqueStyles.map((s, i) => (
-                      <div key={s} style={{ padding: '6px 12px', borderBottom: i < uniqueStyles.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff', fontSize: 12, color: '#374151' }}>
-                        {s}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {beTab === 'items' && (() => {
+                  // Group ALL raw names by lowercase key to show duplicates/case variants
+                  const rawGroups = new Map<string, { names: string[]; vids: string[] }>()
+                  for (const r of parsedRows) {
+                    const key = r.style.toLowerCase()
+                    if (!rawGroups.has(key)) rawGroups.set(key, { names: [], vids: [] })
+                    const g = rawGroups.get(key)!
+                    if (!g.names.includes(r.style)) g.names.push(r.style)
+                    if (!g.vids.includes(r.vendorId)) g.vids.push(r.vendorId)
+                  }
+                  const groups = Array.from(rawGroups.values())
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {groups.map((g, i) => {
+                        const hasDupes = g.names.length > 1
+                        return (
+                          <div key={i} style={{ border: `1px solid ${hasDupes ? '#fbbf24' : border}`, borderRadius: 8, overflow: 'hidden', background: hasDupes ? '#fffbeb' : '#fff' }}>
+                            {g.names.map((name, ni) => (
+                              <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: ni < g.names.length - 1 ? `1px dashed #fde68a` : 'none' }}>
+                                {hasDupes && <span style={{ fontSize: 10, color: '#d97706', fontWeight: 700 }}>{ni === 0 ? '=' : '='}</span>}
+                                <span style={{ fontSize: 12, color: '#374151', flex: 1 }}>{name}</span>
+                                <span style={{ fontSize: 10, color: gray, fontFamily: 'monospace' }}>{parsedRows.find(r => r.style === name)?.vendorId}</span>
+                              </div>
+                            ))}
+                            {hasDupes && (
+                              <div style={{ padding: '3px 12px', background: '#fef3c7', fontSize: 10, color: '#92400e' }}>
+                                treated as same item — {g.vids.join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
 
                 {/* ── Vendor Cards tab ── */}
                 {beTab === 'vendors' && (
