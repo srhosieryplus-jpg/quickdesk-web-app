@@ -83,7 +83,7 @@ function parsePaste(text: string): StyleRow[] {
 
 // ── Step indicator ─────────────────────────────────────────────────────────
 function Steps({ current }: { current: number }) {
-  const steps = ['Paste', 'Endings', 'Select Styles', 'Colors & Qty', 'Output']
+  const steps = ['Paste', 'Endings & Order', 'Colors & Qty', 'Output']
   return (
     <div style={{ display: 'flex', gap: 0, alignItems: 'center', marginBottom: 24 }}>
       {steps.map((s, i) => {
@@ -218,7 +218,7 @@ export default function HairAccPage() {
           <div style={{ fontSize: 16, fontWeight: 900, color: purpleD }}>Hair Accessories</div>
           <div style={{ fontSize: 11, color: gray }}>Style code generator</div>
         </div>
-        {step === 4 && (
+        {step === 3 && (
           <button onClick={copyOutput} style={{ background: copied ? '#d1fae5' : `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: copied ? '#065f46' : '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             {copied ? '✓ Copied!' : 'Copy TSV'}
           </button>
@@ -264,9 +264,8 @@ export default function HairAccPage() {
           </div>
         )}
 
-        {/* ── STEP 1: Endings ─────────────────────────────────────────── */}
+        {/* ── STEP 1: Endings & Order ──────────────────────────────────── */}
         {step === 1 && (() => {
-          // Group unique styles by vendorId so we can show one Pre Desc input per vendor
           const vendorGroups = Array.from(
             uniqueStyles.reduce((m, s) => {
               const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
@@ -275,214 +274,163 @@ export default function HairAccPage() {
               return m
             }, new Map<string, string[]>())
           )
-          return (
-            <div>
-              <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 20, marginBottom: 16, boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Set style code endings</div>
-                <div style={{ fontSize: 12, color: gray, marginBottom: 4 }}>
-                  Code = VendorID + Ending &nbsp;·&nbsp; Final Description = Pre Description + Ending word (editable).
-                </div>
-                <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 0, fontWeight: 600 }}>
-                  Type <code style={{ background: '#fef2f2', padding: '1px 5px', borderRadius: 4 }}>X</code> to hide a style (not carried).
-                </div>
-              </div>
-
-              {vendorGroups.map(([vid, styles]) => (
-                <div key={vid} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, marginBottom: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
-                  {/* Vendor header + Pre Description */}
-                  <div style={{ background: '#f5f3ff', borderBottom: `1px solid ${border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    {vid && <span style={{ fontSize: 13, fontWeight: 900, color: purpleD, fontFamily: 'monospace' }}>{vid}</span>}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 220 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: gray, whiteSpace: 'nowrap' }}>Pre Description:</span>
-                      <input
-                        value={preDesc[vid] ?? ''}
-                        onChange={e => {
-                          const updated = { ...preDesc, [vid]: e.target.value }
-                          setPreDesc(updated); saveTo(LS_PREDESC_KEY, updated)
-                          // Auto-rebuild finalDesc for all styles under this vendor
-                          const fdUpdated = { ...finalDesc }
-                          for (const s of styles) {
-                            const ending = abbrevMap[s]?.trim() ?? ''
-                            if (ending && ending !== 'X') {
-                              fdUpdated[s] = buildFinalDesc(e.target.value, s)
-                            }
-                          }
-                          setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                        }}
-                        placeholder={vid ? `e.g. Floral Crochet Lace` : 'e.g. Scrunchie'}
-                        style={{ ...inp, flex: 1, fontSize: 12 }}
-                        onFocus={e => e.target.style.borderColor = purple}
-                        onBlur={e => e.target.style.borderColor = border}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Column headers */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: '0 12px', padding: '6px 16px', borderBottom: `1px solid #f0f0f0`, alignItems: 'center' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style (from paste)</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Ending</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Final Description</div>
-                  </div>
-
-                  {/* Style rows */}
-                  {styles.map(s => {
-                    const ending = abbrevMap[s] ?? ''
-                    const isX = ending.trim().toUpperCase() === 'X'
-                    const fd = finalDesc[s] ?? ''
-                    return (
-                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: '0 12px', padding: '5px 16px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
-                        <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
-                        <input
-                          value={ending}
-                          onChange={e => {
-                            const val = e.target.value.toUpperCase()
-                            const updated = { ...abbrevMap, [s]: val }
-                            setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
-                            // Auto-build finalDesc using style name (not ending code)
-                            if (val && val !== 'X') {
-                              const pre = preDesc[vid] ?? ''
-                              const fdUpdated = { ...finalDesc, [s]: buildFinalDesc(pre, s) }
-                              setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                            }
-                          }}
-                          placeholder="e.g. HC"
-                          style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border }}
-                          onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
-                          onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
-                        />
-                        <input
-                          value={isX ? '' : fd}
-                          onChange={e => {
-                            const fdUpdated = { ...finalDesc, [s]: e.target.value }
-                            setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                          }}
-                          disabled={isX}
-                          placeholder={isX ? '(hidden)' : 'Final description…'}
-                          style={{ ...inp, fontSize: 12, color: '#374151', background: isX ? '#f9fafb' : '#fff' }}
-                          onFocus={e => e.target.style.borderColor = purple}
-                          onBlur={e => e.target.style.borderColor = border}
-                        />
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
-
-              <button onClick={() => {
-                saveTo(LS_ABBREV_KEY, abbrevMap)
-                saveTo(LS_FINALDESC_KEY, finalDesc)
-                setStep(2)
-              }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
-                Next: Select Styles →
-              </button>
-            </div>
-          )
-        })()}
-
-        {/* ── STEP 2: Select Styles to Order ──────────────────────────── */}
-        {step === 2 && (() => {
-          const vendorGroups = Array.from(
-            activeStyles.reduce((m, s) => {
-              const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
-              if (!m.has(vid)) m.set(vid, [])
-              m.get(vid)!.push(s)
-              return m
-            }, new Map<string, string[]>())
-          )
           const allSelected = activeStyles.every(s => selected.has(s))
+          const selCount = activeStyles.filter(s => selected.has(s)).length
           return (
             <div>
-              <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: 20, marginBottom: 16, boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 4 }}>Select styles to order</div>
-                <div style={{ fontSize: 12, color: gray, marginBottom: 12 }}>
-                  Check the styles you're ordering this time. You can also update Pre Descriptions here.
+              {/* Header bar */}
+              <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, padding: '14px 20px', marginBottom: 16, boxShadow: '0 2px 12px rgba(124,58,237,0.07)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: purpleD, marginBottom: 2 }}>Set endings & select styles to order</div>
+                  <div style={{ fontSize: 12, color: gray }}>
+                    Code = VendorID + Ending &nbsp;·&nbsp; <span style={{ color: '#dc2626', fontWeight: 600 }}>X</span> = hide style &nbsp;·&nbsp; ✓ = ordering this time
+                  </div>
                 </div>
                 <button onClick={() => {
                   const next = allSelected ? new Set<string>() : new Set(activeStyles)
                   setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
-                }} style={{ background: '#f0ebff', border: 'none', borderRadius: 7, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
+                }} style={{ background: '#f0ebff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                   {allSelected ? 'Deselect All' : 'Select All'}
                 </button>
+                <span style={{ fontSize: 12, color: gray, whiteSpace: 'nowrap' }}>
+                  {selCount > 0 ? `${selCount} of ${activeStyles.length} selected` : `${activeStyles.length} active`}
+                </span>
               </div>
 
-              {vendorGroups.map(([vid, styles]) => (
-                <div key={vid} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, marginBottom: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
-                  {/* Vendor header + Pre Description */}
-                  <div style={{ background: '#f5f3ff', borderBottom: `1px solid ${border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    {vid && <span style={{ fontSize: 13, fontWeight: 900, color: purpleD, fontFamily: 'monospace' }}>{vid}</span>}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 220 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: gray, whiteSpace: 'nowrap' }}>Pre Description:</span>
-                      <input
-                        value={preDesc[vid] ?? ''}
-                        onChange={e => {
-                          const updated = { ...preDesc, [vid]: e.target.value }
-                          setPreDesc(updated); saveTo(LS_PREDESC_KEY, updated)
-                          const fdUpdated = { ...finalDesc }
-                          for (const s of styles) {
-                            fdUpdated[s] = buildFinalDesc(e.target.value, s)
-                          }
-                          setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                        }}
-                        placeholder="e.g. Floral Crochet Lace"
-                        style={{ ...inp, flex: 1, fontSize: 12 }}
-                        onFocus={e => e.target.style.borderColor = purple}
-                        onBlur={e => e.target.style.borderColor = border}
-                      />
+              {vendorGroups.map(([vid, styles]) => {
+                const allVidSel = styles.filter(s => (abbrevMap[s] ?? '').trim().toUpperCase() !== 'X').every(s => selected.has(s))
+                const activeVid = styles.filter(s => (abbrevMap[s] ?? '').trim().toUpperCase() !== 'X')
+                return (
+                  <div key={vid} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, marginBottom: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
+                    {/* Vendor header */}
+                    <div style={{ background: '#f5f3ff', borderBottom: `1px solid ${border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      {vid && <span style={{ fontSize: 13, fontWeight: 900, color: purpleD, fontFamily: 'monospace' }}>{vid}</span>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: gray, whiteSpace: 'nowrap' }}>Pre Desc:</span>
+                        <input
+                          value={preDesc[vid] ?? ''}
+                          onChange={e => {
+                            const updated = { ...preDesc, [vid]: e.target.value }
+                            setPreDesc(updated); saveTo(LS_PREDESC_KEY, updated)
+                            const fdUpdated = { ...finalDesc }
+                            for (const s of styles) {
+                              const ending = abbrevMap[s]?.trim() ?? ''
+                              if (ending && ending !== 'X') fdUpdated[s] = buildFinalDesc(e.target.value, s)
+                            }
+                            setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                          }}
+                          placeholder="e.g. Floral Crochet Lace"
+                          style={{ ...inp, flex: 1, fontSize: 12 }}
+                          onFocus={e => e.target.style.borderColor = purple}
+                          onBlur={e => e.target.style.borderColor = border}
+                        />
+                      </div>
+                      {activeVid.length > 0 && (
+                        <button onClick={() => {
+                          const next = new Set(selected)
+                          activeVid.forEach(s => allVidSel ? next.delete(s) : next.add(s))
+                          setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
+                        }} style={{ fontSize: 11, background: 'none', border: `1px solid #c4b5fd`, borderRadius: 5, padding: '3px 10px', color: purple, cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          {allVidSel ? 'Deselect vendor' : 'Select vendor'}
+                        </button>
+                      )}
                     </div>
-                    {/* Select all in this vendor */}
-                    <button onClick={() => {
-                      const allVidSel = styles.every(s => selected.has(s))
-                      const next = new Set(selected)
-                      styles.forEach(s => allVidSel ? next.delete(s) : next.add(s))
-                      setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
-                    }} style={{ fontSize: 11, background: 'none', border: `1px solid #c4b5fd`, borderRadius: 5, padding: '3px 10px', color: purple, cursor: 'pointer', fontWeight: 700 }}>
-                      {styles.every(s => selected.has(s)) ? 'Deselect vendor' : 'Select vendor'}
-                    </button>
-                  </div>
 
-                  {/* Style checkboxes */}
-                  <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {/* Column headers */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 80px 1fr', gap: '0 10px', padding: '6px 16px', borderBottom: `1px solid #f0f0f0`, alignItems: 'center' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>✓</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style (from paste)</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Ending</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Final Description</div>
+                    </div>
+
+                    {/* Style rows */}
                     {styles.map(s => {
-                      const ending = abbrevMap[s]?.trim() ?? ''
-                      const code = ending ? (vid ? `${vid}${ending}` : ending) : s.slice(0, 8).replace(/\s+/g, '').toUpperCase()
-                      const isSel = selected.has(s)
+                      const ending = abbrevMap[s] ?? ''
+                      const isX = ending.trim().toUpperCase() === 'X'
+                      const isSel = !isX && selected.has(s)
                       const fd = finalDesc[s] ?? ''
                       return (
-                        <label key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 7, background: isSel ? '#f5f3ff' : 'transparent', cursor: 'pointer', transition: 'background 0.15s' }}>
-                          <input type="checkbox" checked={isSel} onChange={() => {
-                            const next = new Set(selected)
-                            isSel ? next.delete(s) : next.add(s)
-                            setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
-                          }} style={{ accentColor: purple, width: 15, height: 15, cursor: 'pointer' }} />
-                          <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 800, color: purpleD, background: isSel ? '#ede9fe' : '#f3f4f6', borderRadius: 4, padding: '2px 7px' }}>{code}</span>
-                          <span style={{ fontSize: 12, color: '#374151', flex: 1 }}>{fd || s}</span>
-                        </label>
+                        <div key={s} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 80px 1fr', gap: '0 10px', padding: '5px 16px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : isSel ? '#fafbff' : 'transparent' }}>
+                          {/* Checkbox */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {!isX && (
+                              <input type="checkbox" checked={isSel} onChange={() => {
+                                const next = new Set(selected)
+                                isSel ? next.delete(s) : next.add(s)
+                                setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
+                              }} style={{ accentColor: purple, width: 14, height: 14, cursor: 'pointer' }} />
+                            )}
+                          </div>
+                          {/* Style name */}
+                          <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
+                          {/* Ending input */}
+                          <input
+                            value={ending}
+                            onChange={e => {
+                              const val = e.target.value.toUpperCase()
+                              const updated = { ...abbrevMap, [s]: val }
+                              setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
+                              if (val && val !== 'X') {
+                                const pre = preDesc[vid] ?? ''
+                                const fdUpdated = { ...finalDesc, [s]: buildFinalDesc(pre, s) }
+                                setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                              }
+                              // Auto-uncheck if set to X
+                              if (val === 'X') {
+                                const next = new Set(selected); next.delete(s)
+                                setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
+                              }
+                            }}
+                            placeholder="HC"
+                            style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border }}
+                            onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
+                            onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
+                          />
+                          {/* Final description */}
+                          <input
+                            value={isX ? '' : fd}
+                            onChange={e => {
+                              const fdUpdated = { ...finalDesc, [s]: e.target.value }
+                              setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
+                            }}
+                            disabled={isX}
+                            placeholder={isX ? '(hidden)' : 'Final description…'}
+                            style={{ ...inp, fontSize: 12, color: '#374151', background: isX ? '#f9fafb' : '#fff' }}
+                            onFocus={e => e.target.style.borderColor = purple}
+                            onBlur={e => e.target.style.borderColor = border}
+                          />
+                        </div>
                       )
                     })}
                   </div>
-                </div>
-              ))}
+                )
+              })}
 
-              <div style={{ marginTop: 4, display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <button onClick={() => {
+                  saveTo(LS_ABBREV_KEY, abbrevMap)
+                  saveTo(LS_FINALDESC_KEY, finalDesc)
                   saveTo(LS_SELECTED_KEY, Array.from(selected))
-                  const orderStyles = selected.size > 0 ? Array.from(selected) : activeStyles
+                  const orderStyles = selCount > 0 ? activeStyles.filter(s => selected.has(s)) : activeStyles
                   const saved = loadSaved<Record<string, ColorEntry[]>>(LS_COLORS_KEY, {})
                   const merged: Record<string, ColorEntry[]> = {}
                   for (const s of orderStyles) merged[s] = saved[s] ?? [{ code: '', name: '', qty: '' }]
                   setColorMap(merged)
-                  setStep(3)
+                  setStep(2)
                 }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
                   Next: Colors & Qty →
                 </button>
-                <span style={{ fontSize: 12, color: gray }}>{selected.size > 0 ? `${selected.size} style${selected.size !== 1 ? 's' : ''} selected` : `All ${activeStyles.length} styles`}</span>
+                <span style={{ fontSize: 12, color: gray }}>
+                  {selCount > 0 ? `${selCount} style${selCount !== 1 ? 's' : ''} to order` : `All ${activeStyles.length} active styles`}
+                </span>
               </div>
             </div>
           )
         })()}
 
-        {/* ── STEP 3: Colors & Qty (per style) ────────────────────────── */}
-        {step === 3 && (
+        {/* ── STEP 2: Colors & Qty (per style) ────────────────────────── */}
+        {step === 2 && (
           <div>
             <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
               Set colors per style. Use <strong>Same as…</strong> to copy another style's colors. Enter as <code style={{ background: '#f5f3ff', padding: '1px 5px', borderRadius: 4 }}>code name</code> (e.g. <code>001 Black</code>). Saved for next time.
@@ -579,18 +527,18 @@ export default function HairAccPage() {
             </div>
 
             <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
-              <button onClick={() => { saveTo(LS_COLORS_KEY, colorMap); saveTo(LS_SAMEAS_KEY, sameAs); setStep(4) }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
+              <button onClick={() => { saveTo(LS_COLORS_KEY, colorMap); saveTo(LS_SAMEAS_KEY, sameAs); setStep(3) }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
                 Next: See Output →
               </button>
-              <button onClick={() => setStep(4)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
+              <button onClick={() => setStep(3)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
                 Skip (no colors)
               </button>
             </div>
           </div>
         )}
 
-        {/* ── STEP 4: Output ──────────────────────────────────────────── */}
-        {step === 4 && (
+        {/* ── STEP 3: Output ──────────────────────────────────────────── */}
+        {step === 3 && (
           <div>
             <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
               Table is formatted like your original paste — copy and paste straight into your sheet.
@@ -616,7 +564,7 @@ export default function HairAccPage() {
               <button onClick={copyOutput} style={{ background: copied ? '#d1fae5' : `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: copied ? '#065f46' : '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: copied ? 'none' : '0 2px 10px rgba(124,58,237,0.3)' }}>
                 {copied ? '✓ Copied to clipboard!' : 'Copy Table (TSV)'}
               </button>
-              <button onClick={() => setStep(3)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>← Edit Colors</button>
+              <button onClick={() => setStep(2)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>← Edit Colors</button>
             </div>
           </div>
         )}
