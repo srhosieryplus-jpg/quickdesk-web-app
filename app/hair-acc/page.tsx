@@ -673,7 +673,7 @@ export default function HairAccPage() {
                             <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Include styles in order</div>
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                               {vidUniq.map(r => {
-                                const ending = abbrevMap[r.style]?.trim() ?? ''
+                                const ending = resolveEnding(r.style)
                                 const on = curPivotStyles.includes(r.style)
                                 return (
                                   <button key={r.style} onClick={() => {
@@ -699,7 +699,7 @@ export default function HairAccPage() {
                                   <tr>
                                     <th style={{ padding: '6px 10px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Color</th>
                                     {curPivotStyles.map(styleName => {
-                                      const ending = abbrevMap[styleName]?.trim() ?? styleName
+                                      const ending = resolveEnding(styleName) || '?'
                                       return (
                                         <th key={styleName} style={{ padding: '6px 10px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontFamily: 'monospace', fontWeight: 900, color: purpleD, whiteSpace: 'nowrap' }}>{vid}{ending}</th>
                                       )
@@ -714,7 +714,7 @@ export default function HairAccPage() {
                                       <tr key={ci} style={{ background: ci % 2 === 0 ? '#fff' : '#fafbff' }}>
                                         <td style={{ padding: '5px 10px', borderBottom: `1px solid ${border}`, fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#374151' }}>{label}</td>
                                         {curPivotStyles.map(styleName => {
-                                          const ending = abbrevMap[styleName]?.trim() ?? styleName
+                                          const ending = resolveEnding(styleName) || '?'
                                           const val = curQty[ending]?.[ck] ?? ''
                                           return (
                                             <td key={styleName} style={{ padding: '4px 6px', borderBottom: `1px solid ${border}`, textAlign: 'center' }}>
