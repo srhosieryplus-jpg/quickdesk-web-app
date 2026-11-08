@@ -220,9 +220,10 @@ export default function HairAccPage() {
         out.push({ vendorId: r.vendorId, styleCode, styleName, color: '', qty: '', price: r.price, isFirstForVendor })
       } else {
         colors.forEach((c, ci) => {
+          const nameProper = c.name.trim().replace(/\b\w/g, l => l.toUpperCase())
           const colorStr = c.code.trim() && c.name.trim()
-            ? `#${c.code.trim()} ${c.name.trim()}`
-            : c.name.trim() || `#${c.code.trim()}`
+            ? `#${c.code.trim()} ${nameProper}`
+            : nameProper || `#${c.code.trim()}`
           const qty = (qtyMap[r.vendorId]?.[ending]?.[colorKey(c)] ?? '').trim()
           out.push({ vendorId: r.vendorId, styleCode, styleName, color: colorStr, qty, price: r.price, isFirstForVendor: ci === 0 && isFirstForVendor })
         })
@@ -806,54 +807,53 @@ export default function HairAccPage() {
                         </div>
                       </div>
 
-                      {/* Color rows */}
+                      {/* Color rows — single combined input "001 Black" */}
                       <div style={{ padding: '8px 14px 4px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '74px 1fr 24px', gap: 6, marginBottom: 4 }}>
-                          {['Code', 'Color Name', ''].map(h => (
-                            <div key={h} style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
-                          ))}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px', gap: 6, marginBottom: 4 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Code + Color Name</div>
+                          <div />
                         </div>
-                        {entries.map((e, ei) => (
-                          <div key={ei} className="color-row" style={{ display: 'grid', gridTemplateColumns: '74px 1fr 24px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <span style={{ color: '#9ca3af', fontSize: 12, fontWeight: 700 }}>#</span>
+                        {entries.map((e, ei) => {
+                          const combined = [e.code.trim(), e.name.trim()].filter(Boolean).join(' ')
+                          return (
+                            <div key={ei} className="color-row" style={{ display: 'grid', gridTemplateColumns: '1fr 24px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
                               <input
-                                value={e.code}
-                                onChange={ev => { const u = [...entries]; u[ei] = { ...e, code: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }}
-                                onKeyDown={ev => { if (ev.key === 'Enter') { ev.preventDefault(); (ev.currentTarget.closest('.color-row')?.querySelector('.name-inp') as HTMLInputElement)?.focus() } }}
-                                placeholder="001"
-                                style={{ ...inp, fontFamily: 'monospace', fontSize: 11, width: '100%' }}
-                                onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border}
-                              />
-                            </div>
-                            <input
-                              className="name-inp"
-                              value={e.name}
-                              onChange={ev => { const u = [...entries]; u[ei] = { ...e, name: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }}
-                              onKeyDown={ev => {
-                                if (ev.key === 'Enter') {
-                                  ev.preventDefault()
-                                  if (ei === entries.length - 1) {
-                                    addRow()
-                                    setTimeout(() => {
+                                className="name-inp"
+                                value={combined}
+                                onChange={ev => {
+                                  const val = ev.target.value
+                                  // Parse: leading digits = code, rest = name
+                                  const m = val.match(/^(\d+)\s*(.*)$/)
+                                  const code = m ? m[1] : ''
+                                  const name = m ? m[2] : val
+                                  const u = [...entries]; u[ei] = { ...e, code, name }
+                                  const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
+                                }}
+                                onKeyDown={ev => {
+                                  if (ev.key === 'Enter') {
+                                    ev.preventDefault()
+                                    if (ei === entries.length - 1) {
+                                      addRow()
+                                      setTimeout(() => {
+                                        const rows = document.querySelectorAll(`[data-vid="${vid}"] .color-row`)
+                                        const next = rows[ei + 1]?.querySelector('input') as HTMLInputElement
+                                        next?.focus()
+                                      }, 30)
+                                    } else {
                                       const rows = document.querySelectorAll(`[data-vid="${vid}"] .color-row`)
                                       const next = rows[ei + 1]?.querySelector('input') as HTMLInputElement
                                       next?.focus()
-                                    }, 30)
-                                  } else {
-                                    const rows = document.querySelectorAll(`[data-vid="${vid}"] .color-row`)
-                                    const next = rows[ei + 1]?.querySelector('input') as HTMLInputElement
-                                    next?.focus()
+                                    }
                                   }
-                                }
-                              }}
-                              placeholder="Black"
-                              style={{ ...inp, fontSize: 11 }}
-                              onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border}
-                            />
-                            <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [vid]: u.length ? u : [{ code: '', name: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 15, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
-                          </div>
-                        ))}
+                                }}
+                                placeholder="001 Black"
+                                style={{ ...inp, fontSize: 12 }}
+                                onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border}
+                              />
+                              <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [vid]: u.length ? u : [{ code: '', name: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 15, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
+                            </div>
+                          )
+                        })}
                       </div>
 
                       {/* Inline pivot table */}
