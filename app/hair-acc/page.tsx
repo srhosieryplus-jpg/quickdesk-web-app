@@ -14,7 +14,7 @@ const LS_COLORS_KEY    = 'hairAcc_colorMap'    // per-style color map
 const LS_SAMEAS_KEY    = 'hairAcc_sameAs'      // per-style "same as" link
 const LS_PREDESC_KEY   = 'hairAcc_preDesc'     // per-vendorId pre-description
 const LS_FINALDESC_KEY = 'hairAcc_finalDesc'   // per-style final description (editable)
-const LS_SELECTED_KEY  = 'hairAcc_selected'    // styles selected to order
+const LS_SELECTED_KEY  = 'hairAcc_selected'    // vendorIds selected to order
 
 // Strip parenthetical notes and apply proper title case
 function toTitleCase(s: string): string {
@@ -145,19 +145,21 @@ export default function HairAccPage() {
     [uniqueStyles, abbrevMap]
   )
 
-  // Styles selected to order (subset of activeStyles)
-  const selectedStyles = useMemo(() =>
-    activeStyles.filter(s => selected.has(s)),
-    [activeStyles, selected]
-  )
+  // VendorIds selected to order → derive selected styles
+  const selectedStyles = useMemo(() => {
+    if (selected.size === 0) return activeStyles
+    return parsedRows
+      .filter(r => selected.has(r.vendorId) && activeStyles.includes(r.style))
+      .map(r => r.style)
+      .filter((s, i, arr) => arr.indexOf(s) === i)
+  }, [activeStyles, selected, parsedRows])
 
   // Build output — only active styles, colors from global list
   interface OutRow { vendorId: string; styleCode: string; styleName: string; color: string; qty: string; price: number; isFirstForVendor: boolean }
 
-  // Resolve colors for a style: follow sameAs chain (max 1 hop to avoid cycles)
-  function resolveColors(style: string): ColorEntry[] {
-    const linked = sameAs[style]?.trim()
-    const source = linked ? (colorMap[linked] ?? []) : (colorMap[style] ?? [])
+  // Resolve colors for a style: look up by vendorId (colors shared across all styles of a vendor)
+  function resolveColors(vendorId: string): ColorEntry[] {
+    const source = colorMap[vendorId] ?? []
     return source.filter(c => c.code.trim() || c.name.trim())
   }
 
@@ -175,7 +177,7 @@ export default function HairAccPage() {
       const styleName = finalDesc[r.style]?.trim() || r.style
       const isFirstForVendor = r.vendorId !== lastVendor
       if (r.vendorId) lastVendor = r.vendorId
-      const colors = resolveColors(r.style)
+      const colors = resolveColors(r.vendorId)
 
       if (colors.length === 0) {
         out.push({ vendorId: r.vendorId, styleCode, styleName, color: '', qty: '', price: r.price, isFirstForVendor })
@@ -190,7 +192,7 @@ export default function HairAccPage() {
     }
     return out
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsedRows, activeStyles, abbrevMap, colorMap, sameAs])
+  }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, selectedStyles])
 
   function copyOutput() {
     const tsv = outRows.map(r => [
@@ -280,8 +282,9 @@ export default function HairAccPage() {
             styles: styles.filter(s => (abbrevMap[s] ?? '').trim().toUpperCase() !== 'X')
           })).filter(g => g.styles.length > 0)
 
-          const allSelected = activeStyles.every(s => selected.has(s))
-          const selCount = activeStyles.filter(s => selected.has(s)).length
+          const allVids = activeVendorGroups.map(g => g.vid)
+          const allSelected = allVids.length > 0 && allVids.every(v => selected.has(v))
+          const selCount = activeVendorGroups.filter(g => selected.has(g.vid)).length
 
           return (
             <div>
@@ -342,11 +345,11 @@ export default function HairAccPage() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>Select to Order</div>
                       <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>
-                        {selCount > 0 ? `${selCount} of ${activeStyles.length} selected` : `${activeStyles.length} active styles`}
+                        {selCount > 0 ? `${selCount} of ${activeVendorGroups.length} vendors selected` : `${activeVendorGroups.length} vendors`}
                       </div>
                     </div>
                     <button onClick={() => {
-                      const next = allSelected ? new Set<string>() : new Set(activeStyles)
+                      const next = allSelected ? new Set<string>() : new Set(allVids)
                       setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
                     }} style={{ background: '#ede9fe', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                       {allSelected ? 'Deselect All' : 'Select All'}
@@ -356,15 +359,15 @@ export default function HairAccPage() {
                   {/* One row per vendor: checkbox | vendor ID | pre description */}
                   <div style={{ padding: '6px 0' }}>
                     {activeVendorGroups.map(({ vid, styles }) => {
-                      const allVidSel = styles.every(s => selected.has(s))
+                      const isSel = selected.has(vid)
                       return (
-                        <div key={vid} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, background: allVidSel ? '#f8f7ff' : 'transparent' }}>
-                          <input type="checkbox" checked={allVidSel} onChange={() => {
+                        <div key={vid} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, background: isSel ? '#f8f7ff' : 'transparent' }}>
+                          <input type="checkbox" checked={isSel} onChange={() => {
                             const next = new Set(selected)
-                            styles.forEach(s => allVidSel ? next.delete(s) : next.add(s))
+                            isSel ? next.delete(vid) : next.add(vid)
                             setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
                           }} style={{ accentColor: purple, width: 15, height: 15, cursor: 'pointer', flexShrink: 0 }} />
-                          <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 900, color: allVidSel ? purpleD : '#6b7280', minWidth: 72, flexShrink: 0 }}>{vid || '—'}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 900, color: isSel ? purpleD : '#6b7280', minWidth: 72, flexShrink: 0 }}>{vid || '—'}</span>
                           <input
                             value={preDesc[vid] ?? ''}
                             onChange={e => {
@@ -405,86 +408,47 @@ export default function HairAccPage() {
                   Next: Colors & Qty →
                 </button>
                 <span style={{ fontSize: 12, color: gray }}>
-                  {selCount > 0 ? `${selCount} style${selCount !== 1 ? 's' : ''} to order` : `All ${activeStyles.length} active styles`}
+                  {selCount > 0 ? `${selCount} vendor${selCount !== 1 ? 's' : ''} selected` : `All ${activeVendorGroups.length} vendors`}
                 </span>
               </div>
             </div>
           )
         })()}
 
-        {/* ── STEP 2: Colors & Qty (per style) ────────────────────────── */}
-        {step === 2 && (
-          <div>
-            <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
-              Set colors per style. Use <strong>Same as…</strong> to copy another style's colors. Enter as <code style={{ background: '#f5f3ff', padding: '1px 5px', borderRadius: 4 }}>code name</code> (e.g. <code>001 Black</code>). Saved for next time.
-            </div>
+        {/* ── STEP 2: Colors & Qty (per vendor) ───────────────────────── */}
+        {step === 2 && (() => {
+          // Get ordered vendors for selected (or all active) styles
+          const orderVids = Array.from(
+            new Map(selectedStyles.map(s => {
+              const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
+              return [vid, vid]
+            })).keys()
+          )
+          return (
+            <div>
+              <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
+                Set colors per vendor — shared across all selected styles of that vendor. Saved for next time.
+              </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(selected.size > 0 ? selectedStyles : activeStyles).map(s => {
-                const linked = sameAs[s]?.trim() ?? ''
-                const isLinked = !!linked
-                const entries = colorMap[s] ?? [{ code: '', name: '', qty: '' }]
-                const ending = abbrevMap[s]?.trim()
-                const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
-                const code = ending ? (vid ? `${vid}${ending}` : ending) : s.slice(0, 8).replace(/\s+/g, '').toUpperCase()
-                // Other active styles that have their own colors (not linked themselves) — for sameAs picker
-                // Show as style codes (e.g. MD27001HC) not raw style names
-                const linkTargets = activeStyles
-                  .filter(o => o !== s && !sameAs[o])
-                  .map(o => {
-                    const oEnding = abbrevMap[o]?.trim()
-                    const oVid = parsedRows.find(r => r.style === o)?.vendorId ?? ''
-                    const oCode = oEnding ? (oVid ? `${oVid}${oEnding}` : oEnding) : o.slice(0, 8).replace(/\s+/g, '').toUpperCase()
-                    return { style: o, code: oCode }
-                  })
-
-                return (
-                  <div key={s} style={{ background: '#fff', border: `1.5px solid ${isLinked ? '#c4b5fd' : border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
-                    {/* Style header */}
-                    <div style={{ background: isLinked ? '#f5f3ff' : 'linear-gradient(90deg, #f5f3ff 0%, #fff 100%)', borderBottom: `1px solid ${border}`, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <span style={{ background: purpleD, color: '#fff', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 800, flexShrink: 0 }}>{code}</span>
-                      <span style={{ fontSize: 13, color: '#374151', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s}</span>
-
-                      {/* Same as picker */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                        <span style={{ fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>Same as:</span>
-                        <select
-                          value={linked}
-                          onChange={e => {
-                            const val = e.target.value
-                            const updated = { ...sameAs, [s]: val }
-                            setSameAs(updated); saveTo(LS_SAMEAS_KEY, updated)
-                          }}
-                          style={{ ...inp, fontSize: 11, padding: '3px 7px', maxWidth: 160 }}
-                        >
-                          <option value="">— own colors —</option>
-                          {linkTargets.map(({ style: o, code: oCode }) => <option key={o} value={o}>{oCode}</option>)}
-                        </select>
-                      </div>
-
-                      {!isLinked && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {orderVids.map(vid => {
+                  const entries: ColorEntry[] = colorMap[vid] ?? [{ code: '', name: '', qty: '' }]
+                  const vidStyles = selectedStyles.filter(s => (parsedRows.find(r => r.style === s)?.vendorId ?? '') === vid)
+                  return (
+                    <div key={vid} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
+                      {/* Vendor header */}
+                      <div style={{ background: 'linear-gradient(90deg, #f5f3ff 0%, #fff 100%)', borderBottom: `1px solid ${border}`, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ background: purpleD, color: '#fff', borderRadius: 5, padding: '2px 10px', fontSize: 12, fontWeight: 900, fontFamily: 'monospace' }}>{vid || '—'}</span>
+                        <span style={{ fontSize: 11, color: gray }}>
+                          {vidStyles.map(s => abbrevMap[s]?.trim() ?? s).join(' · ')}
+                        </span>
                         <button onClick={() => {
-                          const updated = { ...colorMap, [s]: [...entries, { code: '', name: '', qty: '' }] }
-                          setColorMap(updated); saveTo(LS_COLORS_KEY, updated)
-                        }} style={{ background: '#f0ebff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer', flexShrink: 0 }}>+ Color</button>
-                      )}
-                    </div>
-
-                    {/* Color rows */}
-                    {isLinked ? (
-                      <div style={{ padding: '8px 14px', fontSize: 12, color: purpleD, fontWeight: 600 }}>
-                        🔗 Using colors from <strong>{(() => {
-                          const lEnding = abbrevMap[linked]?.trim()
-                          const lVid = parsedRows.find(r => r.style === linked)?.vendorId ?? ''
-                          return lEnding ? (lVid ? `${lVid}${lEnding}` : lEnding) : linked.slice(0, 8).replace(/\s+/g, '').toUpperCase()
-                        })()}</strong>
-                        {colorMap[linked] && (
-                          <span style={{ color: gray, fontWeight: 400, marginLeft: 8 }}>
-                            ({colorMap[linked].filter(c => c.code || c.name).length} colors)
-                          </span>
-                        )}
+                          const cm = { ...colorMap, [vid]: [...entries, { code: '', name: '', qty: '' }] }
+                          setColorMap(cm); saveTo(LS_COLORS_KEY, cm)
+                        }} style={{ background: '#f0ebff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: purple, cursor: 'pointer', marginLeft: 'auto' }}>+ Color</button>
                       </div>
-                    ) : (
+
+                      {/* Color rows */}
                       <div style={{ padding: '8px 14px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '74px 1fr 70px 24px', gap: 6, marginBottom: 4 }}>
                           {['Code', 'Color Name', 'Qty', ''].map(h => (
@@ -495,30 +459,30 @@ export default function HairAccPage() {
                           <div key={ei} style={{ display: 'grid', gridTemplateColumns: '74px 1fr 70px 24px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                               <span style={{ color: '#9ca3af', fontSize: 12, fontWeight: 700 }}>#</span>
-                              <input value={e.code} onChange={ev => { const u = [...entries]; u[ei] = { ...e, code: ev.target.value }; const cm = { ...colorMap, [s]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="001" style={{ ...inp, fontFamily: 'monospace', fontSize: 11, width: '100%' }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                              <input value={e.code} onChange={ev => { const u = [...entries]; u[ei] = { ...e, code: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="001" style={{ ...inp, fontFamily: 'monospace', fontSize: 11, width: '100%' }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
                             </div>
-                            <input value={e.name} onChange={ev => { const u = [...entries]; u[ei] = { ...e, name: ev.target.value }; const cm = { ...colorMap, [s]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="Black" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                            <input value={e.qty} onChange={ev => { const u = [...entries]; u[ei] = { ...e, qty: ev.target.value }; const cm = { ...colorMap, [s]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="12" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
-                            <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [s]: u.length ? u : [{ code: '', name: '', qty: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 15, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
+                            <input value={e.name} onChange={ev => { const u = [...entries]; u[ei] = { ...e, name: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="Black" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                            <input value={e.qty} onChange={ev => { const u = [...entries]; u[ei] = { ...e, qty: ev.target.value }; const cm = { ...colorMap, [vid]: u }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} placeholder="12" style={{ ...inp, fontSize: 11 }} onFocus={ev => ev.target.style.borderColor = purple} onBlur={ev => ev.target.style.borderColor = border} />
+                            <button onClick={() => { const u = entries.filter((_, i) => i !== ei); const cm = { ...colorMap, [vid]: u.length ? u : [{ code: '', name: '', qty: '' }] }; setColorMap(cm); saveTo(LS_COLORS_KEY, cm) }} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: 15, lineHeight: 1 }} onMouseOver={ev => (ev.currentTarget.style.color = '#ef4444')} onMouseOut={ev => (ev.currentTarget.style.color = '#d1d5db')}>×</button>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+                    </div>
+                  )
+                })}
+              </div>
 
-            <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
-              <button onClick={() => { saveTo(LS_COLORS_KEY, colorMap); saveTo(LS_SAMEAS_KEY, sameAs); setStep(3) }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
-                Next: See Output →
-              </button>
-              <button onClick={() => setStep(3)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
-                Skip (no colors)
-              </button>
+              <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
+                <button onClick={() => { saveTo(LS_COLORS_KEY, colorMap); setStep(3) }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
+                  Next: See Output →
+                </button>
+                <button onClick={() => setStep(3)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
+                  Skip (no colors)
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* ── STEP 3: Output ──────────────────────────────────────────── */}
         {step === 3 && (
