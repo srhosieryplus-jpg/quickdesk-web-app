@@ -714,7 +714,8 @@ export default function ErrorFormsPage() {
 
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-                {/* Row 0: Store */}
+                {/* Row 0: Store + Error Date */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start' }}>
                 <div>
                   <label style={lbl}>Store ID *</label>
                   {(!isAdmin && modal === 'edit') ? (
@@ -769,9 +770,15 @@ export default function ErrorFormsPage() {
                     <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Defaults to your store</div>
                   )}
                 </div>
+                  {/* Error Date — same row as Store */}
+                  <div>
+                    <label style={lbl}>Error Date</label>
+                    <input type="date" value={vals.error_date ?? ''} onChange={e => upd({ error_date: e.target.value })} style={inp} />
+                  </div>
+                </div>
 
-                {/* Row 1: Brand + Amount + Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 12 }}>
+                {/* Row 1: Brand + Invoice# + Amount */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
                   <div style={{ position: 'relative' }}>
                     <label style={lbl}>Brand *</label>
                     <input value={isEdit ? vals.brand : brandInput}
@@ -808,14 +815,10 @@ export default function ErrorFormsPage() {
                     <label style={lbl}>Amount ($)</label>
                     <input type="number" step="0.01" value={vals.amount ?? ''} onChange={e => upd({ amount: e.target.value ? parseFloat(e.target.value) : null })} placeholder="0.00" style={inp} />
                   </div>
-                  <div>
-                    <label style={lbl}>Error Date</label>
-                    <input type="date" value={vals.error_date ?? ''} onChange={e => upd({ error_date: e.target.value })} style={inp} />
-                  </div>
                 </div>
 
-                {/* Row 2: Status + Email Sent */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+                {/* Row 2: Status + Email Sent + Final Date */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 120px 160px', gap: 12 }}>
                   <div>
                     <label style={lbl}>Resolution Status</label>
                     <select value={vals.status} onChange={e => upd({ status: e.target.value as EFStatus })} style={inp}>
@@ -833,14 +836,9 @@ export default function ErrorFormsPage() {
                       Email Sent
                     </label>
                   </div>
-                </div>
-
-                {/* Row 3: Final date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={lbl}>Final Date (Finalized)</label>
+                    <label style={lbl}>Final Date</label>
                     <input type="date" value={vals.final_date ?? ''} onChange={e => upd({ final_date: e.target.value || null })} style={inp} />
-                    <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Set a date to mark as finalized</div>
                   </div>
                 </div>
 
