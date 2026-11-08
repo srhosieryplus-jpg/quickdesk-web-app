@@ -475,7 +475,9 @@ export default function HairAccPage() {
                     const effectiveEnding = resolveEnding(s)
                     const isX = effectiveEnding.trim().toUpperCase() === 'X'
                     // Description adjustment: only what user has explicitly saved; placeholder shows title-case
-                    const savedDesc = finalDesc[s] ?? ''
+                    // If stored value matches the auto-generated title-case, treat as blank (legacy cleanup)
+                    const rawSaved = finalDesc[s] ?? ''
+                    const savedDesc = rawSaved === toTitleCase(s) ? '' : rawSaved
                     const previewDesc = savedDesc || toTitleCase(s)
                     return (
                       <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
