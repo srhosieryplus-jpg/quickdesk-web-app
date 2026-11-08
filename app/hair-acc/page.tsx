@@ -786,10 +786,7 @@ export default function HairAccPage() {
                       <div style={{ background: 'linear-gradient(90deg, #f5f3ff 0%, #fff 100%)', borderBottom: `1px solid ${border}`, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         <span style={{ background: purpleD, color: '#fff', borderRadius: 5, padding: '2px 10px', fontSize: 12, fontWeight: 900, fontFamily: 'monospace' }}>{vid || '—'}</span>
                         <span style={{ fontSize: 11, color: gray }}>
-                          {vidStyles.map(s => {
-                            const fdKey = Object.keys(finalDesc).find(k => k.toLowerCase() === s.toLowerCase())
-                            return (fdKey && finalDesc[fdKey]?.trim()) || toTitleCase(s)
-                          }).join(' · ')}
+                          {preDesc[vid] ?? ''}
                         </span>
                         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
                           {otherVidsWithColors.length > 0 && (
@@ -842,8 +839,8 @@ export default function HairAccPage() {
                                 <thead>
                                   <tr>
                                     <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'left', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: 160 }}>Color</th>
-                                    {curPivotStyles2.map(sn => (
-                                      <th key={sn} style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontWeight: 700, fontSize: 11, color: purpleD, whiteSpace: 'nowrap' }}>{sn}</th>
+                                    {curPivotStyles2.map((_, si) => (
+                                      <th key={si} style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, width: 56 }} />
                                     ))}
                                     {curPivotStyles2.length > 0 && <th style={{ padding: '5px 8px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, textAlign: 'center', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sum</th>}
                                     <th style={{ padding: '5px 4px', background: '#f5f3ff', borderBottom: `2px solid ${border}`, width: 20 }} />
