@@ -222,6 +222,21 @@ export default function ErrorFormsPage() {
   const [showNewSeason, setShowNewSeason] = useState(false)
   const [newSeasonInput, setNewSeasonInput] = useState('')
   const allSeasons = buildSeasons(extraSeasons)
+  const [seasonCounts, setSeasonCounts] = useState<Record<string, { open: number; closed: number }>>({})
+
+  useEffect(() => {
+    if (!showSeasonPanel) return
+    supabase.from('error_forms').select('season, final_date').then(({ data }) => {
+      if (!data) return
+      const counts: Record<string, { open: number; closed: number }> = {}
+      data.forEach(r => {
+        if (!counts[r.season]) counts[r.season] = { open: 0, closed: 0 }
+        if (r.final_date) counts[r.season].closed++
+        else counts[r.season].open++
+      })
+      setSeasonCounts(counts)
+    })
+  }, [showSeasonPanel])
 
   // Filter state
   const [filterStatus, setFilterStatus] = useState<'all'|'open'|'finalized'>('open')
@@ -410,16 +425,32 @@ export default function ErrorFormsPage() {
                 style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-              {allSeasons.map(s => (
-                <div key={s} className="sp-season-row"
-                  style={{ background: s === season ? '#fef2f2' : 'transparent',
-                    color: s === season ? redD : '#374151',
-                    borderLeft: s === season ? `3px solid ${redD}` : '3px solid transparent' }}
-                  onClick={() => { setSeason(s); setShowSeasonPanel(false) }}>
-                  <span style={{ fontWeight: s === season ? 800 : 500 }}>{s}</span>
-                  {s === season && <span style={{ fontSize: 10, color: redD, opacity: 0.7 }}>✓</span>}
-                </div>
-              ))}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, padding: '0 16px 6px', borderBottom: `1px solid #f3f4f6` }}>
+                <span style={{ fontSize: 10, color: '#b45309', background: '#fef3c7', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>Open</span>
+                <span style={{ fontSize: 10, color: '#166534', background: '#dcfce7', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>Final</span>
+              </div>
+              {allSeasons.map(s => {
+                const sc = seasonCounts[s]
+                return (
+                  <div key={s} className="sp-season-row"
+                    style={{ background: s === season ? '#fef2f2' : 'transparent',
+                      color: s === season ? redD : '#374151',
+                      borderLeft: s === season ? `3px solid ${redD}` : '3px solid transparent' }}
+                    onClick={() => { setSeason(s); setShowSeasonPanel(false) }}>
+                    <span style={{ fontWeight: s === season ? 800 : 500 }}>{s}</span>
+                    <span style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                      {sc ? (
+                        <>
+                          <span title="Open" style={{ fontSize: 10, fontWeight: 700, color: '#b45309', background: '#fef3c7', borderRadius: 4, padding: '1px 5px' }}>{sc.open}</span>
+                          <span title="Finalized" style={{ fontSize: 10, fontWeight: 700, color: '#166534', background: '#dcfce7', borderRadius: 4, padding: '1px 5px' }}>{sc.closed}</span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 10, color: '#d1d5db' }}>—</span>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
             <div style={{ padding: '10px 14px', borderTop: `1px solid ${border}` }}>
               {!showNewSeason ? (
