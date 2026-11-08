@@ -34,6 +34,7 @@ interface ErrorForm {
   store_id: string
   brand: string
   invoice_number: string | null
+  currency: string
   amount: number | null
   email_sent: boolean
   error_date: string | null
@@ -168,7 +169,7 @@ function FileAttach({
 // ── Blank new form ────────────────────────────────────────────────────────────
 function blankForm(season = 'SS27', store_id = ''): Omit<ErrorForm, 'id' | 'logged_by' | 'created_at' | 'updated_at'> {
   return {
-    season, store_id, brand: '', invoice_number: null, amount: null, email_sent: false, error_date: today(),
+    season, store_id, brand: '', invoice_number: null, currency: 'GBP', amount: null, email_sent: false, error_date: today(),
     status: 'pending', comments: null, final_date: null,
     invoice_file_url: null, error_file_url: null, credit_note_url: null,
   }
@@ -359,6 +360,7 @@ export default function ErrorFormsPage() {
       comments: editForm.comments,
       final_date: editForm.final_date ? safeDate(editForm.final_date) : null,
       invoice_number: editForm.invoice_number || null,
+      currency: editForm.currency || 'GBP',
       invoice_file_url: editForm.invoice_file_url,
       error_file_url: editForm.error_file_url,
       credit_note_url: editForm.credit_note_url,
@@ -770,10 +772,10 @@ export default function ErrorFormsPage() {
                     <div style={{ fontSize: 10, color: gray, marginTop: 2 }}>Defaults to your store</div>
                   )}
                 </div>
-                  {/* Invoice # — same row as Store */}
+                  {/* Invoice # — centered between Store and Error Date */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <label style={{ ...lbl, alignSelf: 'flex-start' }}>Invoice #</label>
-                    <input value={vals.invoice_number ?? ''} onChange={e => upd({ invoice_number: e.target.value || null })} placeholder="Optional" style={{ ...inp, textAlign: 'center' }} />
+                    <label style={{ ...lbl, alignSelf: 'center' }}>Invoice #</label>
+                    <input value={vals.invoice_number ?? ''} onChange={e => upd({ invoice_number: e.target.value || null })} placeholder="Optional" style={{ ...inp, textAlign: 'center', width: '100%' }} />
                   </div>
                   {/* Error Date — same row as Store */}
                   <div>
@@ -782,8 +784,8 @@ export default function ErrorFormsPage() {
                   </div>
                 </div>
 
-                {/* Row 1: Brand + Amount */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+                {/* Row 1: Brand + Currency + Amount */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 90px 1fr', gap: 16 }}>
                   <div style={{ position: 'relative' }}>
                     <label style={lbl}>Brand *</label>
                     <input value={isEdit ? vals.brand : brandInput}
@@ -813,7 +815,15 @@ export default function ErrorFormsPage() {
                     )}
                   </div>
                   <div>
-                    <label style={lbl}>Amount ($)</label>
+                    <label style={lbl}>Currency</label>
+                    <select value={vals.currency || 'GBP'} onChange={e => upd({ currency: e.target.value })} style={inp}>
+                      <option value="GBP">£ GBP</option>
+                      <option value="EUR">€ EUR</option>
+                      <option value="USD">$ USD</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Amount</label>
                     <input type="number" step="0.01" value={vals.amount ?? ''} onChange={e => upd({ amount: e.target.value ? parseFloat(e.target.value) : null })} placeholder="0.00" style={inp} />
                   </div>
                 </div>
