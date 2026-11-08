@@ -214,7 +214,9 @@ export default function HairAccPage() {
         : (r.vendorId || r.style.slice(0, 8).replace(/\s+/g, '').toUpperCase())
       // Case-insensitive finalDesc lookup so "flat headband" key matches "flat headband" raw style
       const fdKey = Object.keys(finalDesc).find(k => k.toLowerCase() === r.style.toLowerCase()) ?? r.style
-      const styleName = finalDesc[fdKey]?.trim() || r.style
+      const descEnding = finalDesc[fdKey]?.trim() || r.style
+      const pre = preDesc[r.vendorId]?.trim() ?? ''
+      const styleName = pre ? `${pre} ${descEnding}` : descEnding
       const isFirstForVendor = r.vendorId !== lastVendor
       if (r.vendorId) lastVendor = r.vendorId
       const colors = resolveColors(r.vendorId)
@@ -234,7 +236,7 @@ export default function HairAccPage() {
     }
     return out
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, selectedStyles, qtyMap, pivotStyles])
+  }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, preDesc, selectedStyles, qtyMap, pivotStyles])
 
   function copyOutput() {
     const tsv = outRows.map(r => [
