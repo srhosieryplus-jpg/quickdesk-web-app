@@ -496,10 +496,15 @@ export default function HairAccPage() {
               {pivotPopup && (() => {
                 const vid = pivotPopup
                 const colors = resolveColors(vid)
-                const vidStyleRows = parsedRows.filter(r => r.vendorId === vid && activeStyles.includes(r.style))
+                // Get ALL styles for this vendor from parsedRows (not filtered by uniqueStyles/activeStyles)
+                // so shared style names like "LARGE CLIP" that appear under multiple vendors all show up
+                const xEndings = new Set(
+                  Object.entries(abbrevMap).filter(([,v]) => v.trim().toUpperCase() === 'X').map(([k]) => k.toLowerCase())
+                )
+                const vidStyleRows = parsedRows.filter(r => r.vendorId === vid && !xEndings.has(r.style.toLowerCase()))
                 // Dedupe styles preserving order
                 const seen = new Set<string>()
-                const vidUniq = vidStyleRows.filter(r => { if (seen.has(r.style)) return false; seen.add(r.style); return true })
+                const vidUniq = vidStyleRows.filter(r => { if (seen.has(r.style.toLowerCase())) return false; seen.add(r.style.toLowerCase()); return true })
                 // pivotStyles[vid] stores selected style names (not endings, to avoid collision)
                 const allStyleNames = vidUniq.map(r => r.style)
                 const curPivotStyles: string[] = pivotStyles[vid] ?? allStyleNames
@@ -526,19 +531,16 @@ export default function HairAccPage() {
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                               {vidUniq.map(r => {
                                 const ending = abbrevMap[r.style]?.trim() ?? ''
-                                if (!ending) return null
                                 const on = curPivotStyles.includes(r.style)
                                 return (
                                   <button key={r.style} onClick={() => {
                                     const next = on ? curPivotStyles.filter(s => s !== r.style) : [...curPivotStyles, r.style]
                                     const ps = { ...pivotStyles, [vid]: next }
                                     setPivotStyles(ps); saveTo(LS_PIVOT_STYLES, ps)
-                                  }} style={{ background: on ? purpleD : '#f3f4f6', color: on ? '#fff' : '#374151', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'monospace' }}
-                                  title={r.style}>
-                                    {ending}
-                                    {/* Show style name hint if two endings are the same */}
-                                    {vidUniq.filter(x => abbrevMap[x.style]?.trim() === ending).length > 1 && (
-                                      <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 4, opacity: 0.75 }}>({r.style.slice(0, 8)})</span>
+                                  }} style={{ background: on ? purpleD : '#f3f4f6', color: on ? '#fff' : '#374151', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span>{r.style}</span>
+                                    {ending && (
+                                      <span style={{ fontSize: 10, fontWeight: 900, fontFamily: 'monospace', background: on ? 'rgba(255,255,255,0.25)' : '#e5e7eb', borderRadius: 4, padding: '1px 5px' }}>{ending}</span>
                                     )}
                                   </button>
                                 )
