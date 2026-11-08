@@ -238,12 +238,22 @@ export default function HairAccPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parsedRows, activeStyles, abbrevMap, colorMap, finalDesc, preDesc, selectedStyles, qtyMap, pivotStyles])
 
+  function toProper(s: string) {
+    return s.replace(/\b\w/g, l => l.toUpperCase())
+  }
+
   function copyOutput() {
-    const tsv = outRows.map(r => [
-      r.isFirstForVendor ? r.vendorId : '',
-      r.styleCode, r.styleName, r.color, r.qty,
-      r.price > 0 ? r.price.toFixed(2) : '',
-    ].join('\t')).join('\n')
+    const tsv = outRows.map(r => {
+      const hasQty = r.qty.trim() !== ''
+      return [
+        r.isFirstForVendor ? r.vendorId : '',
+        hasQty ? r.styleCode : '',
+        hasQty ? toProper(r.styleName) : '',
+        r.color,
+        r.qty,
+        hasQty && r.price > 0 ? r.price.toFixed(2) : '',
+      ].join('\t')
+    }).join('\n')
     navigator.clipboard.writeText(tsv)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -1017,16 +1027,19 @@ export default function HairAccPage() {
                     <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</div>
                   ))}
                 </div>
-                {outRows.map((r, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '5px 14px', borderBottom: i < outRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: i % 2 === 0 ? '#fff' : '#fafbff', gap: 8, alignItems: 'center' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: r.isFirstForVendor && r.vendorId ? purpleD : 'transparent' }}>{r.isFirstForVendor ? r.vendorId : ''}</div>
-                    <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: purpleD, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '2px 7px', display: 'inline-block' }}>{r.styleCode}</div>
-                    <div style={{ fontSize: 12, color: '#374151' }}>{r.styleName}</div>
-                    <div style={{ fontSize: 12, color: '#374151' }}>{r.color}</div>
-                    <div style={{ fontSize: 12, color: '#374151' }}>{r.qty}</div>
-                    <div style={{ fontSize: 12, color: '#374151' }}>{r.price > 0 ? `$${r.price.toFixed(2)}` : ''}</div>
-                  </div>
-                ))}
+                {outRows.map((r, i) => {
+                  const hasQty = r.qty.trim() !== ''
+                  return (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 60px 70px', padding: '5px 14px', borderBottom: i < outRows.length - 1 ? `1px solid #f9f9f9` : 'none', background: hasQty ? (i % 2 === 0 ? '#fff' : '#fafbff') : '#fdf2f2', gap: 8, alignItems: 'center' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: r.isFirstForVendor && r.vendorId ? purpleD : 'transparent' }}>{r.isFirstForVendor ? r.vendorId : ''}</div>
+                      <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: hasQty ? purpleD : '#d1d5db', background: hasQty ? '#f5f3ff' : 'transparent', border: hasQty ? '1px solid #ddd6fe' : 'none', borderRadius: 5, padding: '2px 7px', display: 'inline-block' }}>{hasQty ? r.styleCode : '—'}</div>
+                      <div style={{ fontSize: 12, color: hasQty ? '#374151' : '#d1d5db' }}>{hasQty ? toProper(r.styleName) : '—'}</div>
+                      <div style={{ fontSize: 12, color: '#374151' }}>{r.color}</div>
+                      <div style={{ fontSize: 12, color: hasQty ? '#374151' : '#9ca3af', fontStyle: hasQty ? 'normal' : 'italic' }}>{hasQty ? r.qty : 'no qty'}</div>
+                      <div style={{ fontSize: 12, color: hasQty ? '#374151' : '#d1d5db' }}>{hasQty && r.price > 0 ? `$${r.price.toFixed(2)}` : ''}</div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )
