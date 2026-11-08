@@ -316,25 +316,21 @@ export default function HairAccPage() {
                   const groups = Array.from(rawGroups.values())
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {groups.map((g, i) => {
-                        const hasDupes = g.names.length > 1
-                        return (
-                          <div key={i} style={{ border: `1px solid ${hasDupes ? '#fbbf24' : border}`, borderRadius: 8, overflow: 'hidden', background: hasDupes ? '#fffbeb' : '#fff' }}>
-                            {g.names.map((name, ni) => (
-                              <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: ni < g.names.length - 1 ? `1px dashed #fde68a` : 'none' }}>
-                                {hasDupes && <span style={{ fontSize: 10, color: '#d97706', fontWeight: 700 }}>{ni === 0 ? '=' : '='}</span>}
-                                <span style={{ fontSize: 12, color: '#374151', flex: 1 }}>{name}</span>
-                                <span style={{ fontSize: 10, color: gray, fontFamily: 'monospace' }}>{parsedRows.find(r => r.style === name)?.vendorId}</span>
-                              </div>
-                            ))}
-                            {hasDupes && (
-                              <div style={{ padding: '3px 12px', background: '#fef3c7', fontSize: 10, color: '#92400e' }}>
-                                treated as same item — {g.vids.join(', ')}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                      {groups.map((g, i) => (
+                        <div key={i} style={{ border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+                          {g.names.map((name, ni) => (
+                            <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: ni < g.names.length - 1 ? `1px solid #f3f4f6` : 'none' }}>
+                              <span style={{ fontSize: 12, color: '#374151', flex: 1 }}>{name}</span>
+                              <span style={{ fontSize: 10, color: gray, fontFamily: 'monospace' }}>{parsedRows.find(r => r.style === name)?.vendorId}</span>
+                            </div>
+                          ))}
+                          {g.names.length > 1 && (
+                            <div style={{ padding: '3px 12px', background: '#f9f9f9', fontSize: 10, color: '#9ca3af' }}>
+                              treated as same item — {g.vids.join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )
                 })()}
@@ -790,7 +786,10 @@ export default function HairAccPage() {
                       <div style={{ background: 'linear-gradient(90deg, #f5f3ff 0%, #fff 100%)', borderBottom: `1px solid ${border}`, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         <span style={{ background: purpleD, color: '#fff', borderRadius: 5, padding: '2px 10px', fontSize: 12, fontWeight: 900, fontFamily: 'monospace' }}>{vid || '—'}</span>
                         <span style={{ fontSize: 11, color: gray }}>
-                          {vidStyles.map(s => abbrevMap[s]?.trim() ?? s).join(' · ')}
+                          {vidStyles.map(s => {
+                            const fdKey = Object.keys(finalDesc).find(k => k.toLowerCase() === s.toLowerCase())
+                            return (fdKey && finalDesc[fdKey]?.trim()) || toTitleCase(s)
+                          }).join(' · ')}
                         </span>
                         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
                           {otherVidsWithColors.length > 0 && (
