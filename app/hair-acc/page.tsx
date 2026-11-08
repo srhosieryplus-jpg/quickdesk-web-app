@@ -412,23 +412,31 @@ export default function HairAccPage() {
 
         {/* ── STEP 2: Colors & Qty (per vendor) ───────────────────────── */}
         {step === 2 && (() => {
-          // Get ordered vendors for selected (or all active) styles
+          // Use selected styles, fall back to all active styles if none selected
+          const colorStepStyles = selectedStyles.length > 0 ? selectedStyles : activeStyles
+          // Get ordered unique vendors from those styles
           const orderVids = Array.from(
-            new Map(selectedStyles.map(s => {
+            new Map(colorStepStyles.map(s => {
               const vid = parsedRows.find(r => r.style === s)?.vendorId ?? ''
               return [vid, vid]
             })).keys()
-          )
+          ).filter(v => v !== '')
           return (
             <div>
-              <div style={{ fontSize: 12, color: gray, marginBottom: 14 }}>
-                Set colors per vendor — shared across all selected styles of that vendor. Saved for next time.
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+                <button onClick={() => { saveTo(LS_COLORS_KEY, colorMap); setStep(3) }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
+                  Next: See Output →
+                </button>
+                <button onClick={() => setStep(3)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
+                  Skip (no colors)
+                </button>
+                <span style={{ fontSize: 12, color: gray }}>Set colors per vendor — shared across all selected styles of that vendor.</span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {orderVids.map(vid => {
                   const entries: ColorEntry[] = colorMap[vid] ?? [{ code: '', name: '', qty: '' }]
-                  const vidStyles = selectedStyles.filter(s => (parsedRows.find(r => r.style === s)?.vendorId ?? '') === vid)
+                  const vidStyles = colorStepStyles.filter(s => (parsedRows.find(r => r.style === s)?.vendorId ?? '') === vid)
                   return (
                     <div key={vid} style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(124,58,237,0.05)' }}>
                       {/* Vendor header */}
@@ -467,14 +475,6 @@ export default function HairAccPage() {
                 })}
               </div>
 
-              <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
-                <button onClick={() => { saveTo(LS_COLORS_KEY, colorMap); setStep(3) }} style={{ background: `linear-gradient(135deg, ${purple} 0%, #6d28d9 100%)`, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)' }}>
-                  Next: See Output →
-                </button>
-                <button onClick={() => setStep(3)} style={{ background: '#f0ebff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 12, fontWeight: 700, color: purple, cursor: 'pointer' }}>
-                  Skip (no colors)
-                </button>
-              </div>
             </div>
           )
         })()}
