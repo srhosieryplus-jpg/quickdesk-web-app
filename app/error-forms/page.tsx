@@ -38,12 +38,10 @@ interface ErrorForm {
   error_date: string | null
   status: EFStatus
   comments: string | null
-  final_date: string | null  // when form was finalized/closed
+  final_date: string | null
   invoice_file_url: string | null
   error_file_url: string | null
   credit_note_url: string | null
-  credit_note2_url: string | null
-  refund2_url: string | null
   logged_by: string
   created_at: string
   updated_at: string
@@ -171,8 +169,7 @@ function blankForm(season = 'SS27', store_id = ''): Omit<ErrorForm, 'id' | 'logg
   return {
     season, store_id, brand: '', amount: null, email_sent: false, error_date: today(),
     status: 'pending', comments: null, final_date: null,
-    invoice_file_url: null, error_file_url: null,
-    credit_note_url: null, credit_note2_url: null, refund2_url: null,
+    invoice_file_url: null, error_file_url: null, credit_note_url: null,
   }
 }
 
@@ -241,6 +238,12 @@ export default function ErrorFormsPage() {
   const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
   const [storeSearch, setStoreSearch] = useState('')
   const [showStoreDrop, setShowStoreDrop] = useState(false)
+
+  // Right-click context menu
+  type CtxMenu = { x: number; y: number; form: ErrorForm }
+  const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
+  const [delPassword, setDelPassword] = useState('')
+  const [showDelConfirm, setShowDelConfirm] = useState(false)
 
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type); setTimeout(() => setToast(''), 3000)
@@ -342,8 +345,6 @@ export default function ErrorFormsPage() {
       invoice_file_url: editForm.invoice_file_url,
       error_file_url: editForm.error_file_url,
       credit_note_url: editForm.credit_note_url,
-      credit_note2_url: editForm.credit_note2_url,
-      refund2_url: editForm.refund2_url,
       updated_at: new Date().toISOString(),
     }).eq('id', editForm.id)
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
@@ -355,7 +356,6 @@ export default function ErrorFormsPage() {
 
   // ── Delete ────────────────────────────────────────────────────────────────
   async function deleteForm(id: string) {
-    if (!confirm('Delete this error form?')) return
     await supabase.from('error_forms').delete().eq('id', id)
     showToast('🗑 Deleted')
     fetchForms()
@@ -490,26 +490,35 @@ export default function ErrorFormsPage() {
       </div>
 
       {/* ── Filters bar ── */}
-      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '8px 20px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search brand, store, status…"
-          style={{ ...inp, width: 220, flex: '0 0 auto' }} />
+      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '8px 20px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Search — season-book style */}
+        <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 280 }}>
+          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 13, pointerEvents: 'none' }}>🔍</span>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search brand, store, comments…"
+            style={{ ...inp, paddingLeft: 28, width: '100%' }} />
+          {search && (
+            <button onClick={() => setSearch('')}
+              style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', color: gray, cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>✕</button>
+          )}
+        </div>
         <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)}
-          style={{ ...inp, width: 160, flex: '0 0 auto' }}>
+          style={{ ...inp, width: 150, flex: '0 0 auto' }}>
           <option value="">All Brands</option>
           {brandsInUse.map(b => <option key={b} value={b}>{b}</option>)}
         </select>
         {isAdmin && (
           <select value={filterStore} onChange={e => setFilterStore(e.target.value)}
-            style={{ ...inp, width: 140, flex: '0 0 auto' }}>
+            style={{ ...inp, width: 120, flex: '0 0 auto' }}>
             <option value="">All Stores</option>
             {Array.from(new Set(forms.map(f => f.store_id))).filter(Boolean).sort().map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
         )}
-        {(search || filterBrand || filterStore) && (
-          <button onClick={() => { setSearch(''); setFilterBrand(''); setFilterStore('') }}
+        {(filterBrand || filterStore) && (
+          <button onClick={() => { setFilterBrand(''); setFilterStore('') }}
             style={{ fontSize: 11, color: gray, background: '#f3f4f6', border: `1px solid ${border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
             Clear
           </button>
@@ -519,8 +528,56 @@ export default function ErrorFormsPage() {
         </span>
       </div>
 
+      {/* ── Right-click context menu ── */}
+      {ctxMenu && (
+        <div style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 3000,
+          background: '#fff', border: `1px solid ${border}`, borderRadius: 8,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.15)', minWidth: 140, overflow: 'hidden' }}
+          onMouseLeave={() => { setCtxMenu(null); setShowDelConfirm(false); setDelPassword('') }}>
+          <div onClick={() => { openEdit(ctxMenu.form); setCtxMenu(null) }}
+            style={{ padding: '10px 16px', fontSize: 13, cursor: 'pointer', fontWeight: 600, color: '#374151',
+              borderBottom: `1px solid ${border}` }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+            onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+            ✏️ Edit
+          </div>
+          {!showDelConfirm ? (
+            <div onClick={() => setShowDelConfirm(true)}
+              style={{ padding: '10px 16px', fontSize: 13, cursor: 'pointer', fontWeight: 600, color: red }}
+              onMouseEnter={e => e.currentTarget.style.background = redL}
+              onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+              🗑 Delete
+            </div>
+          ) : (
+            <div style={{ padding: '10px 12px', borderTop: `1px solid ${border}` }}>
+              <div style={{ fontSize: 11, color: gray, marginBottom: 6 }}>Enter password to delete</div>
+              <input type="password" value={delPassword} onChange={e => setDelPassword(e.target.value)}
+                placeholder="Password" autoFocus
+                style={{ ...inp, marginBottom: 6 }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    if (delPassword === 'delete') { deleteForm(ctxMenu.form.id); setCtxMenu(null); setShowDelConfirm(false); setDelPassword('') }
+                    else { showToast('❌ Wrong password', 'err') }
+                  }
+                  if (e.key === 'Escape') { setCtxMenu(null); setShowDelConfirm(false); setDelPassword('') }
+                }} />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => { setShowDelConfirm(false); setDelPassword('') }}
+                  style={{ flex: 1, background: '#e5e7eb', border: 'none', borderRadius: 5, padding: '4px 0', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={() => {
+                  if (delPassword === 'delete') { deleteForm(ctxMenu.form.id); setCtxMenu(null); setShowDelConfirm(false); setDelPassword('') }
+                  else showToast('❌ Wrong password', 'err')
+                }}
+                  style={{ flex: 1, background: redD, color: '#fff', border: 'none', borderRadius: 5, padding: '4px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Table ── */}
-      <div style={{ padding: '16px 20px', overflowX: 'auto' }}>
+      <div style={{ padding: '16px 24px', overflowX: 'auto' }}
+        onClick={() => { if (ctxMenu) { setCtxMenu(null); setShowDelConfirm(false); setDelPassword('') } }}>
         {loading ? (
           <div style={{ textAlign: 'center', color: gray, padding: 40, fontSize: 13 }}>Loading…</div>
         ) : filtered.length === 0 ? (
@@ -528,7 +585,7 @@ export default function ErrorFormsPage() {
             {filterStatus === 'open' ? 'No open error forms.' : 'No forms found.'}
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <table style={{ width: '100%', maxWidth: 960, margin: '0 auto', borderCollapse: 'collapse', fontSize: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderRadius: 10, overflow: 'hidden' }}>
             <thead>
               <tr style={{ background: redD, color: '#fff' }}>
                 <th style={th}>Store</th>
@@ -538,25 +595,24 @@ export default function ErrorFormsPage() {
                 <th style={th}>Status</th>
                 <th style={th}>Email</th>
                 <th style={th}>Invoice</th>
-                <th style={th}>Error</th>
+                <th style={th}>Error Form</th>
                 <th style={th}>Credit Note</th>
-                <th style={th}>Credit Note 2</th>
-                <th style={th}>Refund 2</th>
                 <th style={th}>Comments</th>
                 <th style={th}>Finalized</th>
                 <th style={th}>By</th>
-                <th style={{ ...th, width: 60 }}></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((f, i) => {
                 const sc = STATUS_COLORS[f.status]
                 const isFinalized = !!f.final_date
+                const isResolved = f.status !== 'pending'
+                const rowBg = isFinalized ? '#f0fdf4' : isResolved ? '#f0fdf4' : (i % 2 === 0 ? '#fff' : '#fafafa')
                 return (
                   <tr key={f.id}
-                    style={{ background: isFinalized ? '#f0fdf4' : (i % 2 === 0 ? '#fff' : '#fafafa'),
-                      borderBottom: `1px solid ${border}`, opacity: isFinalized ? 0.8 : 1 }}
+                    style={{ background: rowBg, borderBottom: `1px solid ${border}` }}
                     onClick={() => openEdit(f)}
+                    onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, form: f }); setShowDelConfirm(false); setDelPassword('') }}
                     className="ef-row">
                     <td style={td}>
                       <span style={{ fontWeight: 700, color: '#1d4ed8', fontSize: 11, background: '#eff6ff',
@@ -564,9 +620,7 @@ export default function ErrorFormsPage() {
                         {f.store_id || '—'}
                       </span>
                     </td>
-                    <td style={td}>
-                      <span style={{ fontWeight: 700, color: redD }}>{f.brand}</span>
-                    </td>
+                    <td style={td}><span style={{ fontWeight: 700, color: redD }}>{f.brand}</span></td>
                     <td style={td}>{f.amount != null ? fmt$(f.amount) : '—'}</td>
                     <td style={td}>{fmtDate(f.error_date)}</td>
                     <td style={td}>
@@ -580,35 +634,20 @@ export default function ErrorFormsPage() {
                     </td>
                     <td style={td} onClick={e => e.stopPropagation()}>
                       {f.invoice_file_url
-                        ? <a href={f.invoice_file_url} target="_blank" rel="noopener noreferrer"
-                            style={{ color: purple, fontWeight: 700, fontSize: 11 }}>📄 View</a>
+                        ? <a href={f.invoice_file_url} target="_blank" rel="noopener noreferrer" style={{ color: purple, fontWeight: 700, fontSize: 11 }}>📄 View</a>
                         : <span style={{ color: gray }}>—</span>}
                     </td>
                     <td style={td} onClick={e => e.stopPropagation()}>
                       {f.error_file_url
-                        ? <a href={f.error_file_url} target="_blank" rel="noopener noreferrer"
-                            style={{ color: purple, fontWeight: 700, fontSize: 11 }}>📄 View</a>
+                        ? <a href={f.error_file_url} target="_blank" rel="noopener noreferrer" style={{ color: purple, fontWeight: 700, fontSize: 11 }}>📄 View</a>
                         : <span style={{ color: gray }}>—</span>}
                     </td>
                     <td style={td} onClick={e => e.stopPropagation()}>
                       {f.credit_note_url
-                        ? <a href={f.credit_note_url} target="_blank" rel="noopener noreferrer"
-                            style={{ color: purple, fontWeight: 700, fontSize: 11 }}>📄 View</a>
+                        ? <a href={f.credit_note_url} target="_blank" rel="noopener noreferrer" style={{ color: purple, fontWeight: 700, fontSize: 11 }}>📄 View</a>
                         : <span style={{ color: gray }}>—</span>}
                     </td>
-                    <td style={td} onClick={e => e.stopPropagation()}>
-                      {f.credit_note2_url
-                        ? <a href={f.credit_note2_url} target="_blank" rel="noopener noreferrer"
-                            style={{ color: purple, fontWeight: 700, fontSize: 11 }}>📄 View</a>
-                        : <span style={{ color: gray }}>—</span>}
-                    </td>
-                    <td style={td} onClick={e => e.stopPropagation()}>
-                      {f.refund2_url
-                        ? <a href={f.refund2_url} target="_blank" rel="noopener noreferrer"
-                            style={{ color: purple, fontWeight: 700, fontSize: 11 }}>📄 View</a>
-                        : <span style={{ color: gray }}>—</span>}
-                    </td>
-                    <td style={{ ...td, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: gray }}>
+                    <td style={{ ...td, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: gray }}>
                       {f.comments ?? '—'}
                     </td>
                     <td style={td}>
@@ -617,15 +656,6 @@ export default function ErrorFormsPage() {
                         : <span style={{ color: '#b45309', fontWeight: 600 }}>Open</span>}
                     </td>
                     <td style={td}>{displayUser(f.logged_by)}</td>
-                    <td style={{ ...td, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                      {isAdmin && (
-                        <button onClick={() => deleteForm(f.id)}
-                          style={{ fontSize: 10, color: red, background: redL, border: `1px solid #fca5a5`,
-                            borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>
-                          Delete
-                        </button>
-                      )}
-                    </td>
                   </tr>
                 )
               })}
@@ -801,15 +831,13 @@ export default function ErrorFormsPage() {
                       { label: 'Invoice', key: 'invoice_file_url' as const, slot: 'inv' },
                       { label: 'Error Form', key: 'error_file_url' as const, slot: 'err' },
                       { label: 'Credit Note', key: 'credit_note_url' as const, slot: 'cn1' },
-                      { label: 'Credit Note 2', key: 'credit_note2_url' as const, slot: 'cn2' },
-                      { label: 'Refund 2', key: 'refund2_url' as const, slot: 'ref2' },
                     ].map(({ label, key, slot }) => (
                       <div key={key} style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 6, padding: '8px 10px' }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: gray, marginBottom: 5 }}>{label}</div>
                         {isEdit ? (
                           <FileAttach
                             label={label} url={vals[key] as string | null}
-                            bucket="error-forms" path={`${fileBase}-${slot}`}
+                            bucket="invoices" path={`ef-${fileBase}-${slot}`}
                             onUpdated={async url => {
                               upd({ [key]: url } as any)
                               if (isEdit) {
@@ -821,7 +849,7 @@ export default function ErrorFormsPage() {
                         ) : (
                           <FileAttach
                             label={label} url={vals[key] as string | null}
-                            bucket="error-forms" path={`${fileBase}-${slot}`}
+                            bucket="invoices" path={`ef-${fileBase}-${slot}`}
                             onUpdated={url => upd({ [key]: url } as any)}
                           />
                         )}
