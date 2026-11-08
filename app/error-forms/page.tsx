@@ -206,12 +206,13 @@ export default function ErrorFormsPage() {
       } catch {}
       // Last resort: distinct stores from users table
       supabase.from('users').select('store').limit(1000).then(({ data: ud }) => {
-        if (ud) {
-          const unique = Array.from(new Set(
-            ud.map((r: { store: string }) => r.store).filter(s => s && s !== 'ALL')
-          )).sort() as string[]
-          if (unique.length > 0) setStoreIds(unique)
-        }
+        const fromUsers = ud
+          ? Array.from(new Set(ud.map((r: { store: string }) => r.store).filter(s => s && s !== 'ALL'))).sort() as string[]
+          : []
+        // Merge with hardcoded defaults so all known stores always appear
+        const defaults = ['PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
+        const merged = Array.from(new Set([...defaults, ...fromUsers])).sort()
+        setStoreIds(merged)
       })
     })
   }, [])
@@ -659,7 +660,7 @@ export default function ErrorFormsPage() {
 
                 {/* Row 0: Store */}
                 <div>
-                  <label style={lbl}>Store *</label>
+                  <label style={lbl}>Store ID *</label>
                   {(!isAdmin && modal === 'edit') ? (
                     <div style={{ ...inp, width: 220, background: '#f9fafb', color: gray }}>{vals.store_id || '—'}</div>
                   ) : (() => {
