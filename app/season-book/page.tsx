@@ -1288,11 +1288,11 @@ export default function SeasonBookPage() {
                           <tr style={{ background: '#f8f7ff' }}>
                             <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PDF</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Units</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Total</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Deposits</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Balance Due</th>
-                            <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1326,22 +1326,22 @@ export default function SeasonBookPage() {
                                     </span>
                                   )) : <span style={{ color: gray }}>—</span>}
                                 </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                  {invoiceFileUrls.length > 0
+                                    ? invoiceFileUrls.map((url, i) => (
+                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                          style={{ color: purpleD, fontWeight: 700, fontSize: 13, textDecoration: 'none', display: 'inline-block', marginLeft: i > 0 ? 4 : 0 }}
+                                          title="View PDF invoice">
+                                          📄
+                                        </a>
+                                      ))
+                                    : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
+                                  }
+                                </td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{sUnits || '—'}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit, rowCurrency)}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep, rowCurrency)}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: sBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(sBal, rowCurrency)}</td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                                  {invoiceFileUrls.length > 0
-                                    ? invoiceFileUrls.map((url, i) => (
-                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                          style={{ color: purpleD, fontWeight: 700, fontSize: 11, textDecoration: 'none', display: 'inline-block', marginLeft: i > 0 ? 4 : 0 }}
-                                          title="View PDF invoice">
-                                          📄{invoiceFileUrls.length > 1 ? ` ${i+1}` : ''}
-                                        </a>
-                                      ))
-                                    : <span style={{ fontSize: 10, color: gray }}>view →</span>
-                                  }
-                                </td>
                               </tr>
                             )
                           })}
@@ -1350,13 +1350,12 @@ export default function SeasonBookPage() {
                         {storesPresent.length > 1 && (
                           <tfoot>
                             <tr style={{ background: totBal > 0.001 ? '#fef2f2' : '#f0fdf4', borderTop: `2px solid ${border}` }}>
-                              <td colSpan={5} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
+                              <td colSpan={6} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
                                 Total Owed
                               </td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 13, fontWeight: 900, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>
                                 {fmt$(totBal, (bRows[0]?.currency as Currency) ?? 'USD')}
                               </td>
-                              <td style={{ padding: '6px 10px' }} />
                             </tr>
                           </tfoot>
                         )}
@@ -2057,13 +2056,16 @@ export default function SeasonBookPage() {
 
       {/* ── Quick Payment Modal ──────────────────────────────────────────────── */}
       {modal === 'quick-pay' && (() => {
-        // All rows with a balance — optionally filtered to pre-selected brand
+        // All rows with a balance — optionally filtered to pre-selected brand/vendor or search text
         const allBalanceRows = rows.filter(r => (r.balance_due ?? 0) > 0.001)
+        const searchQ = payBrandSearch.trim().toLowerCase()
         const filteredRows = quickPayBrand
           ? allBalanceRows.filter(r => r.brand === quickPayBrand)
           : quickPayVendorId
             ? allBalanceRows.filter(r => r.vendor_id === quickPayVendorId)
-            : allBalanceRows
+            : searchQ
+              ? allBalanceRows.filter(r => r.brand.toLowerCase().includes(searchQ) || (r.vendor_id ?? '').toLowerCase().includes(searchQ))
+              : allBalanceRows
 
         // Group by brand → drop for display
         const brandGroups = Array.from(new Set(filteredRows.map(r => r.brand))).sort()
