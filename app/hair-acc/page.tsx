@@ -463,57 +463,56 @@ export default function HairAccPage() {
                 <div style={{ background: '#fff', border: `1.5px solid ${border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 12px rgba(124,58,237,0.07)' }}>
                   <div style={{ background: '#f5f3ff', borderBottom: `1px solid ${border}`, padding: '12px 16px' }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: purpleD }}>Style Endings</div>
-                    <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>VendorID + Ending = Style Code · <strong>Same as</strong> merges into another style · Type <span style={{ color: '#dc2626', fontWeight: 700 }}>X</span> to hide</div>
+                    <div style={{ fontSize: 11, color: gray, marginTop: 2 }}>VendorID + Ending = Style Code · Adjust description text · Type <span style={{ color: '#dc2626', fontWeight: 700 }}>X</span> to hide</div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 68px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f0f0f0` }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Style (from paste)</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Same as</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Ending</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f0f0f0` }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Item Name</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Description Ending</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Code</div>
                   </div>
                   {uniqueStyles.map(s => {
-                    const alias = aliasMap[s] ?? ''
                     const ownEnding = abbrevMap[s] ?? ''
-                    const effectiveEnding = alias ? (abbrevMap[alias] ?? '') : ownEnding
+                    const effectiveEnding = resolveEnding(s)
                     const isX = effectiveEnding.trim().toUpperCase() === 'X'
-                    const isAliased = !!alias
-                    // Other unique styles this one could alias to (not itself, not styles that alias to this one)
-                    const aliasTargets = uniqueStyles.filter(o => o !== s && !aliasMap[o])
+                    // Description adjustment: stored in finalDesc, defaults to title-cased item name
+                    const descAdj = finalDesc[s] ?? toTitleCase(s)
                     return (
-                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 68px', gap: '0 6px', padding: '4px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : isAliased ? '#f9f7ff' : 'transparent' }}>
+                      <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px', gap: '0 6px', padding: '5px 14px', borderBottom: `1px solid #f9f9f9`, alignItems: 'center', background: isX ? '#fef9f9' : 'transparent' }}>
                         <div style={{ fontSize: 12, color: isX ? '#9ca3af' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isX ? 'line-through' : 'none' }} title={s}>{s}</div>
-                        <select
-                          value={alias}
-                          onChange={e => {
-                            const val = e.target.value
-                            const am = { ...aliasMap, [s]: val }
-                            setAliasMap(am); saveTo(LS_ALIAS_KEY, am)
-                          }}
-                          style={{ ...inp, fontSize: 11, padding: '2px 4px', color: alias ? purpleD : '#9ca3af' }}
-                        >
-                          <option value="">—</option>
-                          {aliasTargets.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <input
+                            value={isX ? '' : descAdj}
+                            disabled={isX}
+                            onChange={e => {
+                              const fd = { ...finalDesc, [s]: e.target.value }
+                              setFinalDesc(fd); saveTo(LS_FINALDESC_KEY, fd)
+                            }}
+                            placeholder={toTitleCase(s)}
+                            style={{ ...inp, fontSize: 11, background: isX ? '#f9f9f9' : '#fff', color: '#374151', width: '100%' }}
+                            onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
+                            onBlur={e => { e.target.style.borderColor = border }}
+                          />
+                          {!isX && effectiveEnding && (
+                            <div style={{ fontSize: 10, color: '#a78bfa', fontFamily: 'monospace', paddingLeft: 2 }}>
+                              → <span style={{ color: purpleD, fontWeight: 700 }}>{effectiveEnding}</span> {descAdj}
+                            </div>
+                          )}
+                        </div>
                         <input
-                          value={isAliased ? effectiveEnding : ownEnding}
-                          readOnly={isAliased}
+                          value={ownEnding}
                           onChange={e => {
-                            if (isAliased) return
                             const val = e.target.value.toUpperCase()
                             const updated = { ...abbrevMap, [s]: val }
                             setAbbrevMap(updated); saveTo(LS_ABBREV_KEY, updated)
-                            if (val && val !== 'X') {
-                              const fdUpdated = { ...finalDesc, [s]: buildFinalDesc('', s) }
-                              setFinalDesc(fdUpdated); saveTo(LS_FINALDESC_KEY, fdUpdated)
-                            }
                             if (val === 'X') {
                               const next = new Set(selected); next.delete(s)
                               setSelected(next); saveTo(LS_SELECTED_KEY, Array.from(next))
                             }
                           }}
                           placeholder="HC"
-                          style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isAliased ? '#ede9fe' : isX ? '#fef2f2' : '#fff', color: isAliased ? purpleD : isX ? '#dc2626' : '#111', borderColor: isAliased ? '#c4b5fd' : isX ? '#fca5a5' : border, width: '100%' }}
-                          onFocus={e => { if (!isX && !isAliased) e.target.style.borderColor = purple }}
-                          onBlur={e => { e.target.style.borderColor = isAliased ? '#c4b5fd' : isX ? '#fca5a5' : border }}
+                          style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, fontSize: 12, background: isX ? '#fef2f2' : '#fff', color: isX ? '#dc2626' : '#111', borderColor: isX ? '#fca5a5' : border, width: '100%' }}
+                          onFocus={e => { if (!isX) e.target.style.borderColor = purple }}
+                          onBlur={e => { e.target.style.borderColor = isX ? '#fca5a5' : border }}
                         />
                       </div>
                     )
