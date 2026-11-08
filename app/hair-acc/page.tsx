@@ -55,7 +55,10 @@ function guessColRoles(grid: string[][]): ColMapping {
     const vals = grid.map(r => r[i] ?? '').filter(Boolean)
     const numericCount = vals.filter(v => !isNaN(parseFloat(v))).length
     const shortNumeric = vals.filter(v => /^\d{3,10}$/.test(v)).length
-    if (shortNumeric > 0) mapping[i] = 'styleNum'
+    // Alphanumeric style IDs: mix of letters+digits, some cells blank (sub-items)
+    const alphaNum = vals.filter(v => /^[A-Za-z]+\d/.test(v) || /^\d+[A-Za-z]/.test(v)).length
+    const blankRatio = grid.map(r => r[i] ?? '').filter(c => !c).length / (grid.length || 1)
+    if (shortNumeric > 0 || (alphaNum > 0 && blankRatio > 0.3)) mapping[i] = 'styleNum'
     else if (numericCount / (vals.length || 1) > 0.6) mapping[i] = 'price'
     else mapping[i] = 'description'
   }
@@ -81,18 +84,29 @@ function parsePaste(text: string, mapping: ColMapping): RawRow[] {
     const desc      = dIdx   >= 0 ? (cols[dIdx]   ?? '').trim() : ''
     const priceStr  = pIdx   >= 0 ? (cols[pIdx]   ?? '').trim() : ''
 
-    // Update current style # if this row has one (3–10 digits)
-    if (styleNum && /^\d{3,10}$/.test(styleNum)) {
+    // Style # = any non-empty value in the styleNum column that isn't a plain decimal (e.g. MD27001, 27029)
+    const looksLikePrice = /^\d+(\.\d+)?$/.test(styleNum) && parseFloat(styleNum) < 100
+    const isStyleNum = !!styleNum && !looksLikePrice
+
+    // Case 1: style # and description on the SAME row
+    if (isStyleNum && desc) {
       currentVendorId = styleNum
-      if (!desc) continue   // row was just setting the style #, no description yet
+      const price = parseFloat(priceStr)
+      rows.push({ vendorId: currentVendorId, style: desc, price: isNaN(price) ? 0 : price })
+      continue
     }
 
+    // Case 2: style # alone on its own row (next rows carry descriptions)
+    if (isStyleNum && !desc) {
+      currentVendorId = styleNum
+      continue
+    }
+
+    // Case 3: description row under a previously seen style #
     if (!desc) continue
     if (!currentVendorId) continue
 
     const price = parseFloat(priceStr)
-    if (priceStr === '0' || price === 0) continue
-
     rows.push({
       vendorId: currentVendorId,
       style: desc,
@@ -190,7 +204,10 @@ export default function HairAccPage() {
     saveTo(LS_COLMAP_KEY, colMapping)
     const rows = parsePaste(paste, colMapping)
     if (rows.length === 0) {
-      setParseError('No rows could be parsed. Check your column mapping — make sure Style # is a numeric column and Description is set correctly.')
+      // Show first few raw cells to help debug
+      const grid2 = paste.split('\n').slice(0, 3).map(l => l.split('\t').map(c => c.trim()))
+      const sample = grid2.map(r => r.join(' | ')).join(' /// ')
+      setParseError(`No rows parsed. Sample data: "${sample.slice(0, 200)}". Make sure Style # column contains the vendor number and Description column contains the style name.`)
       return
     }
     setParseError('')
