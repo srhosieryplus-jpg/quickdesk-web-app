@@ -156,8 +156,16 @@ export default function HairAccPage() {
 
   // Resolve effective ending for a style, following alias chain
   function resolveEnding(style: string): string {
-    const canon = aliasMap[style]?.trim()
-    return canon ? (abbrevMap[canon] ?? '') : (abbrevMap[style] ?? '')
+    const lower = style.toLowerCase()
+    // case-insensitive lookup helper
+    function abbrevLookup(key: string): string {
+      if (abbrevMap[key] !== undefined) return abbrevMap[key]
+      const k = Object.keys(abbrevMap).find(k => k.toLowerCase() === key.toLowerCase())
+      return k ? abbrevMap[k] : ''
+    }
+    const canonRaw = aliasMap[style] ?? Object.entries(aliasMap).find(([k]) => k.toLowerCase() === lower)?.[1]
+    const canon = canonRaw?.trim()
+    return canon ? abbrevLookup(canon) : abbrevLookup(style)
   }
 
   // Active styles = those whose ending is NOT 'X' (alias-resolved)
