@@ -527,33 +527,42 @@ export default function SettingsPage() {
             </form>
           </div>
 
-          {/* Spreadsheet */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 40px' }}>
-            <div style={{ overflowX: 'auto', maxWidth: 700, margin: '0 auto', paddingTop: 8 }}>
-              <table className="ss-table">
-                <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
-                  <tr>
-                    <th style={{ width: 28, textAlign: 'center' }}>#</th>
-                    <th>Vendor ID</th>
-                    <th>Brand</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredVendors.length === 0 && (
-                    <tr><td colSpan={3} style={{ textAlign: 'center', color: '#9b8ec4', padding: 28 }}>No matches.</td></tr>
-                  )}
-                  {filteredVendors.map((v, i) => (
-                    <tr key={i}
-                      style={{ background: i % 2 === 0 ? '#fff' : '#faf8ff', cursor: 'default' }}
-                      onContextMenu={e => { e.preventDefault(); setVCtxMenu({ x: e.clientX, y: e.clientY, kind: 'vendor', idx: i }); setCtxMenu(null) }}>
-                      <td style={{ textAlign: 'center', color: '#aaa', fontSize: 10 }}>{i + 1}</td>
-                      <td style={{ fontWeight: 700, color: purpleD }}>{v.vendor_id}</td>
-                      <td style={{ color: '#374151' }}>{v.brand}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {/* Grouped by Vendor ID */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 14px 40px' }}>
+            {filteredVendors.length === 0 && (
+              <div style={{ textAlign: 'center', color: '#9b8ec4', padding: 28 }}>No matches.</div>
+            )}
+            {(() => {
+              // group by vendor_id
+              const groups = new Map<string, typeof filteredVendors>()
+              filteredVendors.forEach(v => {
+                if (!groups.has(v.vendor_id)) groups.set(v.vendor_id, [])
+                groups.get(v.vendor_id)!.push(v)
+              })
+              return Array.from(groups.entries()).map(([vid, rows]) => (
+                <div key={vid} style={{ marginBottom: 10, border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
+                  {/* Vendor header */}
+                  <div style={{ background: purpleD, color: '#fff', padding: '6px 12px', fontWeight: 800, fontSize: 12, letterSpacing: '0.04em' }}>
+                    {vid}
+                  </div>
+                  {/* Brand rows */}
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      {rows.map((v, i) => {
+                        const globalIdx = filteredVendors.indexOf(v)
+                        return (
+                          <tr key={i}
+                            style={{ background: i % 2 === 0 ? '#fff' : '#faf8ff', cursor: 'default' }}
+                            onContextMenu={e => { e.preventDefault(); setVCtxMenu({ x: e.clientX, y: e.clientY, kind: 'vendor', idx: globalIdx }); setCtxMenu(null) }}>
+                            <td style={{ padding: '6px 12px', fontSize: 12, color: '#374151' }}>{v.brand}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))
+            })()}
           </div>
 
           <div style={{ padding: '5px 14px', background: purpleLight, borderTop: `1px solid ${border}`, fontSize: 11, color: '#9b8ec4', position: 'sticky', bottom: 0 }}>
