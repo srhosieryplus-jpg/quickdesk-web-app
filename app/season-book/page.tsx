@@ -295,6 +295,16 @@ export default function SeasonBookPage() {
   const [modalBrandSuggs, setModalBrandSuggs] = useState<string[]>([])
   const [showModalBrandDrop, setShowModalBrandDrop] = useState(false)
   const modalBrandRef = useRef<HTMLDivElement>(null)
+  // Inline brand/vendor dropdowns on the new-entry form (after brand chosen)
+  const [showFormBrandDrop, setShowFormBrandDrop] = useState(false)
+  const [showFormVendorDrop, setShowFormVendorDrop] = useState(false)
+  const formBrandRef = useRef<HTMLDivElement>(null)
+  const formVendorRef = useRef<HTMLDivElement>(null)
+  // Inline brand/vendor dropdowns on the edit-entry form
+  const [showEditBrandDrop, setShowEditBrandDrop] = useState(false)
+  const [showEditVendorDrop, setShowEditVendorDrop] = useState(false)
+  const editBrandRef = useRef<HTMLDivElement>(null)
+  const editVendorRef = useRef<HTMLDivElement>(null)
 
   // Form state: drop number + per-store entries (TTC + TTP simultaneously)
   const [formDrop, setFormDrop] = useState(1)
@@ -603,6 +613,18 @@ export default function SeasonBookPage() {
       }
       if (modalBrandRef.current && !modalBrandRef.current.contains(e.target as Node)) {
         setShowModalBrandDrop(false)
+      }
+      if (formBrandRef.current && !formBrandRef.current.contains(e.target as Node)) {
+        setShowFormBrandDrop(false)
+      }
+      if (formVendorRef.current && !formVendorRef.current.contains(e.target as Node)) {
+        setShowFormVendorDrop(false)
+      }
+      if (editBrandRef.current && !editBrandRef.current.contains(e.target as Node)) {
+        setShowEditBrandDrop(false)
+      }
+      if (editVendorRef.current && !editVendorRef.current.contains(e.target as Node)) {
+        setShowEditVendorDrop(false)
       }
       if (cutoffPopoverRef.current && !cutoffPopoverRef.current.contains(e.target as Node)) {
         setShowCutoffPopover(false)
@@ -1679,17 +1701,70 @@ export default function SeasonBookPage() {
               {/* Only show form once brand is chosen */}
               {activeBrand && <>
 
-              {/* Brand + Drop row */}
-              <div style={{ marginBottom: 14, display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end' }}>
-                <div>
+              {/* Brand + Vendor ID + Drop row */}
+              <div style={{ marginBottom: 14, display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                {/* Brand with autocomplete */}
+                <div ref={formBrandRef} style={{ position: 'relative' }}>
                   <label style={lbl}>Brand</label>
                   <input
                     value={activeBrand}
-                    onChange={e => setActiveBrand(e.target.value)}
+                    onChange={e => { setActiveBrand(e.target.value); setShowFormBrandDrop(true) }}
+                    onFocus={() => setShowFormBrandDrop(true)}
                     placeholder="Brand name"
                     style={{ ...inp, fontSize: 13 }}
                   />
+                  {showFormBrandDrop && (() => {
+                    const q = activeBrand.toLowerCase()
+                    const allB = Array.from(new Set([...liveVendors.map(v => v.brand), ...rows.map(r => r.brand)])).sort()
+                    const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== activeBrand).slice(0, 8)
+                    return suggs.length > 0 ? (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+                        {suggs.map(b => (
+                          <div key={b}
+                            onMouseDown={e => { e.preventDefault(); setActiveBrand(b); setShowFormBrandDrop(false)
+                              const vids = brandToVendors.get(b)
+                              if (vids && vids.length === 1) setFormVendorId(vids[0])
+                            }}
+                            style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
+                            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                            {b}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
                 </div>
+                {/* Vendor ID with autocomplete */}
+                <div ref={formVendorRef} style={{ position: 'relative' }}>
+                  <label style={lbl}>Vendor ID</label>
+                  <input
+                    value={formVendorId ?? ''}
+                    onChange={e => { setFormVendorId(e.target.value || null); setShowFormVendorDrop(true) }}
+                    onFocus={() => setShowFormVendorDrop(true)}
+                    placeholder="e.g. 1984 by Ladida"
+                    style={{ ...inp, fontSize: 13 }}
+                  />
+                  {showFormVendorDrop && (() => {
+                    const q = (formVendorId ?? '').toLowerCase()
+                    const allV = Array.from(new Set(liveVendors.map(v => v.vendor_id).filter(Boolean))).sort() as string[]
+                    const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== formVendorId).slice(0, 8)
+                    return suggs.length > 0 ? (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+                        {suggs.map(v => (
+                          <div key={v}
+                            onMouseDown={e => { e.preventDefault(); setFormVendorId(v); setShowFormVendorDrop(false) }}
+                            style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
+                            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                            {v}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
+                </div>
+                {/* Drop # */}
                 <div>
                   <label style={lbl}>Drop #</label>
                   <input type="number" min={1} value={formDrop}
@@ -1923,29 +1998,79 @@ export default function SeasonBookPage() {
                 {/* Vendor ID + Brand editable row */}
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <div>
+                    <div ref={editVendorRef} style={{ position: 'relative' }}>
                       <label style={lbl}>Vendor ID</label>
                       <input
                         value={editRow.vendor_id ?? ''}
                         placeholder="e.g. 1984 by Ladida"
+                        onFocus={() => setShowEditVendorDrop(true)}
                         onChange={async e => {
                           const newVid = e.target.value
                           setEditRow({ ...editRow, vendor_id: newVid || null })
+                          setShowEditVendorDrop(true)
                           await supabase.from('season_ledger').update({ vendor_id: newVid || null }).eq('id', editRow.id)
                         }}
                         style={inp} />
+                      {showEditVendorDrop && (() => {
+                        const q = (editRow.vendor_id ?? '').toLowerCase()
+                        const allV = Array.from(new Set(liveVendors.map(v => v.vendor_id).filter(Boolean))).sort() as string[]
+                        const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== editRow.vendor_id).slice(0, 8)
+                        return suggs.length > 0 ? (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+                            {suggs.map(v => (
+                              <div key={v}
+                                onMouseDown={async e => {
+                                  e.preventDefault()
+                                  setEditRow({ ...editRow, vendor_id: v })
+                                  setShowEditVendorDrop(false)
+                                  await supabase.from('season_ledger').update({ vendor_id: v }).eq('id', editRow.id)
+                                }}
+                                style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                {v}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null
+                      })()}
                     </div>
-                    <div>
+                    <div ref={editBrandRef} style={{ position: 'relative' }}>
                       <label style={lbl}>Brand</label>
                       <input
                         value={editRow.brand}
                         placeholder="Brand name"
+                        onFocus={() => setShowEditBrandDrop(true)}
                         onChange={async e => {
                           const newBrand = e.target.value
                           setEditRow({ ...editRow, brand: newBrand })
+                          setShowEditBrandDrop(true)
                           await supabase.from('season_ledger').update({ brand: newBrand }).eq('id', editRow.id)
                         }}
                         style={inp} />
+                      {showEditBrandDrop && (() => {
+                        const q = editRow.brand.toLowerCase()
+                        const allB = Array.from(new Set([...liveVendors.map(v => v.brand), ...rows.map(r => r.brand)])).sort()
+                        const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== editRow.brand).slice(0, 8)
+                        return suggs.length > 0 ? (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+                            {suggs.map(b => (
+                              <div key={b}
+                                onMouseDown={async e => {
+                                  e.preventDefault()
+                                  setEditRow({ ...editRow, brand: b })
+                                  setShowEditBrandDrop(false)
+                                  await supabase.from('season_ledger').update({ brand: b }).eq('id', editRow.id)
+                                }}
+                                style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                {b}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null
+                      })()}
                     </div>
                   </div>
                 </div>
