@@ -370,6 +370,8 @@ export default function SeasonBookPage() {
   }
 
   // ── Fetch rows for current season ─────────────────────────────────────────
+  const [pendingErrorBrands, setPendingErrorBrands] = useState<Set<string>>(new Set())
+
   const fetchRows = useCallback(async (s: string, u: User) => {
     setLoading(true)
     let q = supabase.from('season_ledger').select('*').eq('season', s).order('brand').order('drop_num').order('store')
@@ -380,6 +382,9 @@ export default function SeasonBookPage() {
     const { data, error } = await q
     if (error) { showToast('❌ ' + error.message, 'err') }
     else setRows((data as unknown as LedgerRow[]) || [])
+    // Fetch open error forms (no final_date) for this season
+    const { data: ef } = await supabase.from('error_forms').select('brand').eq('season', s).is('final_date', null)
+    setPendingErrorBrands(new Set((ef ?? []).map((r: { brand: string }) => r.brand)))
     setLoading(false)
   }, [])
 
@@ -1329,6 +1334,11 @@ export default function SeasonBookPage() {
                             ✓ Paid
                           </span>
                         )}
+                        {pendingErrorBrands.has(brand) && (
+                          <span title="Open error form(s) for this brand" style={{ fontSize: 11, fontWeight: 800, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '1px 8px', whiteSpace: 'nowrap' }}>
+                            ⚠️ Error Form
+                          </span>
+                        )}
                         <span className="sb-click-hint" style={{ fontSize: 10, color: gray, marginLeft: 'auto' }}>click to open invoice</span>
                       </div>
 
@@ -1336,9 +1346,10 @@ export default function SeasonBookPage() {
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
                           <tr style={{ background: '#f8f7ff' }}>
-                            <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
+                            <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Drop</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
-                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Order #</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PO #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PDF</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Units</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Total</th>
@@ -1347,71 +1358,87 @@ export default function SeasonBookPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {storesPresent.map(store => {
-                            const sRows = bRows.filter(r => r.store === store)
-                            const activeRows = sRows.filter(r => !r.is_cancelled)
-                            const sUnits = activeRows.reduce((s, r) => s + (r.units ?? 0), 0)
-                            const sInit  = activeRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
-                            const sDep   = activeRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
-                            const sBal   = activeRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
-                            const hasCancelled = sRows.some(r => r.is_cancelled)
-                            const rowCurrency = (activeRows[0]?.currency as Currency) ?? 'USD'
-                            // Collect unique invoice #s for this store (active only)
-                            const invoiceNums = Array.from(new Set(activeRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
-                            const invoiceFileUrls = Array.from(new Set(activeRows.map(r => r.invoice_file_url).filter((u): u is string => !!u)))
-                            return (
-                              <tr key={store}
-                                onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
-                                title="Click to view store invoice"
-                                style={{ cursor: 'pointer', borderBottom: `1px solid #f3f4f6` }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
-                                onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                                <td style={{ padding: '8px 14px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>
-                                  {store}
-                                  {hasCancelled && <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', marginLeft: 4 }}>🚫</span>}
-                                </td>
-                                <td style={{ padding: '8px 10px', textAlign: 'left' }}>
-                                  {invoiceNums.length > 0 ? invoiceNums.map(inv => (
-                                    <span key={inv} style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>
-                                      {inv}
-                                    </span>
-                                  )) : <span style={{ color: gray }}>—</span>}
-                                </td>
-                                <td style={{ padding: '8px 10px', textAlign: 'left' }}>
-                                  {(() => {
-                                    const orderNums = Array.from(new Set(activeRows.map(r => r.order_num).filter((n): n is string => !!n)))
-                                    return orderNums.length > 0 ? orderNums.map(o => (
+                          {(() => {
+                            // Build rows: one per unique (drop_name, store) combo, ordered by drop then store
+                            const dropStoreRows: { dropName: string | null; store: string; dropRows: LedgerRow[] }[] = []
+                            const seenKeys = new Set<string>()
+                            for (const r of bRows) {
+                              const key = `${r.drop_name ?? ''}|${r.store}`
+                              if (!seenKeys.has(key)) {
+                                seenKeys.add(key)
+                                dropStoreRows.push({
+                                  dropName: r.drop_name,
+                                  store: r.store,
+                                  dropRows: bRows.filter(x => x.drop_name === r.drop_name && x.store === r.store),
+                                })
+                              }
+                            }
+                            return dropStoreRows.map(({ dropName, store, dropRows }) => {
+                              const activeRows = dropRows.filter(r => !r.is_cancelled)
+                              const sUnits = activeRows.reduce((s, r) => s + (r.units ?? 0), 0)
+                              const sInit  = activeRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
+                              const sDep   = activeRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
+                              const sBal   = activeRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                              const hasCancelled = dropRows.some(r => r.is_cancelled)
+                              const rowCurrency = (activeRows[0]?.currency as Currency) ?? 'USD'
+                              const invoiceNums = Array.from(new Set(activeRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
+                              const poNums = Array.from(new Set(activeRows.map(r => r.order_num).filter((n): n is string => !!n)))
+                              const invoiceFileUrls = Array.from(new Set(activeRows.map(r => r.invoice_file_url).filter((u): u is string => !!u)))
+                              const rowKey = `${dropName ?? '_'}|${store}`
+                              return (
+                                <tr key={rowKey}
+                                  onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
+                                  title="Click to view store invoice"
+                                  style={{ cursor: 'pointer', borderBottom: `1px solid #f3f4f6` }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
+                                  onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                                  <td style={{ padding: '8px 14px', fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>
+                                    {dropName || <span style={{ color: '#d1d5db' }}>—</span>}
+                                  </td>
+                                  <td style={{ padding: '8px 10px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>
+                                    {store}
+                                    {hasCancelled && <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', marginLeft: 4 }}>🚫</span>}
+                                  </td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'left' }}>
+                                    {invoiceNums.length > 0 ? invoiceNums.map(inv => (
+                                      <span key={inv} style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>
+                                        {inv}
+                                      </span>
+                                    )) : <span style={{ color: gray }}>—</span>}
+                                  </td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'left' }}>
+                                    {poNums.length > 0 ? poNums.map(o => (
                                       <span key={o} style={{ fontSize: 10, color: '#6b21a8', fontWeight: 700, background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>
                                         {o}
                                       </span>
-                                    )) : <span style={{ color: gray }}>—</span>
-                                  })()}
-                                </td>
-                                <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                                  {invoiceFileUrls.length > 0
-                                    ? invoiceFileUrls.map((url, i) => (
-                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                          style={{ color: purpleD, fontWeight: 700, fontSize: 13, textDecoration: 'none', display: 'inline-block', marginLeft: i > 0 ? 4 : 0 }}
-                                          title="View PDF invoice">
-                                          📄
-                                        </a>
-                                      ))
-                                    : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
-                                  }
-                                </td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{sUnits || '—'}</td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit, rowCurrency)}</td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep, rowCurrency)}</td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: sBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(sBal, rowCurrency)}</td>
-                              </tr>
-                            )
-                          })}
+                                    )) : <span style={{ color: gray }}>—</span>}
+                                  </td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                    {invoiceFileUrls.length > 0
+                                      ? invoiceFileUrls.map((url, i) => (
+                                          <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                            style={{ color: purpleD, fontWeight: 700, fontSize: 13, textDecoration: 'none', display: 'inline-block', marginLeft: i > 0 ? 4 : 0 }}
+                                            title="View PDF invoice">
+                                            📄
+                                          </a>
+                                        ))
+                                      : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
+                                    }
+                                  </td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{sUnits || '—'}</td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit, rowCurrency)}</td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep, rowCurrency)}</td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: sBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(sBal, rowCurrency)}</td>
+                                </tr>
+                              )
+                            })
+                          })()}
                         </tbody>
                         {/* Total Owed footer — aligns under Balance Due */}
-                        {storesPresent.length > 1 && (
+                        {bRows.length > 1 && (
                           <tfoot>
                             <tr style={{ background: totBal > 0.001 ? '#fef2f2' : '#f0fdf4', borderTop: `2px solid ${border}` }}>
-                              <td colSpan={7} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
+                              <td colSpan={8} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
                                 Total Owed
                               </td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 13, fontWeight: 900, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>
