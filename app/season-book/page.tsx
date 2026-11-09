@@ -1043,7 +1043,7 @@ export default function SeasonBookPage() {
         <div className="sb-subbar-divider" style={{ width: 1, height: 20, background: border, flexShrink: 0 }} />
 
         {/* Search — aligns with grand total box */}
-        <div className="sb-subbar-search" ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
+        <div className="sb-subbar-search" ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 500 }}>
           <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
             <span style={{ padding: '0 8px', color: gray, fontSize: 14 }}>🔍</span>
             <input

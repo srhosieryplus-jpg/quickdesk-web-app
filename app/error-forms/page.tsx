@@ -480,7 +480,7 @@ export default function ErrorFormsPage() {
       )}
 
       {/* ── Header ── */}
-      <div style={{ background: redD, color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', position: 'relative' }}>
+      <div className="ef-header" style={{ background: redD, color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => setShowSeasonPanel(true)}
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 14, cursor: 'pointer' }}
@@ -493,13 +493,13 @@ export default function ErrorFormsPage() {
           </button>
         </div>
         {/* Centered title */}
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+        <div className="ef-header-title" style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center', pointerEvents: 'none' }}>
           <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '0.05em' }}>⚠ ERROR FORMS</div>
           <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
             {season} · {openCount} open · {finalCount} finalized
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="ef-header-right" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Season badge */}
           <button onClick={() => setShowSeasonPanel(true)}
             style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)',
@@ -515,7 +515,7 @@ export default function ErrorFormsPage() {
 
       {/* ── Filters bar ── */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '10px 20px' }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', maxWidth: 960, margin: '0 auto', justifyContent: 'center' }}>
+        <div className="ef-filters" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', maxWidth: 960, margin: '0 auto', justifyContent: 'center' }}>
           {/* Status dropdown — first */}
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as 'all'|'open'|'finalized')}
             style={{ ...inp, width: 120, flex: '0 0 auto', fontWeight: 700 }}>
@@ -609,16 +609,40 @@ export default function ErrorFormsPage() {
       )}
 
       {/* ── Table ── */}
-      <div style={{ padding: '16px 24px', overflowX: 'auto' }}
+      <div className="ef-table-wrap" style={{ padding: '16px 24px', overflowX: 'auto' }}
         onClick={() => { if (ctxMenu) { setCtxMenu(null); setShowDelConfirm(false); setDelPassword('') } }}>
         {loading ? (
           <div style={{ textAlign: 'center', color: gray, padding: 40, fontSize: 13 }}>Loading…</div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', color: gray, padding: 40, fontSize: 13 }}>
-            {filtered.length === 0 ? 'No forms found.' : ''}
-          </div>
+          <div style={{ textAlign: 'center', color: gray, padding: 40, fontSize: 13 }}>No forms found.</div>
         ) : (
-          <table style={{ width: '100%', maxWidth: 960, margin: '0 auto', borderCollapse: 'collapse', fontSize: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderRadius: 10, overflow: 'hidden' }}>
+          <>
+          {/* ── Mobile cards ── */}
+          <div className="ef-cards">
+            {filtered.map(f => {
+              const sc = STATUS_COLORS[f.status]
+              return (
+                <div key={f.id} className="ef-card" onClick={() => openEdit(f)}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontWeight: 800, color: redD, fontSize: 14 }}>{f.brand}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, borderRadius: 5, padding: '2px 8px' }}>{STATUS_LABELS[f.status]}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, fontSize: 12, color: gray, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, color: '#1d4ed8' }}>{f.store_id}</span>
+                    {f.amount != null && <span style={{ fontWeight: 600, color: '#111' }}>{fmt$(f.amount)}</span>}
+                    <span>{fmtDate(f.error_date)}</span>
+                    {f.email_sent && <span style={{ color: '#166534', fontWeight: 700 }}>✓ Email</span>}
+                    {f.final_date
+                      ? <span style={{ color: '#166534', fontWeight: 700 }}>✓ {fmtDate(f.final_date)}</span>
+                      : <span style={{ color: '#b45309', fontWeight: 600 }}>Open</span>}
+                  </div>
+                  {f.comments && <div style={{ fontSize: 11, color: gray, marginTop: 5, fontStyle: 'italic' }}>{f.comments}</div>}
+                </div>
+              )
+            })}
+          </div>
+          {/* ── Desktop table ── */}
+          <table className="ef-desktop-table" style={{ width: '100%', maxWidth: 960, margin: '0 auto', borderCollapse: 'collapse', fontSize: 12, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', borderRadius: 10, overflow: 'hidden' }}>
             <thead>
               <tr style={{ background: redD, color: '#fff' }}>
                 <th style={th}>Store</th>
@@ -688,6 +712,7 @@ export default function ErrorFormsPage() {
               })}
             </tbody>
           </table>
+          </>
         )}
       </div>
 
@@ -703,8 +728,8 @@ export default function ErrorFormsPage() {
         const fileBase = isEdit ? ef!.id : 'new-' + Date.now()
 
         return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+          <div className="ef-modal-wrap" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div className="ef-modal-box" style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
               {/* Modal header */}
               <div style={{ background: redD, color: '#fff', padding: '14px 20px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -714,10 +739,10 @@ export default function ErrorFormsPage() {
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
 
-              <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 22 }}>
+              <div className="ef-modal-body" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 22 }}>
 
                 {/* Row 0: Store + Invoice # + Error Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 160px', gap: 16, alignItems: 'start' }}>
+                <div className="ef-modal-row0" style={{ display: 'grid', gridTemplateColumns: '1fr 140px 160px', gap: 16, alignItems: 'start' }}>
                 <div>
                   <label style={lbl}>Store ID *</label>
                   {(!isAdmin && modal === 'edit') ? (
@@ -785,7 +810,7 @@ export default function ErrorFormsPage() {
                 </div>
 
                 {/* Row 1: Brand + Currency + Amount */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 90px 1fr', gap: 16 }}>
+                <div className="ef-modal-row1" style={{ display: 'grid', gridTemplateColumns: '2fr 90px 1fr', gap: 16 }}>
                   <div style={{ position: 'relative' }}>
                     <label style={lbl}>Brand *</label>
                     <input value={isEdit ? vals.brand : brandInput}
@@ -829,7 +854,7 @@ export default function ErrorFormsPage() {
                 </div>
 
                 {/* Row 2: Status + Email Sent + Final Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: '160px 120px 160px', gap: 16 }}>
+                <div className="ef-modal-row2" style={{ display: 'grid', gridTemplateColumns: '160px 120px 160px', gap: 16 }}>
                   <div>
                     <label style={lbl}>Resolution Status</label>
                     <select value={vals.status} onChange={e => upd({ status: e.target.value as EFStatus })} style={inp}>
@@ -919,6 +944,9 @@ export default function ErrorFormsPage() {
         )
       })()}
 
+      {/* ── Mobile FAB ── */}
+      <button className="ef-fab" onClick={openNew}>+</button>
+
       <style>{`
         .ef-row { cursor: pointer; transition: background 0.1s; }
         .ef-row:hover { background: #fef2f2 !important; }
@@ -939,9 +967,29 @@ export default function ErrorFormsPage() {
           font-size: 13px; transition: background 0.1s; border-bottom: 1px solid #f3f4f6; color: #374151;
         }
         .sp-season-row:hover { background: #fef2f2 !important; }
-        @media (max-width: 768px) {
-          table { font-size: 11px; }
+        /* ── Mobile ── */
+        @media (max-width: 600px), (pointer: coarse) and (max-width: 900px) {
+          .ef-header { flex-wrap: nowrap !important; }
+          .ef-header-title { position: static !important; transform: none !important; flex: 1; pointer-events: auto !important; }
+          .ef-header-title div:last-child { display: none; }
+          .ef-header-right { display: none !important; }
+          .ef-filters { flex-direction: column !important; align-items: stretch !important; padding: 8px 12px !important; }
+          .ef-filters > * { width: 100% !important; max-width: none !important; flex: none !important; }
+          .ef-table-wrap { padding: 10px 12px !important; }
+          .ef-desktop-table { display: none !important; }
+          .ef-cards { display: flex !important; }
+          .ef-modal-body { padding: 16px !important; }
+          .ef-modal-row0 { grid-template-columns: 1fr !important; }
+          .ef-modal-row1 { grid-template-columns: 1fr !important; }
+          .ef-modal-row2 { grid-template-columns: 1fr !important; }
+          .ef-modal-box { border-radius: 14px 14px 0 0 !important; max-height: 92vh !important; }
+          .ef-modal-wrap { align-items: flex-end !important; padding: 0 !important; }
         }
+        .ef-cards { display: none; flex-direction: column; gap: 10px; }
+        .ef-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+        .ef-card:active { background: #fef2f2; }
+        .ef-fab { display: none; position: fixed; bottom: 20px; right: 20px; z-index: 100; background: ${redD}; color: #fff; border: none; border-radius: 50%; width: 52px; height: 52px; font-size: 26px; font-weight: 300; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.25); align-items: center; justify-content: center; }
+        @media (max-width: 600px), (pointer: coarse) and (max-width: 900px) { .ef-fab { display: flex; } }
       `}</style>
     </div>
   )
