@@ -626,6 +626,7 @@ export default function SettingsPage() {
             setVCtxMenu(null)
           }}>✏️ Edit</div>
           <div className="ctx-item danger" onClick={() => {
+            console.log('[delete click]', vCtxMenu.idx)
             deleteVendorRow(vCtxMenu.idx)
             setVCtxMenu(null)
           }}>🗑 Delete</div>
