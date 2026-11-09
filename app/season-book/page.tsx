@@ -23,6 +23,30 @@ import { VENDOR_DATA } from '@/lib/vendors'
 
 type Currency = 'USD' | 'EUR'
 
+const PASTE_HEADERS = ['Brand','Vendor ID','Drop #','Drop Name','Store','Units','Total','Deposit','Duties','Currency','Invoice #','Order #','Comment']
+
+interface SmartPasteRow {
+  raw: string[]
+  brand: string
+  vendor_id: string
+  drop_num: string
+  drop_name: string
+  store: string
+  units: string
+  total: string
+  deposit: string
+  duties: string
+  currency: string
+  invoice_num: string
+  order_num: string
+  comment: string
+  // validation
+  brandMatch: string | null    // null = not found
+  vendorMatch: string | null
+  warning: string | null
+  skip: boolean
+}
+
 interface LedgerRow {
   id: string
   season: string
@@ -151,7 +175,11 @@ export default function SeasonBookPage() {
   const [activeBrand, setActiveBrand] = useState<string | null>(null)
 
   // Modal: new log entry
-  const [modal, setModal] = useState<'none'|'new-entry'|'edit-entry'|'add-payment'|'quick-pay'|'invoice'|'pay-history'>('none')
+  const [modal, setModal] = useState<'none'|'new-entry'|'edit-entry'|'add-payment'|'quick-pay'|'invoice'|'pay-history'|'smart-paste'>('none')
+  const [pasteText, setPasteText] = useState('')
+  const [pasteRows, setPasteRows] = useState<SmartPasteRow[]>([])
+  const [pasteParsed, setPasteParsed] = useState(false)
+  const [pasteSaving, setPasteSaving] = useState(false)
   const [editRow, setEditRow] = useState<LedgerRow | null>(null)
   const [quickPayBrand, setQuickPayBrand] = useState<string | null>(null)
   const [quickPayAmt, setQuickPayAmt] = useState('')
@@ -335,6 +363,50 @@ export default function SeasonBookPage() {
   const isAdmin = user?.store === 'ALL'
   // Payment/history/deposit access: STAR (admin) and MG only
   const canPay = ['STAR', 'MG'].includes(user?.userid?.toUpperCase() ?? '')
+  const canSmartPaste = user?.userid?.toUpperCase() === 'STAR'
+
+  // Fuzzy brand/vendor matcher — strips punctuation & spaces for comparison
+  function normalize(s: string) { return s.toLowerCase().replace(/[^a-z0-9]/g, '') }
+
+  function parsePaste(text: string, vendors: typeof VENDOR_DATA): SmartPasteRow[] {
+    const lines = text.trim().split('\n').filter(l => l.trim())
+    // skip header row if first cell matches first header
+    const startIdx = normalize(lines[0]?.split('\t')[0] ?? '') === normalize(PASTE_HEADERS[0]) ? 1 : 0
+    const allBrands = Array.from(new Set(vendors.map(v => v.brand)))
+    const allVendorIds = Array.from(new Set(vendors.map(v => v.vendor_id)))
+
+    return lines.slice(startIdx).map(line => {
+      const cols = line.split('\t').map(c => c.trim())
+      const [brand='', vendor_id='', drop_num='', drop_name='', store='', units='', total='', deposit='', duties='', currency='USD', invoice_num='', order_num='', comment=''] = cols
+
+      // Fuzzy brand match
+      const normBrand = normalize(brand)
+      let brandMatch: string | null = allBrands.find(b => normalize(b) === normBrand) ?? null
+      if (!brandMatch && normBrand) {
+        // partial match fallback
+        brandMatch = allBrands.find(b => normalize(b).includes(normBrand) || normBrand.includes(normalize(b))) ?? null
+      }
+
+      // Fuzzy vendor match
+      const normVendor = normalize(vendor_id)
+      let vendorMatch: string | null = allVendorIds.find(v => normalize(v) === normVendor) ?? null
+      if (!vendorMatch && normVendor) {
+        vendorMatch = allVendorIds.find(v => normalize(v).includes(normVendor) || normVendor.includes(normalize(v))) ?? null
+      }
+
+      let warning: string | null = null
+      if (brand && !brandMatch) warning = `Brand "${brand}" not found in vendors list`
+      else if (brandMatch && brandMatch !== brand) warning = `Brand matched as "${brandMatch}" (you entered "${brand}")`
+      if (vendor_id && !vendorMatch) warning = (warning ? warning + '; ' : '') + `Vendor ID "${vendor_id}" not found`
+      else if (vendorMatch && vendorMatch !== vendor_id) warning = (warning ? warning + '; ' : '') + `Vendor matched as "${vendorMatch}" (you entered "${vendor_id}")`
+
+      return {
+        raw: cols, brand, vendor_id, drop_num, drop_name, store, units, total,
+        deposit, duties, currency, invoice_num, order_num, comment,
+        brandMatch, vendorMatch, warning, skip: false,
+      }
+    })
+  }
 
   const [liveVendors, setLiveVendors] = useState(VENDOR_DATA)
 
@@ -1004,6 +1076,10 @@ export default function SeasonBookPage() {
             style={{ background: '#fff', color: purpleD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             + New
           </button>
+          {canSmartPaste && <button onClick={() => { setPasteText(''); setPasteRows([]); setPasteParsed(false); setModal('smart-paste') }}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            📋 Smart Paste
+          </button>}
           {canPay && <button onClick={async () => {
             setPayHistRow(null)
             setPayHistLoading(true)
@@ -2569,6 +2645,165 @@ export default function SeasonBookPage() {
               style={{ marginTop: 14, background: 'none', border: 'none', color: gray, fontSize: 12, cursor: 'pointer', width: '100%', textAlign: 'center' }}>
               Skip / Not sure
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Smart Paste Modal ─────────────────────────────────────────────────── */}
+      {modal === 'smart-paste' && (
+        <div className="modal-bg">
+          <div className="modal-box" style={{ maxWidth: 820 }}>
+            <div className="modal-head">
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: purpleD }}>📋 Smart Paste</div>
+                <div style={{ fontSize: 12, color: gray }}>Paste rows from Excel / Sheets — {season}</div>
+              </div>
+              <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div className="modal-body">
+              {!pasteParsed ? (
+                <>
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: purpleD, marginBottom: 6 }}>Step 1 — Copy these headers into row 1 of your spreadsheet</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: `1.5px solid ${border}`, borderRadius: 8, padding: '8px 12px' }}>
+                      <span style={{ fontSize: 11, color: gray, fontFamily: 'monospace', flex: 1, wordBreak: 'break-all' }}>{PASTE_HEADERS.join('\t')}</span>
+                      <button onClick={() => { navigator.clipboard.writeText(PASTE_HEADERS.join('\t')); showToast('✅ Headers copied') }}
+                        style={{ background: purpleD, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        Copy Headers
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 11, color: gray, marginTop: 6 }}>
+                      Columns: {PASTE_HEADERS.map((h, i) => <span key={h}><b>{h}</b>{i < PASTE_HEADERS.length - 1 ? ' · ' : ''}</span>)}
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: purpleD, marginBottom: 6 }}>Step 2 — Select your data rows (with or without header) and paste below</div>
+                    <textarea
+                      value={pasteText}
+                      onChange={e => setPasteText(e.target.value)}
+                      placeholder="Paste from Excel / Google Sheets here…"
+                      style={{ width: '100%', minHeight: 160, border: `1.5px solid ${border}`, borderRadius: 8, padding: '10px 12px', fontSize: 12, fontFamily: 'monospace', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button onClick={() => setModal('none')}
+                      style={{ background: 'none', border: `1.5px solid ${border}`, borderRadius: 7, padding: '7px 16px', fontSize: 13, fontWeight: 700, color: gray, cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                    <button disabled={!pasteText.trim()} onClick={() => {
+                      const parsed = parsePaste(pasteText, liveVendors)
+                      setPasteRows(parsed)
+                      setPasteParsed(true)
+                    }}
+                      style={{ background: purpleD, color: '#fff', border: 'none', borderRadius: 7, padding: '7px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: pasteText.trim() ? 1 : 0.5 }}>
+                      Preview →
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: purpleD, marginBottom: 8 }}>
+                    Review {pasteRows.length} row{pasteRows.length !== 1 ? 's' : ''} — uncheck any you want to skip
+                  </div>
+                  <div style={{ maxHeight: 380, overflowY: 'auto', border: `1.5px solid ${border}`, borderRadius: 8, marginBottom: 12 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: '#f5f3ff', position: 'sticky', top: 0 }}>
+                          <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 800, color: purpleD, width: 32 }}></th>
+                          {['Brand','Vendor','Drop','Store','Units','Total','Deposit','Inv #','Ord #','Status'].map(h => (
+                            <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pasteRows.map((r, i) => (
+                          <tr key={i} style={{ background: r.skip ? '#fafafa' : r.warning ? '#fffbeb' : '#fff', borderTop: `1px solid ${border}`, opacity: r.skip ? 0.4 : 1 }}>
+                            <td style={{ padding: '5px 8px' }}>
+                              <input type="checkbox" checked={!r.skip} onChange={() => setPasteRows(prev => prev.map((p, j) => j === i ? { ...p, skip: !p.skip } : p))}
+                                style={{ accentColor: purpleD }} />
+                            </td>
+                            <td style={{ padding: '5px 8px', fontWeight: 700, color: r.brandMatch ? (r.brandMatch !== r.brand ? '#92400e' : purpleD) : '#dc2626' }}>
+                              {(r.brandMatch ?? r.brand) || <span style={{ color: '#dc2626' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '5px 8px', color: r.vendorMatch ? (r.vendorMatch !== r.vendor_id ? '#92400e' : gray) : '#dc2626' }}>
+                              {(r.vendorMatch ?? r.vendor_id) || '—'}
+                            </td>
+                            <td style={{ padding: '5px 8px', color: gray }}>{r.drop_num}</td>
+                            <td style={{ padding: '5px 8px', color: gray }}>{r.store}</td>
+                            <td style={{ padding: '5px 8px', color: gray }}>{r.units}</td>
+                            <td style={{ padding: '5px 8px', color: gray }}>{r.total}</td>
+                            <td style={{ padding: '5px 8px', color: gray }}>{r.deposit}</td>
+                            <td style={{ padding: '5px 8px', color: gray }}>{r.invoice_num}</td>
+                            <td style={{ padding: '5px 8px', color: gray }}>{r.order_num}</td>
+                            <td style={{ padding: '5px 8px' }}>
+                              {r.warning
+                                ? <span title={r.warning} style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 6, padding: '1px 6px', cursor: 'help' }}>⚠️ {r.warning.length > 40 ? r.warning.slice(0, 40) + '…' : r.warning}</span>
+                                : <span style={{ fontSize: 10, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 6, padding: '1px 6px' }}>✓ OK</span>
+                              }
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ fontSize: 11, color: gray, marginBottom: 12 }}>
+                    <span style={{ fontWeight: 700, color: '#92400e' }}>⚠️ amber rows</span> = fuzzy match applied or value not found — hover the status badge for details. &nbsp;
+                    <span style={{ fontWeight: 700, color: '#065f46' }}>✓ green</span> = exact match.
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <button onClick={() => setPasteParsed(false)}
+                      style={{ background: 'none', border: `1.5px solid ${border}`, borderRadius: 7, padding: '7px 16px', fontSize: 13, fontWeight: 700, color: gray, cursor: 'pointer' }}>
+                      ← Back
+                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => setModal('none')}
+                        style={{ background: 'none', border: `1.5px solid ${border}`, borderRadius: 7, padding: '7px 16px', fontSize: 13, fontWeight: 700, color: gray, cursor: 'pointer' }}>
+                        Cancel
+                      </button>
+                      <button disabled={pasteSaving || pasteRows.every(r => r.skip)} onClick={async () => {
+                        if (!user) return
+                        setPasteSaving(true)
+                        const toInsert = pasteRows.filter(r => !r.skip).map(r => {
+                          const init = parseFloat(r.total) || null
+                          const dep  = parseFloat(r.deposit) || null
+                          const dut  = parseFloat(r.duties) || null
+                          const bal  = init != null ? (init - (dep ?? 0) - (dut ?? 0)) : null
+                          const cur: Currency = (r.currency?.toUpperCase() === 'EUR') ? 'EUR' : 'USD'
+                          return {
+                            season,
+                            brand: r.brandMatch ?? r.brand,
+                            vendor_id: r.vendorMatch ?? (r.vendor_id || null),
+                            drop_num: parseInt(r.drop_num) || 1,
+                            drop_name: r.drop_name || null,
+                            store: r.store,
+                            units: parseInt(r.units) || null,
+                            initial_total: init,
+                            deposit: dep,
+                            duties: dut,
+                            balance_due: bal,
+                            currency: cur,
+                            invoice_num: r.invoice_num || null,
+                            order_num: r.order_num || null,
+                            comment: r.comment || null,
+                            payment_date: null,
+                            logged_by: user.userid,
+                          }
+                        })
+                        const { error } = await supabase.from('season_ledger').insert(toInsert)
+                        setPasteSaving(false)
+                        if (error) { showToast('❌ ' + error.message, 'err'); return }
+                        showToast(`✅ ${toInsert.length} row${toInsert.length !== 1 ? 's' : ''} inserted`)
+                        setModal('none')
+                        fetchRows(season, user)
+                      }}
+                        style={{ background: purpleD, color: '#fff', border: 'none', borderRadius: 7, padding: '7px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: (pasteSaving || pasteRows.every(r => r.skip)) ? 0.5 : 1 }}>
+                        {pasteSaving ? 'Saving…' : `Import ${pasteRows.filter(r => !r.skip).length} row${pasteRows.filter(r => !r.skip).length !== 1 ? 's' : ''}`}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
