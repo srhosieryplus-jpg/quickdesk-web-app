@@ -323,10 +323,13 @@ export default function SeasonBookPage() {
   }
 
   async function confirmRowDelete() {
-    if (!rowCtxMenu) return
+    console.log('[confirmRowDelete]', { rowCtxMenu, rowCtxDelPw })
+    if (!rowCtxMenu) { console.warn('no rowCtxMenu'); return }
     if (rowCtxDelPw.toLowerCase() !== 'delete') { setRowCtxDelErr(true); return }
     const ids = rowCtxMenu.rows.map(r => r.id)
+    console.log('[confirmRowDelete] deleting ids', ids)
     const { error } = await supabase.from('season_ledger').delete().in('id', ids)
+    console.log('[confirmRowDelete] result', error)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     setRowCtxMenu(null); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false)
     showToast(`🗑 ${ids.length} row${ids.length !== 1 ? 's' : ''} deleted`)
