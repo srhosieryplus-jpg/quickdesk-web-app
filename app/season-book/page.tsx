@@ -1885,39 +1885,35 @@ export default function SeasonBookPage() {
                   </div>
                 </div>
 
-                {/* Vendor ID row */}
-                {(() => {
-                  const vids = brandToVendors.get(editRow.brand) ?? []
-                  const currentVid = editRow.vendor_id
-                  if (vids.length === 0 && !currentVid) return null
-                  return (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <label style={lbl}>Vendor ID</label>
-                        {currentVid && (
-                          <span style={{ fontSize: 13, fontWeight: 700, color: purpleD }}>
-                            {currentVid} - {editRow.brand}
-                          </span>
-                        )}
-                        {vids.length > 1 && (
-                          <button
-                            onClick={() => {
-                              setVendorPickerBrand(editRow.brand)
-                              setVendorPickerCandidates(vids)
-                              setVendorPickerOnSelect(() => async (vid: string) => {
-                                const { error } = await supabase.from('season_ledger').update({ vendor_id: vid }).eq('id', editRow.id)
-                                if (!error && user) { setEditRow({ ...editRow, vendor_id: vid }); fetchRows(season, user) }
-                                setVendorPickerBrand(null)
-                              })
-                            }}
-                            style={{ fontSize: 11, fontWeight: 700, background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 7, padding: '3px 10px', cursor: 'pointer', color: purpleD }}>
-                            {currentVid ? 'Change Vendor' : 'Pick Vendor'}
-                          </button>
-                        )}
-                      </div>
+                {/* Vendor ID + Brand editable row */}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>
+                      <label style={lbl}>Vendor ID</label>
+                      <input
+                        value={editRow.vendor_id ?? ''}
+                        placeholder="e.g. 1984 by Ladida"
+                        onChange={async e => {
+                          const newVid = e.target.value
+                          setEditRow({ ...editRow, vendor_id: newVid || null })
+                          await supabase.from('season_ledger').update({ vendor_id: newVid || null }).eq('id', editRow.id)
+                        }}
+                        style={inp} />
                     </div>
-                  )
-                })()}
+                    <div>
+                      <label style={lbl}>Brand</label>
+                      <input
+                        value={editRow.brand}
+                        placeholder="Brand name"
+                        onChange={async e => {
+                          const newBrand = e.target.value
+                          setEditRow({ ...editRow, brand: newBrand })
+                          await supabase.from('season_ledger').update({ brand: newBrand }).eq('id', editRow.id)
+                        }}
+                        style={inp} />
+                    </div>
+                  </div>
+                </div>
 
                 {/* Divider */}
                 <div style={{ height: 1, background: border, marginBottom: 14 }} />
