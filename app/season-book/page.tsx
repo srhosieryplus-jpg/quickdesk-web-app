@@ -2205,9 +2205,9 @@ export default function SeasonBookPage() {
                                     )}
                                   </div>
 
-                                  {/* Balance chip */}
+                                  {/* Balance — flat text, no bubble */}
                                   <div style={{ marginTop: 7 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 800, color: bal > 0.001 ? '#dc2626' : '#166534', background: bal > 0.001 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${bal > 0.001 ? '#fca5a5' : '#86efac'}`, borderRadius: 6, padding: '2px 8px' }}>
+                                    <span style={{ fontSize: 12, fontWeight: 800, color: bal > 0.001 ? '#dc2626' : '#166534' }}>
                                       {bal > 0.001 ? `Balance: ${fmt$(bal, dRow.currency)}` : '✓ Paid'}
                                     </span>
                                   </div>
@@ -2450,6 +2450,20 @@ export default function SeasonBookPage() {
                             {selectedRows.length} Drop{selectedRows.length > 1 ? 's' : ''} Selected
                           </span>
                           <div style={{ display: 'flex', gap: 6 }}>
+                            <button type="button"
+                              onClick={() => {
+                                if (selectedRows.length === 1) {
+                                  setUsePerRow(false)
+                                  setQuickPayAmt((selectedRows[0].balance_due ?? 0).toFixed(2))
+                                } else {
+                                  const m = new Map<string, string>()
+                                  selectedRows.forEach(r => m.set(r.id, (r.balance_due ?? 0).toFixed(2)))
+                                  setPerRowAmts(m); setUsePerRow(true); setQuickPayAmt('')
+                                }
+                              }}
+                              style={{ fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 6, border: `1.5px solid #dc2626`, background: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}>
+                              Remainder
+                            </button>
                             <button type="button"
                               onClick={() => {
                                 const m = new Map<string, string>()
