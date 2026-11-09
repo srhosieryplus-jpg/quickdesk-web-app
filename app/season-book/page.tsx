@@ -1497,7 +1497,7 @@ export default function SeasonBookPage() {
                                   onMouseLeave={e => (e.currentTarget.style.background = '')}
                                   onContextMenu={e => { e.preventDefault(); setRowCtxMenu({ x: e.clientX, y: e.clientY, rows: dropRows }); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false) }}>
                                   <td style={{ padding: '8px 14px', fontSize: 11, fontWeight: 700, color: purpleD, whiteSpace: 'nowrap' }}>
-                                    {rowIdx === 0 ? brand : ''}
+                                    {brand}
                                   </td>
                                   <td style={{ padding: '8px 10px', fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>
                                     {dropName || `Drop ${dropNum}`}
