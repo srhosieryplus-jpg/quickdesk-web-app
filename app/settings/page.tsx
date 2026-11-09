@@ -82,6 +82,7 @@ export default function SettingsPage() {
   const [editVendor, setEditVendor] = useState<{ idx: number; vendor_id: string; brand: string } | null>(null)
   const [newVendorId, setNewVendorId] = useState('')
   const [newBrand, setNewBrand] = useState('')
+  const [vendorsSaving, setVendorsSaving] = useState(false)
 
   const ctxRef = useRef<HTMLDivElement>(null)
 
@@ -123,6 +124,12 @@ export default function SettingsPage() {
             try { localStorage.setItem('qd_stores', JSON.stringify(parsed)) } catch {}
           }
         } catch {}
+      }
+    })
+    // Load vendors from Supabase vendors table (falls back to static VENDOR_DATA)
+    supabase.from('vendors').select('vendor_id, brand').order('vendor_id').then(({ data, error }) => {
+      if (!error && data && data.length > 0) {
+        setVendors(data as VendorRow[])
       }
     })
   }, [router])
@@ -241,7 +248,25 @@ export default function SettingsPage() {
     showToast('✅ Saved')
   }
 
-  // Vendor helpers
+  // Vendor helpers — all mutations go to Supabase `vendors` table
+  async function saveVendorAdd(vid: string, br: string) {
+    setVendorsSaving(true)
+    await supabase.from('vendors').insert({ vendor_id: vid, brand: br })
+    setVendorsSaving(false)
+  }
+  async function saveVendorEdit(oldVid: string, oldBrand: string, newVid: string, newBrand: string) {
+    setVendorsSaving(true)
+    // match by both columns since there's no unique id
+    await supabase.from('vendors').update({ vendor_id: newVid, brand: newBrand })
+      .eq('vendor_id', oldVid).eq('brand', oldBrand)
+    setVendorsSaving(false)
+  }
+  async function saveVendorDelete(vid: string, brand: string) {
+    setVendorsSaving(true)
+    await supabase.from('vendors').delete().eq('vendor_id', vid).eq('brand', brand)
+    setVendorsSaving(false)
+  }
+
   const filteredVendors = useMemo(() => {
     const q = vendorSearch.toLowerCase().trim()
     // Always hide rows with no vendor_id unless searching explicitly for blank
@@ -257,25 +282,32 @@ export default function SettingsPage() {
     if (!vid || !br) { showToast('❌ Both fields required', 'err'); return }
     setVendors(prev => [...prev, { vendor_id: vid, brand: br }])
     setNewVendorId(''); setNewBrand('')
+    saveVendorAdd(vid, br)
     showToast('✅ Row added')
   }
 
   function saveEditVendor() {
     if (!editVendor) return
-    setVendors(prev => prev.map((v, i) => i === editVendor.idx ? { vendor_id: editVendor.vendor_id, brand: editVendor.brand } : v))
+    const target = filteredVendors[editVendor.idx]
+    setVendors(prev => prev.map((v, i) => {
+      const fullIdx = prev.findIndex(x => x === target)
+      return i === fullIdx ? { vendor_id: editVendor.vendor_id, brand: editVendor.brand } : v
+    }))
+    saveVendorEdit(target.vendor_id, target.brand, editVendor.vendor_id, editVendor.brand)
     setEditVendor(null)
     showToast('✅ Saved')
   }
 
   function deleteVendorRow(idx: number) {
-    // find actual index in full vendors array — filteredVendors[idx] matches by value
     const target = filteredVendors[idx]
+    // Only removes from future options — existing ledger rows keep their vendor_id
     setVendors(prev => {
       const fullIdx = prev.findIndex(v => v === target)
       if (fullIdx === -1) return prev
       return prev.filter((_, i) => i !== fullIdx)
     })
-    showToast('🗑 Removed')
+    saveVendorDelete(target.vendor_id, target.brand)
+    showToast('🗑 Removed from options (existing records kept)')
   }
 
   const anyDirty = Object.keys(dirty).length > 0

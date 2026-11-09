@@ -336,10 +336,12 @@ export default function SeasonBookPage() {
   // Payment/history/deposit access: STAR (admin) and MG only
   const canPay = ['STAR', 'MG'].includes(user?.userid?.toUpperCase() ?? '')
 
+  const [liveVendors, setLiveVendors] = useState(VENDOR_DATA)
+
   // ── Vendor lookup map: brand → vendor_id[] (blank vendor_ids excluded) ────
-  const brandToVendors = (() => {
+  const brandToVendors = useMemo(() => {
     const map = new Map<string, string[]>()
-    for (const v of VENDOR_DATA) {
+    for (const v of liveVendors) {
       if (!v.vendor_id || !v.vendor_id.trim()) continue   // skip blank vendor IDs
       const existing = map.get(v.brand) ?? []
       if (!existing.includes(v.vendor_id)) {
@@ -347,7 +349,7 @@ export default function SeasonBookPage() {
       }
     }
     return map
-  })()
+  }, [liveVendors])
 
   // ── Actual assigned vendor IDs per brand (from live row data) ──────────────
   // Used for sidebar/table badges — reflects what was actually saved, not static VENDOR_DATA
@@ -394,6 +396,10 @@ export default function SeasonBookPage() {
     setUser(u)
     fetchRows(season, u)
     loadCutoff(season.startsWith('SS') ? 'SS' : 'AW')
+    // Load live vendors from Supabase, fall back to static VENDOR_DATA
+    supabase.from('vendors').select('vendor_id, brand').order('vendor_id').then(({ data, error }) => {
+      if (!error && data && data.length > 0) setLiveVendors(data as typeof VENDOR_DATA)
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, fetchRows, season])
 
@@ -443,7 +449,7 @@ export default function SeasonBookPage() {
     }
     // Filter by active vendor_id
     if (activeVendorId) {
-      const vendorBrands = new Set(VENDOR_DATA.filter(v => v.vendor_id === activeVendorId).map(v => v.brand))
+      const vendorBrands = new Set(liveVendors.filter(v => v.vendor_id === activeVendorId).map(v => v.brand))
       list = list.filter(b => vendorBrands.has(b))
     }
     return list
@@ -454,7 +460,7 @@ export default function SeasonBookPage() {
   const headerSearchResults: Array<{ type: 'brand' | 'invoice' | 'vendor'; label: string; brand: string; invoiceNum?: string; vendorId?: string }> = headerSearch.trim()
     ? [
         // Vendor ID matches — only vendors with a vendor_id
-        ...Array.from(new Set(VENDOR_DATA.filter(v => v.vendor_id && v.vendor_id.trim()).map(v => v.vendor_id)))
+        ...Array.from(new Set(liveVendors.filter(v => v.vendor_id && v.vendor_id.trim()).map(v => v.vendor_id)))
           .filter(vid => vid.toLowerCase().includes(headerSearch.toLowerCase()))
           .slice(0, 4)
           .map(vid => ({ type: 'vendor' as const, label: vid, brand: '', vendorId: vid })),
@@ -1221,7 +1227,7 @@ export default function SeasonBookPage() {
                   ? rows.filter(r => r.drop_name === activeDropName)
                   : rows
                 if (activeVendorId) {
-                  const vendorBrands = new Set(VENDOR_DATA.filter(v => v.vendor_id === activeVendorId).map(v => v.brand))
+                  const vendorBrands = new Set(liveVendors.filter(v => v.vendor_id === activeVendorId).map(v => v.brand))
                   baseRows = baseRows.filter(r => vendorBrands.has(r.brand))
                 }
                 const storeIds = STORES.filter(s => baseRows.some(r => r.store === s))
