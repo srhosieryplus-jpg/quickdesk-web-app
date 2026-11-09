@@ -153,6 +153,82 @@ function safeDate(d: string) {
   return d.slice(0, 10) + 'T12:00:00'
 }
 
+// ── Invoice file attachment (top-level so React never remounts it on re-render) ─
+function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () => void }) {
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const gray = '#6b7280'
+  const border = '#e5e7eb'
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `${row.id}.${ext}`
+    const { error: upErr } = await supabase.storage.from('invoices').upload(path, file, { upsert: true })
+    if (upErr) { setUploading(false); return }
+    const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path)
+    const { error: dbErr } = await supabase.from('season_ledger').update({ invoice_file_url: urlData.publicUrl }).eq('id', row.id)
+    if (dbErr) { setUploading(false); return }
+    setUploading(false)
+    onUpdated()
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const [showDelMenu, setShowDelMenu] = useState(false)
+  const [delPw, setDelPw] = useState('')
+  const [delErr, setDelErr] = useState(false)
+
+  async function handleRemove() {
+    if (!row.invoice_file_url) return
+    const path = row.invoice_file_url.split('/invoices/').pop()
+    if (path) await supabase.storage.from('invoices').remove([path])
+    await supabase.from('season_ledger').update({ invoice_file_url: null }).eq('id', row.id)
+    setShowDelMenu(false); setDelPw('')
+    onUpdated()
+  }
+
+  return (
+    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', position: 'relative' }}>
+      {row.invoice_file_url ? (
+        <>
+          <a href={row.invoice_file_url} target="_blank" rel="noopener noreferrer"
+            onContextMenu={e => { e.preventDefault(); setShowDelMenu(v => !v); setDelPw(''); setDelErr(false) }}
+            style={{ fontSize: 11, fontWeight: 700, color: '#6d28d9', background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+            📄 View Invoice
+          </a>
+          {showDelMenu && (
+            <div onMouseDown={e => e.stopPropagation()} style={{ position: 'absolute', top: '110%', left: 0, background: '#fff', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '10px 12px', zIndex: 999, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>🗑 Delete Invoice PDF</div>
+              <input autoFocus type="password" placeholder="Type password"
+                value={delPw} onChange={e => { setDelPw(e.target.value); setDelErr(false) }}
+                onKeyDown={e => { if (e.key === 'Enter') { if (delPw.toLowerCase() === 'delete') handleRemove(); else setDelErr(true) } }}
+                style={{ width: '100%', border: `1px solid ${delErr ? '#fca5a5' : border}`, borderRadius: 5, padding: '4px 7px', fontSize: 11, marginBottom: 6, outline: 'none', boxSizing: 'border-box' }} />
+              {delErr && <div style={{ fontSize: 10, color: '#dc2626', marginBottom: 4 }}>Incorrect password</div>}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => { if (delPw.toLowerCase() === 'delete') handleRemove(); else setDelErr(true) }}
+                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}>Delete</button>
+                <button onClick={() => { setShowDelMenu(false); setDelPw('') }}
+                  style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 5, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleUpload}
+            style={{ display: 'none' }} id={`inv-file-${row.id}`} />
+          <label htmlFor={`inv-file-${row.id}`}
+            style={{ fontSize: 11, fontWeight: 700, color: gray, background: '#f9fafb', border: `1px dashed ${border}`, borderRadius: 5, padding: '2px 8px', cursor: uploading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {uploading ? '⏳ Uploading…' : '📎 Attach Invoice'}
+          </label>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function SeasonBookPage() {
   const router = useRouter()
@@ -787,98 +863,6 @@ export default function SeasonBookPage() {
   const allSeasons = buildSeasons(extraSeasons)
 
   if (!user) return null
-
-  // ── Invoice file attachment component ────────────────────────────────────
-  function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () => void }) {
-    const [uploading, setUploading] = useState(false)
-    const fileRef = useRef<HTMLInputElement>(null)
-
-    async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-      const file = e.target.files?.[0]
-      if (!file) return
-      setUploading(true)
-      const ext = file.name.split('.').pop()
-      const path = `${row.id}.${ext}`
-      const { error: upErr } = await supabase.storage.from('invoices').upload(path, file, { upsert: true })
-      if (upErr) { showToast('❌ ' + upErr.message, 'err'); setUploading(false); return }
-      const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path)
-      const { error: dbErr } = await supabase.from('season_ledger').update({ invoice_file_url: urlData.publicUrl }).eq('id', row.id)
-      if (dbErr) { showToast('❌ ' + dbErr.message, 'err'); setUploading(false); return }
-      setUploading(false)
-      showToast('📎 Invoice attached')
-      onUpdated()
-      if (fileRef.current) fileRef.current.value = ''
-    }
-
-    const [showDelMenu, setShowDelMenu] = useState(false)
-    const [delPw, setDelPw] = useState('')
-    const [delErr, setDelErr] = useState(false)
-
-    async function handleRemove() {
-      if (!row.invoice_file_url) return
-      const path = row.invoice_file_url.split('/invoices/').pop()
-      if (path) await supabase.storage.from('invoices').remove([path])
-      await supabase.from('season_ledger').update({ invoice_file_url: null }).eq('id', row.id)
-      showToast('🗑 Invoice removed')
-      setShowDelMenu(false)
-      setDelPw('')
-      onUpdated()
-    }
-
-    return (
-      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', position: 'relative' }}>
-        {row.invoice_file_url ? (
-          <>
-            <a href={row.invoice_file_url} target="_blank" rel="noopener noreferrer"
-              onContextMenu={e => { e.preventDefault(); setShowDelMenu(v => !v); setDelPw(''); setDelErr(false) }}
-              style={{ fontSize: 11, fontWeight: 700, color: purpleD, background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-              📄 View Invoice
-            </a>
-            {showDelMenu && (
-              <div style={{ position: 'absolute', top: '110%', left: 0, background: '#fff', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '10px 12px', zIndex: 999, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>🗑 Delete Invoice PDF</div>
-                <input
-                  autoFocus
-                  type="password"
-                  placeholder="Enter password…"
-                  value={delPw}
-                  onChange={e => { setDelPw(e.target.value); setDelErr(false) }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      if (delPw === 'delete') handleRemove()
-                      else setDelErr(true)
-                    }
-                    if (e.key === 'Escape') { setShowDelMenu(false); setDelPw('') }
-                  }}
-                  style={{ width: '100%', border: `1.5px solid ${delErr ? '#dc2626' : '#e5e7eb'}`, borderRadius: 5, padding: '4px 8px', fontSize: 12, marginBottom: 4 }}
-                />
-                {delErr && <div style={{ fontSize: 10, color: '#dc2626', marginBottom: 4 }}>Incorrect password</div>}
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => { if (delPw === 'delete') handleRemove(); else setDelErr(true) }}
-                    style={{ flex: 1, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                    Confirm Delete
-                  </button>
-                  <button onClick={() => { setShowDelMenu(false); setDelPw('') }}
-                    style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 5, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleUpload}
-              style={{ display: 'none' }} id={`inv-file-${row.id}`} />
-            <label htmlFor={`inv-file-${row.id}`}
-              style={{ fontSize: 11, fontWeight: 700, color: gray, background: '#f9fafb', border: `1px dashed ${border}`, borderRadius: 5, padding: '2px 8px', cursor: uploading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-              {uploading ? '⏳ Uploading…' : '📎 Attach Invoice'}
-            </label>
-          </>
-        )}
-      </div>
-    )
-  }
 
   // ── Payment sub-row component ─────────────────────────────────────────────
   function PaymentRow({ row }: { row: LedgerRow }) {
@@ -2012,10 +1996,21 @@ export default function SeasonBookPage() {
                 </div>
 
                 {/* Comment — full width */}
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 12 }}>
                   <label style={lbl}>Comment</label>
                   <input value={entry.comment} placeholder="Optional note"
                     onChange={e => upd({ comment: e.target.value })} style={inp} />
+                </div>
+
+                {/* Invoice PDF attachment */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={lbl}>Invoice PDF</label>
+                  <InvoiceAttachment row={editRow} onUpdated={async () => {
+                    await fetchRows(season, user!)
+                    // re-read the updated row so the attachment button refreshes
+                    const { data } = await supabase.from('season_ledger').select('*').eq('id', editRow.id).single()
+                    if (data) setEditRow(data as LedgerRow)
+                  }} />
                 </div>
 
                 {/* Action bar */}
