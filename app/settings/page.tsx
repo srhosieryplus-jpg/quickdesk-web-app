@@ -128,6 +128,7 @@ export default function SettingsPage() {
     })
     // Load vendors from Supabase vendors table (falls back to static VENDOR_DATA)
     supabase.from('vendors').select('vendor_id, brand').order('vendor_id').then(({ data, error }) => {
+      console.log('[vendors load]', { count: data?.length, error })
       if (!error && data && data.length > 0) {
         setVendors(data as VendorRow[])
       }
@@ -263,7 +264,8 @@ export default function SettingsPage() {
   }
   async function saveVendorDelete(vid: string, brand: string) {
     setVendorsSaving(true)
-    await supabase.from('vendors').delete().eq('vendor_id', vid).eq('brand', brand)
+    const { error } = await supabase.from('vendors').delete().eq('vendor_id', vid).eq('brand', brand)
+    console.log('[vendor delete]', { vid, brand, error })
     setVendorsSaving(false)
   }
 
