@@ -1252,58 +1252,63 @@ export default function SeasonBookPage() {
       {/* Body */}
       <div className="sb-layout">
 
-        {/* Sidebar — brand list */}
+        {/* Sidebar — vendor list */}
         <div className="sb-sidebar">
-          {/* Filter existing brands */}
+          {/* Filter vendors */}
           {brandsInSeason.length > 0 && (
             <div style={{ padding: '6px 12px', borderBottom: `1px solid ${border}` }}>
               <input value={viewFilter} onChange={e => setViewFilter(e.target.value)}
-                placeholder="Filter brands…"
+                placeholder="Filter vendors…"
                 style={{ ...inp, fontSize: 11 }} />
             </div>
           )}
 
-          {/* Brand list */}
+          {/* Vendor list — one entry per vendor ID */}
           {loading ? (
             <p style={{ padding: 16, fontSize: 12, color: gray }}>Loading…</p>
           ) : brandsInSeason.length === 0 ? (
-            <p style={{ padding: 16, fontSize: 12, color: gray, textAlign: 'center' }}>No brands logged for {season} yet.</p>
-          ) : filteredBrands.map(b => {
-            const bRows = activeDropName
-              ? rows.filter(r => r.brand === b && r.drop_name === activeDropName)
-              : rows.filter(r => r.brand === b)
-            const totalBal = bRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
-            const hasOwing = totalBal > 0.001
-            return (
-              <div key={b} className={`sb-brand-row${activeBrand === b ? ' active' : ''}`}
-                onClick={() => {
-                  const next = activeBrand === b ? '' : b
-                  setActiveBrand(next)
-                  if (next) {
+            <p style={{ padding: 16, fontSize: 12, color: gray, textAlign: 'center' }}>No vendors logged for {season} yet.</p>
+          ) : (() => {
+            // Build unique vendor list from filteredBrands
+            const seen = new Set<string>()
+            const vendorItems: { vid: string; brands: string[] }[] = []
+            for (const b of filteredBrands) {
+              const assigned = brandAssignedVendors.get(b)
+              const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(b) ?? [])
+              const vid = vids[0] ?? '—'
+              if (!seen.has(vid)) {
+                seen.add(vid)
+                vendorItems.push({ vid, brands: [] })
+              }
+              vendorItems.find(x => x.vid === vid)!.brands.push(b)
+            }
+            return vendorItems.map(({ vid, brands }) => {
+              const vRows = brands.flatMap(b => activeDropName
+                ? rows.filter(r => r.brand === b && r.drop_name === activeDropName)
+                : rows.filter(r => r.brand === b))
+              const totalBal = vRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+              const hasOwing = totalBal > 0.001
+              const isActive = brands.some(b => activeBrand === b)
+              return (
+                <div key={vid} className={`sb-brand-row${isActive ? ' active' : ''}`}
+                  onClick={() => {
+                    // scroll to this vendor card
                     setTimeout(() => {
-                      document.getElementById(`brand-${next}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      document.getElementById(`vendor-${vid}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                     }, 50)
-                  }
-                }}>
-                {(() => {
-                  // Use actual assigned vendor IDs from rows, fall back to VENDOR_DATA if unassigned
-                  const assigned = brandAssignedVendors.get(b)
-                  const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(b) ?? [])
-                  const vidLabel = vids.length > 0 ? vids[0] : null
-                  return (
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'inherit' }}>
-                      {vidLabel ? `${vidLabel} - ${b}` : b}
-                    </span>
-                  )
-                })()}
-                {hasOwing && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 5px', flexShrink: 0 }}>
-                    {fmt$(totalBal)}
+                  }}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: 'inherit' }}>
+                    {vid}
                   </span>
-                )}
-              </div>
-            )
-          })}
+                  {hasOwing && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '1px 5px', flexShrink: 0 }}>
+                      {fmt$(totalBal)}
+                    </span>
+                  )}
+                </div>
+              )
+            })
+          })()}
         </div>
 
         {/* Main panel */}
@@ -1511,8 +1516,8 @@ export default function SeasonBookPage() {
                                   <td style={{ padding: '8px 14px', fontSize: 11, fontWeight: 700, color: purpleD, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {brand}
                                   </td>
-                                  <td style={{ padding: '8px 10px', fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>
-                                    {dropName || `Drop ${dropNum}`}
+                                  <td style={{ padding: '8px 10px', fontSize: 11, color: gray, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {`Drop ${dropNum}`}{dropName ? ` · ${dropName}` : ''}
                                   </td>
                                   <td style={{ padding: '8px 10px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>
                                     {store}{hasCancelled && <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', marginLeft: 4 }}>🚫</span>}
