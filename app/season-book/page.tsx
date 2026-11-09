@@ -322,6 +322,17 @@ export default function SeasonBookPage() {
     }
   }
 
+  async function confirmRowDelete() {
+    if (!rowCtxMenu) return
+    if (rowCtxDelPw.toLowerCase() !== 'delete') { setRowCtxDelErr(true); return }
+    const ids = rowCtxMenu.rows.map(r => r.id)
+    const { error } = await supabase.from('season_ledger').delete().in('id', ids)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    setRowCtxMenu(null); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false)
+    showToast(`🗑 ${ids.length} row${ids.length !== 1 ? 's' : ''} deleted`)
+    if (user) fetchRows(season, user)
+  }
+
   async function deletePayment(payId: string, row: LedgerRow, amount: number) {
     if (!user) return
     if (payId.startsWith('__legacy__')) {
@@ -2826,7 +2837,7 @@ export default function SeasonBookPage() {
               <div style={{ padding: '4px 14px 6px', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>
                 {rowCtxMenu.rows[0]?.brand} · {rowCtxMenu.rows[0]?.store} · Drop {rowCtxMenu.rows[0]?.drop_num}
               </div>
-              <div onClick={() => setRowCtxDelMode(true)}
+              <div onMouseDown={e => e.stopPropagation()} onClick={() => setRowCtxDelMode(true)}
                 style={{ padding: '9px 16px', fontSize: 13, fontWeight: 700, color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                 onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
                 onMouseLeave={e => (e.currentTarget.style.background = '')}>
@@ -2834,7 +2845,7 @@ export default function SeasonBookPage() {
               </div>
             </>
           ) : (
-            <div style={{ padding: '12px 16px' }}>
+            <div style={{ padding: '12px 16px' }} onMouseDown={e => e.stopPropagation()}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', marginBottom: 8 }}>
                 Enter password to delete {rowCtxMenu.rows.length > 1 ? `${rowCtxMenu.rows.length} rows` : 'this row'}
               </div>
@@ -2842,15 +2853,8 @@ export default function SeasonBookPage() {
                 type="password"
                 value={rowCtxDelPw}
                 onChange={e => { setRowCtxDelPw(e.target.value); setRowCtxDelErr(false) }}
-                onKeyDown={async e => {
-                  if (e.key === 'Enter') {
-                    if (rowCtxDelPw.toLowerCase() !== 'delete') { setRowCtxDelErr(true); return }
-                    const ids = rowCtxMenu.rows.map(r => r.id)
-                    await supabase.from('season_ledger').delete().in('id', ids)
-                    setRowCtxMenu(null); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false)
-                    showToast(`🗑 ${ids.length} row${ids.length !== 1 ? 's' : ''} deleted`)
-                    if (user) fetchRows(season, user)
-                  }
+                onKeyDown={e => {
+                  if (e.key === 'Enter') confirmRowDelete()
                   if (e.key === 'Escape') { setRowCtxMenu(null); setRowCtxDelMode(false); setRowCtxDelPw('') }
                 }}
                 autoFocus
@@ -2858,7 +2862,16 @@ export default function SeasonBookPage() {
                 style={{ width: '100%', border: `1.5px solid ${rowCtxDelErr ? '#dc2626' : border}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
               />
               {rowCtxDelErr && <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Incorrect password</div>}
-              <div style={{ fontSize: 10, color: gray, marginTop: 6 }}>Press Enter to confirm · Escape to cancel</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <button onMouseDown={e => e.stopPropagation()} onClick={() => { setRowCtxMenu(null); setRowCtxDelMode(false); setRowCtxDelPw('') }}
+                  style={{ flex: 1, background: 'none', border: `1.5px solid ${border}`, borderRadius: 6, padding: '5px 0', fontSize: 12, fontWeight: 700, color: gray, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onMouseDown={e => e.stopPropagation()} onClick={confirmRowDelete}
+                  style={{ flex: 1, background: '#dc2626', border: 'none', borderRadius: 6, padding: '5px 0', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
+                  Delete
+                </button>
+              </div>
             </div>
           )}
         </div>
