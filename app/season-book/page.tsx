@@ -384,8 +384,8 @@ export default function SeasonBookPage() {
     const { data, error } = await q
     if (error) { showToast('❌ ' + error.message, 'err') }
     else setRows((data as unknown as LedgerRow[]) || [])
-    // Fetch open error forms (no final_date) for this season
-    const { data: ef } = await supabase.from('error_forms').select('brand').eq('season', s).is('final_date', null)
+    // Fetch ALL open error forms across all seasons (no final_date) so badge persists across seasons
+    const { data: ef } = await supabase.from('error_forms').select('brand').is('final_date', null)
     setPendingErrorBrands(new Set((ef ?? []).map((r: { brand: string }) => r.brand)))
     setLoading(false)
   }, [])
@@ -1341,7 +1341,7 @@ export default function SeasonBookPage() {
                           </span>
                         )}
                         {pendingErrorBrands.has(brand) && (
-                          <span title="Open error form(s) for this brand" style={{ fontSize: 11, fontWeight: 800, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '1px 8px', whiteSpace: 'nowrap' }}>
+                          <span title="Open error form(s) for this brand — not yet resolved" style={{ fontSize: 11, fontWeight: 800, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '1px 8px', whiteSpace: 'nowrap' }}>
                             ⚠️ Error Form
                           </span>
                         )}

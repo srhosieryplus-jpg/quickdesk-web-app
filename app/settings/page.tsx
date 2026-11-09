@@ -128,7 +128,6 @@ export default function SettingsPage() {
     })
     // Load vendors from Supabase vendors table (falls back to static VENDOR_DATA)
     supabase.from('vendors').select('vendor_id, brand').order('vendor_id').then(({ data, error }) => {
-      console.log('[vendors load]', { count: data?.length, error })
       if (!error && data && data.length > 0) {
         setVendors(data as VendorRow[])
       }
@@ -264,8 +263,7 @@ export default function SettingsPage() {
   }
   async function saveVendorDelete(vid: string, brand: string) {
     setVendorsSaving(true)
-    const { error } = await supabase.from('vendors').delete().eq('vendor_id', vid).eq('brand', brand)
-    console.log('[vendor delete]', { vid, brand, error })
+    await supabase.from('vendors').delete().eq('vendor_id', vid).eq('brand', brand)
     setVendorsSaving(false)
   }
 
@@ -302,14 +300,9 @@ export default function SettingsPage() {
 
   function deleteVendorRow(idx: number) {
     const target = filteredVendors[idx]
-    console.log('[deleteVendorRow]', idx, target)
-    if (!target) { console.warn('[deleteVendorRow] no target at idx', idx); return }
-    // Only removes from future options — existing ledger rows keep their vendor_id
-    setVendors(prev => {
-      const fullIdx = prev.findIndex(v => v === target)
-      if (fullIdx === -1) return prev
-      return prev.filter((_, i) => i !== fullIdx)
-    })
+    if (!target) return
+    // Match by value not reference (objects are new instances after Supabase load)
+    setVendors(prev => prev.filter(v => !(v.vendor_id === target.vendor_id && v.brand === target.brand)))
     saveVendorDelete(target.vendor_id, target.brand)
     showToast('🗑 Removed from options (existing records kept)')
   }
@@ -628,7 +621,6 @@ export default function SettingsPage() {
             setVCtxMenu(null)
           }}>✏️ Edit</div>
           <div className="ctx-item danger" onClick={() => {
-            console.log('[delete click]', vCtxMenu.idx)
             deleteVendorRow(vCtxMenu.idx)
             setVCtxMenu(null)
           }}>🗑 Delete</div>
