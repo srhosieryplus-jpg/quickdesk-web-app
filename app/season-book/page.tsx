@@ -191,7 +191,7 @@ export default function SeasonBookPage() {
   const [rowCtxDelMode, setRowCtxDelMode] = useState(false)
   const [rowCtxDelErr, setRowCtxDelErr] = useState(false)
   const rowCtxRef = useRef<HTMLDivElement>(null)
-  const [brandCtxMenu, setBrandCtxMenu] = useState<{ x: number; y: number; brand: string; vendorId: string } | null>(null)
+  const [brandCtxMenu, setBrandCtxMenu] = useState<{ x: number; y: number; brand: string; vendorId: string; editMode: boolean } | null>(null)
   const [brandCtxEditBrand, setBrandCtxEditBrand] = useState('')
   const [brandCtxEditVendor, setBrandCtxEditVendor] = useState('')
   const [brandCtxSaving, setBrandCtxSaving] = useState(false)
@@ -1434,7 +1434,7 @@ export default function SeasonBookPage() {
                           const assigned = brandAssignedVendors.get(brand)
                           const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(brand) ?? [])
                           const vid = vids[0] ?? ''
-                          setBrandCtxMenu({ x: e.clientX, y: e.clientY, brand, vendorId: vid })
+                          setBrandCtxMenu({ x: e.clientX, y: e.clientY, brand, vendorId: vid, editMode: false })
                           setBrandCtxEditBrand(brand)
                           setBrandCtxEditVendor(vid)
                         }}
@@ -2934,25 +2934,39 @@ export default function SeasonBookPage() {
 
       {/* ── Brand Header Right-Click Edit ─────────────────────────────────────── */}
       {brandCtxMenu && (
-        <div ref={brandCtxRef} style={{ position: 'fixed', left: brandCtxMenu.x, top: brandCtxMenu.y, zIndex: 2000, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 10, boxShadow: '0 4px 24px rgba(0,0,0,0.18)', minWidth: 260, padding: '14px 16px' }}
+        <div ref={brandCtxRef} style={{ position: 'fixed', left: brandCtxMenu.x, top: brandCtxMenu.y, zIndex: 2000, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 10, boxShadow: '0 4px 24px rgba(0,0,0,0.18)', minWidth: 220, padding: '6px 0' }}
           onMouseDown={e => e.stopPropagation()}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: purpleD, marginBottom: 10 }}>✏️ Edit Brand / Vendor</div>
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: gray, display: 'block', marginBottom: 3 }}>Brand name</label>
-            <input value={brandCtxEditBrand} onChange={e => setBrandCtxEditBrand(e.target.value)}
-              style={{ width: '100%', border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: gray, display: 'block', marginBottom: 3 }}>Vendor ID</label>
-            <input value={brandCtxEditVendor} onChange={e => setBrandCtxEditVendor(e.target.value)}
-              style={{ width: '100%', border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button onMouseDown={e => e.stopPropagation()} onClick={() => setBrandCtxMenu(null)}
-              style={{ flex: 1, background: 'none', border: `1.5px solid ${border}`, borderRadius: 6, padding: '6px 0', fontSize: 12, fontWeight: 700, color: gray, cursor: 'pointer' }}>
-              Cancel
-            </button>
-            <button disabled={brandCtxSaving} onMouseDown={e => e.stopPropagation()} onClick={async () => {
+          {!brandCtxMenu.editMode ? (
+            <>
+              <div style={{ padding: '4px 14px 6px', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>
+                {brandCtxMenu.brand}{brandCtxMenu.vendorId ? ` · ${brandCtxMenu.vendorId}` : ''}
+              </div>
+              <div onMouseDown={e => e.stopPropagation()} onClick={() => setBrandCtxMenu(m => m ? { ...m, editMode: true } : m)}
+                style={{ padding: '9px 16px', fontSize: 13, fontWeight: 700, color: purpleD, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#f5f3ff')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                ✏️ Edit brand / vendor
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: '14px 16px' }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: purpleD, marginBottom: 10 }}>✏️ Edit Brand / Vendor</div>
+              <div style={{ marginBottom: 8 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: gray, display: 'block', marginBottom: 3 }}>Brand name</label>
+                <input value={brandCtxEditBrand} onChange={e => setBrandCtxEditBrand(e.target.value)}
+                  style={{ width: '100%', border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: gray, display: 'block', marginBottom: 3 }}>Vendor ID</label>
+                <input value={brandCtxEditVendor} onChange={e => setBrandCtxEditVendor(e.target.value)}
+                  style={{ width: '100%', border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onMouseDown={e => e.stopPropagation()} onClick={() => setBrandCtxMenu(null)}
+                  style={{ flex: 1, background: 'none', border: `1.5px solid ${border}`, borderRadius: 6, padding: '6px 0', fontSize: 12, fontWeight: 700, color: gray, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button disabled={brandCtxSaving} onMouseDown={e => e.stopPropagation()} onClick={async () => {
               if (!brandCtxMenu) return
               const newBrand = brandCtxEditBrand.trim()
               const newVendor = brandCtxEditVendor.trim()
@@ -2978,6 +2992,8 @@ export default function SeasonBookPage() {
               {brandCtxSaving ? 'Saving…' : 'Save'}
             </button>
           </div>
+        </div>
+          )}
         </div>
       )}
 
