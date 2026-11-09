@@ -253,8 +253,10 @@ export default function ErrorFormsPage() {
   const [form, setForm] = useState(blankForm())
   const [brandInput, setBrandInput] = useState('')
   const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
+  const [brandHighlight, setBrandHighlight] = useState(-1)
   const [storeSearch, setStoreSearch] = useState('')
   const [showStoreDrop, setShowStoreDrop] = useState(false)
+  const [storeHighlight, setStoreHighlight] = useState(-1)
 
   // Right-click context menu
   type CtxMenu = { x: number; y: number; form: ErrorForm }
@@ -757,9 +759,20 @@ export default function ErrorFormsPage() {
                           borderRadius: 6, background: '#fff', overflow: 'hidden' }}>
                           <input
                             value={showStoreDrop ? storeSearch : (vals.store_id || '')}
-                            onChange={e => { setStoreSearch(e.target.value); setShowStoreDrop(true); if (!e.target.value) upd({ store_id: '' }) }}
-                            onFocus={() => { setStoreSearch(''); setShowStoreDrop(true) }}
+                            onChange={e => { setStoreSearch(e.target.value); setShowStoreDrop(true); setStoreHighlight(-1); if (!e.target.value) upd({ store_id: '' }) }}
+                            onFocus={() => { setStoreSearch(''); setShowStoreDrop(true); setStoreHighlight(-1) }}
                             onBlur={() => setTimeout(() => setShowStoreDrop(false), 150)}
+                            onKeyDown={e => {
+                              if (!showStoreDrop) return
+                              const list = storeIds.filter(s => !storeSearch || s.toLowerCase().includes(storeSearch.toLowerCase()))
+                              if (e.key === 'ArrowDown') { e.preventDefault(); setStoreHighlight(h => Math.min(h + 1, list.length - 1)) }
+                              else if (e.key === 'ArrowUp') { e.preventDefault(); setStoreHighlight(h => Math.max(h - 1, 0)) }
+                              else if (e.key === 'Enter') {
+                                e.preventDefault()
+                                const pick = storeHighlight >= 0 ? list[storeHighlight] : list[0]
+                                if (pick) { upd({ store_id: pick }); setStoreSearch(''); setShowStoreDrop(false); setStoreHighlight(-1) }
+                              } else if (e.key === 'Escape') { setShowStoreDrop(false); setStoreHighlight(-1) }
+                            }}
                             placeholder="Search store…"
                             style={{ flex: 1, border: 'none', outline: 'none', padding: '5px 8px', fontSize: 12,
                               fontFamily: 'Inter, sans-serif', color: '#111', background: 'transparent' }}
@@ -775,16 +788,15 @@ export default function ErrorFormsPage() {
                             boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 200, overflowY: 'auto', marginTop: 2 }}>
                             {filteredStores.length === 0 ? (
                               <div style={{ padding: '8px 12px', fontSize: 12, color: gray }}>No stores found</div>
-                            ) : filteredStores.map(s => (
+                            ) : filteredStores.map((s, si) => (
                               <div key={s}
-                                onMouseDown={() => { upd({ store_id: s }); setStoreSearch(''); setShowStoreDrop(false) }}
+                                onMouseDown={() => { upd({ store_id: s }); setStoreSearch(''); setShowStoreDrop(false); setStoreHighlight(-1) }}
+                                onMouseEnter={() => setStoreHighlight(si)}
                                 style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer',
-                                  background: vals.store_id === s ? '#fef2f2' : '#fff',
-                                  color: vals.store_id === s ? redD : '#111',
+                                  background: storeHighlight === si ? '#fef2f2' : vals.store_id === s ? '#fff7f7' : '#fff',
+                                  color: storeHighlight === si || vals.store_id === s ? redD : '#111',
                                   fontWeight: vals.store_id === s ? 700 : 400,
-                                  borderBottom: `1px solid #f3f4f6` }}
-                                onMouseEnter={e => { if (vals.store_id !== s) e.currentTarget.style.background = '#f9fafb' }}
-                                onMouseLeave={e => { if (vals.store_id !== s) e.currentTarget.style.background = '#fff' }}>
+                                  borderBottom: `1px solid #f3f4f6` }}>
                                 {s}
                               </div>
                             ))}
@@ -816,6 +828,7 @@ export default function ErrorFormsPage() {
                     <input value={isEdit ? vals.brand : brandInput}
                       onChange={e => {
                         const v = e.target.value
+                        setBrandHighlight(-1)
                         if (isEdit) upd({ brand: v })
                         else {
                           setBrandInput(v)
@@ -823,16 +836,29 @@ export default function ErrorFormsPage() {
                           setBrandSuggestions(v.length > 0 ? BRAND_LIST.filter(b => b.toLowerCase().includes(v.toLowerCase())).slice(0, 8) : [])
                         }
                       }}
+                      onKeyDown={e => {
+                        if (!brandSuggestions.length) return
+                        if (e.key === 'ArrowDown') { e.preventDefault(); setBrandHighlight(h => Math.min(h + 1, brandSuggestions.length - 1)) }
+                        else if (e.key === 'ArrowUp') { e.preventDefault(); setBrandHighlight(h => Math.max(h - 1, 0)) }
+                        else if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const pick = brandHighlight >= 0 ? brandSuggestions[brandHighlight] : brandSuggestions[0]
+                          if (pick) { setBrandInput(pick); upd({ brand: pick }); setBrandSuggestions([]); setBrandHighlight(-1) }
+                        } else if (e.key === 'Escape') { setBrandSuggestions([]); setBrandHighlight(-1) }
+                      }}
                       placeholder="Type brand name…"
                       style={inp} autoFocus={!isEdit} />
                     {!isEdit && brandSuggestions.length > 0 && (
                       <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff',
                         border: `1px solid ${border}`, borderRadius: 6, zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 180, overflowY: 'auto' }}>
-                        {brandSuggestions.map(b => (
-                          <div key={b} onClick={() => { setBrandInput(b); upd({ brand: b }); setBrandSuggestions([]) }}
-                            style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', borderBottom: `1px solid #f3f4f6` }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#f5f3ff')}
-                            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                        {brandSuggestions.map((b, bi) => (
+                          <div key={b}
+                            onMouseDown={() => { setBrandInput(b); upd({ brand: b }); setBrandSuggestions([]); setBrandHighlight(-1) }}
+                            onMouseEnter={() => setBrandHighlight(bi)}
+                            style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', borderBottom: `1px solid #f3f4f6`,
+                              background: brandHighlight === bi ? '#f5f3ff' : '#fff',
+                              color: brandHighlight === bi ? '#6d28d9' : '#111',
+                              fontWeight: brandHighlight === bi ? 700 : 400 }}>
                             {b}
                           </div>
                         ))}
