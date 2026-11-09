@@ -181,6 +181,11 @@ export default function SeasonBookPage() {
   const [pasteParsed, setPasteParsed] = useState(false)
   const [pasteSaving, setPasteSaving] = useState(false)
   const [editRow, setEditRow] = useState<LedgerRow | null>(null)
+  const [rowCtxMenu, setRowCtxMenu] = useState<{ x: number; y: number; rows: LedgerRow[] } | null>(null)
+  const [rowCtxDelPw, setRowCtxDelPw] = useState('')
+  const [rowCtxDelMode, setRowCtxDelMode] = useState(false)
+  const [rowCtxDelErr, setRowCtxDelErr] = useState(false)
+  const rowCtxRef = useRef<HTMLDivElement>(null)
   const [quickPayBrand, setQuickPayBrand] = useState<string | null>(null)
   const [quickPayAmt, setQuickPayAmt] = useState('')
   const [quickPayDate, setQuickPayDate] = useState(today())
@@ -497,6 +502,9 @@ export default function SeasonBookPage() {
       }
       if (cutoffPopoverRef.current && !cutoffPopoverRef.current.contains(e.target as Node)) {
         setShowCutoffPopover(false)
+      }
+      if (rowCtxRef.current && !rowCtxRef.current.contains(e.target as Node)) {
+        setRowCtxMenu(null); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -1471,10 +1479,11 @@ export default function SeasonBookPage() {
                               return (
                                 <tr key={rowKey}
                                   onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
-                                  title="Click to view store invoice"
+                                  title="Click to view invoice · Right-click to delete"
                                   style={{ cursor: 'pointer', borderBottom: `1px solid #f3f4f6` }}
                                   onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
-                                  onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                                  onMouseLeave={e => (e.currentTarget.style.background = '')}
+                                  onContextMenu={e => { e.preventDefault(); setRowCtxMenu({ x: e.clientX, y: e.clientY, rows: dropRows }); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false) }}>
                                   <td style={{ padding: '8px 14px', fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>
                                     {dropName || `Drop ${dropNum}`}
                                   </td>
@@ -2764,9 +2773,10 @@ export default function SeasonBookPage() {
                         if (!user) return
                         setPasteSaving(true)
                         const toInsert = pasteRows.filter(r => !r.skip).map(r => {
-                          const init = parseFloat(r.total) || null
-                          const dep  = parseFloat(r.deposit) || null
-                          const dut  = parseFloat(r.duties) || null
+                          const stripCurrency = (s: string) => parseFloat(s.replace(/[$€,\s]/g, '')) || null
+                          const init = stripCurrency(r.total)
+                          const dep  = stripCurrency(r.deposit)
+                          const dut  = stripCurrency(r.duties)
                           const bal  = init != null ? (init - (dep ?? 0) - (dut ?? 0)) : null
                           const cur: Currency = (r.currency?.toUpperCase() === 'EUR') ? 'EUR' : 'USD'
                           return {
@@ -2805,6 +2815,52 @@ export default function SeasonBookPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Row Right-Click Context Menu ──────────────────────────────────────── */}
+      {rowCtxMenu && (
+        <div ref={rowCtxRef} style={{ position: 'fixed', left: rowCtxMenu.x, top: rowCtxMenu.y, zIndex: 2000, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 10, boxShadow: '0 4px 24px rgba(0,0,0,0.18)', minWidth: 200, padding: '6px 0' }}>
+          {!rowCtxDelMode ? (
+            <>
+              <div style={{ padding: '4px 14px 6px', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>
+                {rowCtxMenu.rows[0]?.brand} · {rowCtxMenu.rows[0]?.store} · Drop {rowCtxMenu.rows[0]?.drop_num}
+              </div>
+              <div onClick={() => setRowCtxDelMode(true)}
+                style={{ padding: '9px 16px', fontSize: 13, fontWeight: 700, color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                🗑 Delete {rowCtxMenu.rows.length > 1 ? `all ${rowCtxMenu.rows.length} store rows` : 'this row'}
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: '12px 16px' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', marginBottom: 8 }}>
+                Enter password to delete {rowCtxMenu.rows.length > 1 ? `${rowCtxMenu.rows.length} rows` : 'this row'}
+              </div>
+              <input
+                type="password"
+                value={rowCtxDelPw}
+                onChange={e => { setRowCtxDelPw(e.target.value); setRowCtxDelErr(false) }}
+                onKeyDown={async e => {
+                  if (e.key === 'Enter') {
+                    if (rowCtxDelPw.toLowerCase() !== 'delete') { setRowCtxDelErr(true); return }
+                    const ids = rowCtxMenu.rows.map(r => r.id)
+                    await supabase.from('season_ledger').delete().in('id', ids)
+                    setRowCtxMenu(null); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false)
+                    showToast(`🗑 ${ids.length} row${ids.length !== 1 ? 's' : ''} deleted`)
+                    if (user) fetchRows(season, user)
+                  }
+                  if (e.key === 'Escape') { setRowCtxMenu(null); setRowCtxDelMode(false); setRowCtxDelPw('') }
+                }}
+                autoFocus
+                placeholder="password"
+                style={{ width: '100%', border: `1.5px solid ${rowCtxDelErr ? '#dc2626' : border}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+              />
+              {rowCtxDelErr && <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Incorrect password</div>}
+              <div style={{ fontSize: 10, color: gray, marginTop: 6 }}>Press Enter to confirm · Escape to cancel</div>
+            </div>
+          )}
         </div>
       )}
 
