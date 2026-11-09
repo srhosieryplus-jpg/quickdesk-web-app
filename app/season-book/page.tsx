@@ -2254,7 +2254,7 @@ export default function SeasonBookPage() {
                         <div style={{ fontSize: 11, color: purpleD, fontWeight: 700, padding: '2px 4px', marginTop: 4 }}>
                           Filtering by {quickPayVendorId
                             ? <><span style={{ background: '#ede9fe', borderRadius: 6, padding: '1px 7px' }}>Vendor {quickPayVendorId}</span></>
-                            : <><span style={{ background: '#ede9fe', borderRadius: 6, padding: '1px 7px' }}>{quickPayBrand}</span></>}
+                            : <><span style={{ background: '#ede9fe', borderRadius: 6, padding: '1px 7px' }}>{quickPayBrand}</span>{quickPayBrand && pendingErrorBrands.has(quickPayBrand) && <span title="Open error form(s) for this brand — not yet resolved" style={{ fontSize: 10, fontWeight: 800, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '1px 7px', whiteSpace: 'nowrap', marginLeft: 6 }}>⚠️ Error Form</span>}</>}
                         </div>
                       )}
                     </div>
@@ -2283,7 +2283,14 @@ export default function SeasonBookPage() {
                         return (
                           <div key={brand} style={{ marginBottom: 8 }}>
                             {!quickPayBrand && (
-                              <div style={{ fontSize: 10, fontWeight: 800, color: purpleD, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4, paddingLeft: 2 }}>{brand}</div>
+                              <div style={{ fontSize: 10, fontWeight: 800, color: purpleD, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4, paddingLeft: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {brand}
+                                {pendingErrorBrands.has(brand) && (
+                                  <span title="Open error form(s) for this brand — not yet resolved" style={{ fontSize: 10, fontWeight: 800, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '1px 7px', whiteSpace: 'nowrap', textTransform: 'none', letterSpacing: 0 }}>
+                                    ⚠️ Error Form
+                                  </span>
+                                )}
+                              </div>
                             )}
                             {brandRows.map(r => (
                               <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: paySelectedIds.has(r.id) ? '#f5f3ff' : '#fafafa', border: `1px solid ${paySelectedIds.has(r.id) ? purpleD : border}`, borderRadius: 7, padding: '7px 12px', marginBottom: 5, cursor: 'pointer' }}>
