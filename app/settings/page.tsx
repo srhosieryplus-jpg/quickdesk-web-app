@@ -31,7 +31,7 @@ const DEFAULT_STORES = ['ALL','PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS',
 const LOCATIONS = ['Hosiery Plus','Tiptoe','Purple Orchid']
 const DELETE_PASSWORD = 'star'
 
-interface DBUser { id: string; userid: string; store: string; location: string; modules: string[]; admin_stores?: string[] }
+interface DBUser { id: string; userid: string; name?: string; store: string; location: string; modules: string[]; admin_stores?: string[] }
 interface CtxMenu { x: number; y: number; kind: 'user'; userId: string }
 interface VCtxMenu { x: number; y: number; kind: 'vendor'; idx: number }
 
@@ -58,6 +58,7 @@ export default function SettingsPage() {
 
   // User tab
   const [newId, setNewId] = useState('')
+  const [newName, setNewName] = useState('')
   const [newStore, setNewStore] = useState('')
   const [newLocation, setNewLocation] = useState('')
   const [adding, setAdding] = useState(false)
@@ -204,10 +205,10 @@ export default function SettingsPage() {
     setAdding(true)
     const { data: existing } = await supabase.from('users').select('id').eq('userid', uid).maybeSingle()
     if (existing) { showToast(`❌ "${uid}" already exists`, 'err'); setAdding(false); return }
-    const { error } = await supabase.from('users').insert({ userid: uid, store, location: newLocation, modules: [] })
+    const { error } = await supabase.from('users').insert({ userid: uid, name: newName.trim() || null, store, location: newLocation, modules: [] })
     if (error) { showToast(`❌ ${error.message}`, 'err'); setAdding(false); return }
     showToast('✅ User added')
-    setNewId(''); setNewStore(''); setNewLocation('')
+    setNewId(''); setNewName(''); setNewStore(''); setNewLocation('')
     setAdding(false)
     fetchUsers()
   }
@@ -229,6 +230,7 @@ export default function SettingsPage() {
     if (!editUser) return
     const { error } = await supabase.from('users').update({
       userid: editUser.userid,
+      name: editUser.name?.trim() || null,
       store: editUser.store,
       location: editUser.location,
       admin_stores: editUser.admin_stores ?? [],
@@ -344,6 +346,9 @@ export default function SettingsPage() {
             <label style={labelStyle}>User ID:</label>
             <input value={newId} onChange={e => setNewId(e.target.value.toUpperCase())} maxLength={10}
               placeholder="e.g. SARA" style={{ ...inlineInput, width: 80, textTransform: 'uppercase', fontWeight: 700 }} />
+            <label style={labelStyle}>Name:</label>
+            <input value={newName} onChange={e => setNewName(e.target.value)}
+              placeholder="Full name" style={{ ...inlineInput, width: 130 }} />
             <label style={labelStyle}>Store:</label>
             <select value={newStore} onChange={e => setNewStore(e.target.value)} style={{ ...inlineInput, width: 88 }}>
               <option value="">—</option>
@@ -375,7 +380,7 @@ export default function SettingsPage() {
                 />
                 {userSearch && (
                   <span style={{ marginLeft: 8, fontSize: 11, color: '#9b8ec4' }}>
-                    {users.filter(u => [u.userid, u.store, u.location].some(v => v?.toLowerCase().includes(userSearch.toLowerCase()))).length} result(s)
+                    {users.filter(u => [u.userid, u.name, u.store, u.location].some(v => v?.toLowerCase().includes(userSearch.toLowerCase()))).length} result(s)
                   </span>
                 )}
               </div>
@@ -385,6 +390,7 @@ export default function SettingsPage() {
                     <tr>
                       <th style={{ width: 28, textAlign: 'center' }}>#</th>
                       <th style={{ width: 90 }}>User ID</th>
+                      <th style={{ width: 140 }}>Name</th>
                       <th style={{ width: 80 }}>Store</th>
                       <th style={{ width: 130 }}>Location</th>
                       <th style={{ width: 90, textAlign: 'center', fontSize: 10 }}>Admin Stores</th>
@@ -395,9 +401,9 @@ export default function SettingsPage() {
                   </thead>
                   <tbody>
                     {users.length === 0 && (
-                      <tr><td colSpan={ALL_MODULES.length + 5} style={{ textAlign: 'center', color: '#b8aed8', padding: 28 }}>No users yet.</td></tr>
+                      <tr><td colSpan={ALL_MODULES.length + 6} style={{ textAlign: 'center', color: '#b8aed8', padding: 28 }}>No users yet.</td></tr>
                     )}
-                    {users.filter(u => !userSearch || [u.userid, u.store, u.location].some(v => v?.toLowerCase().includes(userSearch.toLowerCase()))).map((u, i) => {
+                    {users.filter(u => !userSearch || [u.userid, u.name, u.store, u.location].some(v => v?.toLowerCase().includes(userSearch.toLowerCase()))).map((u, i) => {
                       const mods = getModules(u)
                       const isDirty = dirty[u.id] !== undefined
                       return (
@@ -407,6 +413,9 @@ export default function SettingsPage() {
                           <td style={{ textAlign: 'center', color: '#aaa', fontSize: 10 }}>{i + 1}</td>
                           <td style={{ fontWeight: 800, color: '#3730a3', fontSize: 12, letterSpacing: '0.04em' }}>
                             {u.userid}{isDirty && <span style={{ color: purple, marginLeft: 4 }}>●</span>}
+                          </td>
+                          <td style={{ color: '#374151', fontSize: 12 }}>
+                            {u.name || <span style={{ color: '#d1d5db' }}>—</span>}
                           </td>
                           <td>
                             <select value={u.store} onChange={async e => {
@@ -596,6 +605,8 @@ export default function SettingsPage() {
             <h3>Edit User: {editUser.userid}</h3>
             <label>User ID</label>
             <input value={editUser.userid} onChange={e => setEditUser(u => u ? { ...u, userid: e.target.value.toUpperCase() } : u)} maxLength={10} />
+            <label>Name</label>
+            <input value={editUser.name ?? ''} onChange={e => setEditUser(u => u ? { ...u, name: e.target.value } : u)} placeholder="Full name" />
             <label>Store</label>
             <select value={editUser.store} onChange={e => setEditUser(u => u ? { ...u, store: e.target.value } : u)}>
               {stores.map(s => <option key={s}>{s}</option>)}

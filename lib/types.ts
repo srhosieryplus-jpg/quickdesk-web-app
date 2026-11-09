@@ -1,6 +1,7 @@
 export interface User {
   id: string
   userid: string
+  name?: string            // display name (e.g. "Jennifer Zhang")
   store: string
   location: string
   modules: string[]
