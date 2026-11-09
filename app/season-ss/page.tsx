@@ -482,7 +482,6 @@ export default function SeasonSSPage() {
         .ss-btn-amber   { background: ${amber}; color: #fff; }
         .ss-btn-gray    { background: #f3f4f6; color: #374151; }
         .ss-btn-red     { background: #dc2626; color: #fff; }
-        .result-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; padding: 16px; margin: 0; box-shadow: 0 2px 12px rgba(5,150,105,0.07); }
         .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
         .brand-row:hover { background: ${greenL}; border-color: ${border}; }
         .ss-main-table { border-collapse: collapse; width: 100%; font-size: 12px; }
@@ -515,6 +514,14 @@ export default function SeasonSSPage() {
         .ss-refresh-btn { display: inline-block; }
         .ss-table-wrap { display: flex; }
         .ss-cards { display: none; }
+        .ss-search-form { display: flex; align-items: center; gap: 0; border: 1.5px solid ${border}; border-radius: 8px; overflow: visible; background: #fff; width: 100%; max-width: 700px; margin: 0 auto; }
+        .ss-search-inv { display: flex; align-items: center; gap: 6px; padding: 0 10px; flex: 1; border-right: 1px solid #fef3c7; }
+        .ss-search-or { padding: 0 10px; color: #94a3b8; font-size: 11px; font-weight: 700; flex-shrink: 0; user-select: none; }
+        .ss-search-brand { display: flex; align-items: center; gap: 6px; padding: 0 10px; flex: 1.4; border-left: 1px solid #fef3c7; position: relative; }
+        .ss-search-btn { background: ${green}; color: #fff; border: none; border-radius: 0 6px 6px 0; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+        .ss-search-input { border: none; outline: none; font-size: 13px; color: #111; background: transparent; flex: 1; padding: 8px 0; font-family: Inter, sans-serif; width: 0; min-width: 0; }
+        .result-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; padding: 16px; margin: 0; box-shadow: 0 2px 12px rgba(5,150,105,0.07); }
+        .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
         @media (max-width: 600px) {
           .ss-col-hide { display: none; }
           .ss-main-table td { height: 42px; padding: 4px 8px; font-size: 12px; }
@@ -522,6 +529,23 @@ export default function SeasonSSPage() {
           .ss-refresh-btn { display: none !important; }
           .ss-table-wrap { display: none; }
           .ss-cards { display: block; padding: 8px 12px; }
+          /* Search bar: stack vertically on mobile */
+          .ss-search-form { flex-direction: column; border-radius: 8px; overflow: hidden; }
+          .ss-search-inv { width: 100%; border-right: none; border-bottom: 1px solid #fef3c7; padding: 4px 10px; }
+          .ss-search-or { display: none; }
+          .ss-search-brand { width: 100%; border-left: none; border-bottom: 1px solid #fef3c7; padding: 4px 10px; }
+          .ss-search-btn { width: 100%; border-radius: 0 0 6px 6px; padding: 10px 16px; }
+          .ss-search-input { padding: 6px 0; font-size: 14px; width: 100%; }
+          /* Result card: single column */
+          .result-grid { grid-template-columns: 1fr; gap: 0; }
+          .result-card { padding: 12px; }
+          /* Modal full screen on mobile */
+          .modal-overlay { padding: 0; align-items: flex-end; }
+          .modal-box { border-radius: 14px 14px 0 0; min-height: 85vh; max-height: 95vh; }
+          /* Header compact */
+          .qs-header { padding: 10px 12px; }
+          .modal-tabs { overflow-x: auto; flex-wrap: nowrap; }
+          .modal-tab { padding: 6px 12px; white-space: nowrap; font-size: 11px; }
         }
       `}</style>
 
@@ -575,28 +599,28 @@ export default function SeasonSSPage() {
 
       {/* ── SEARCH BAR ── */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '8px 16px' }}>
-        <form onSubmit={handleSearch} style={{ width: '100%', maxWidth: 700, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 0, border: `1.5px solid ${border}`, borderRadius: 8, overflow: 'visible', background: '#fff' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', flex: 1, borderRight: `1px solid #fef3c7` }}>
+        <form onSubmit={handleSearch} className="ss-search-form">
+          <div className="ss-search-inv">
             <label style={{ ...labelSt, fontSize: 10, color: '#94a3b8' }}>INV#</label>
             <input
               ref={invoiceRef} autoFocus value={invoiceQ}
               onChange={e => { setInvoiceQ(e.target.value); if (e.target.value) setBrandQ('') }}
               placeholder="Invoice number…"
-              style={{ border: 'none', outline: 'none', fontSize: 13, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
+              className="ss-search-input"
               onBlur={() => { if (window.visualViewport) { (document.documentElement.style as any).zoom = '1' } }}
             />
           </div>
 
-          <div style={{ padding: '0 10px', color: '#94a3b8', fontSize: 11, fontWeight: 700, flexShrink: 0, userSelect: 'none' }}>or</div>
+          <div className="ss-search-or">or</div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', flex: 1.4, borderLeft: `1px solid #fef3c7`, position: 'relative' }}>
+          <div className="ss-search-brand">
             <label style={{ ...labelSt, fontSize: 10, color: '#94a3b8' }}>BRAND</label>
             <input
               ref={brandRef} value={brandQ}
               onChange={e => { onBrandInput(e.target.value); if (e.target.value) setInvoiceQ('') }}
               onFocus={() => { if (brandQ.length >= 1) setShowSugg(true) }}
               placeholder="Brand name…"
-              style={{ border: 'none', outline: 'none', fontSize: 13, color: '#111', background: 'transparent', flex: 1, padding: '8px 0', fontFamily: 'Inter, sans-serif' }}
+              className="ss-search-input"
               autoComplete="off"
               onBlur={() => { if (window.visualViewport) { (document.documentElement.style as any).zoom = '1' } }}
             />
@@ -613,7 +637,8 @@ export default function SeasonSSPage() {
           </div>
 
           <button type="submit" disabled={(!invoiceQ.trim() && !brandQ.trim()) || searching}
-            style={{ background: green, color: '#fff', border: 'none', borderRadius: '0 6px 6px 0', padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0, opacity: (!invoiceQ.trim() && !brandQ.trim()) || searching ? 0.5 : 1 }}>
+            className="ss-search-btn"
+            style={{ opacity: (!invoiceQ.trim() && !brandQ.trim()) || searching ? 0.5 : 1 }}>
             {searching ? '…' : '🔍 Search'}
           </button>
         </form>
@@ -652,7 +677,7 @@ export default function SeasonSSPage() {
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                <div className="result-grid">
                   <InfoRow label="Invoice #" value={state.row.invoice_no} />
                   <InfoRow label="PO #"      value={state.row.po_no} />
                   <InfoRow label="Brand"     value={state.row.brand} />
