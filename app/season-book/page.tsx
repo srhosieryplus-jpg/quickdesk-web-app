@@ -1349,7 +1349,7 @@ export default function SeasonBookPage() {
                             <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Drop</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
-                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PO #</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Order #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PDF</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Units</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Total</th>
@@ -1359,21 +1359,22 @@ export default function SeasonBookPage() {
                         </thead>
                         <tbody>
                           {(() => {
-                            // Build rows: one per unique (drop_name, store) combo, ordered by drop then store
-                            const dropStoreRows: { dropName: string | null; store: string; dropRows: LedgerRow[] }[] = []
+                            // Build rows: one per unique (drop_num, store) combo, ordered by drop_num then store
+                            const dropStoreRows: { dropNum: number; dropName: string | null; store: string; dropRows: LedgerRow[] }[] = []
                             const seenKeys = new Set<string>()
                             for (const r of bRows) {
-                              const key = `${r.drop_name ?? ''}|${r.store}`
+                              const key = `${r.drop_num}|${r.store}`
                               if (!seenKeys.has(key)) {
                                 seenKeys.add(key)
                                 dropStoreRows.push({
+                                  dropNum: r.drop_num,
                                   dropName: r.drop_name,
                                   store: r.store,
-                                  dropRows: bRows.filter(x => x.drop_name === r.drop_name && x.store === r.store),
+                                  dropRows: bRows.filter(x => x.drop_num === r.drop_num && x.store === r.store),
                                 })
                               }
                             }
-                            return dropStoreRows.map(({ dropName, store, dropRows }) => {
+                            return dropStoreRows.map(({ dropNum, dropName, store, dropRows }) => {
                               const activeRows = dropRows.filter(r => !r.is_cancelled)
                               const sUnits = activeRows.reduce((s, r) => s + (r.units ?? 0), 0)
                               const sInit  = activeRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
@@ -1384,7 +1385,7 @@ export default function SeasonBookPage() {
                               const invoiceNums = Array.from(new Set(activeRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
                               const poNums = Array.from(new Set(activeRows.map(r => r.order_num).filter((n): n is string => !!n)))
                               const invoiceFileUrls = Array.from(new Set(activeRows.map(r => r.invoice_file_url).filter((u): u is string => !!u)))
-                              const rowKey = `${dropName ?? '_'}|${store}`
+                              const rowKey = `${dropNum}|${store}`
                               return (
                                 <tr key={rowKey}
                                   onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
@@ -1393,7 +1394,7 @@ export default function SeasonBookPage() {
                                   onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
                                   onMouseLeave={e => (e.currentTarget.style.background = '')}>
                                   <td style={{ padding: '8px 14px', fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>
-                                    {dropName || <span style={{ color: '#d1d5db' }}>—</span>}
+                                    {dropName || `Drop ${dropNum}`}
                                   </td>
                                   <td style={{ padding: '8px 10px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>
                                     {store}
