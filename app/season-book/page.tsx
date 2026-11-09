@@ -804,12 +804,18 @@ export default function SeasonBookPage() {
         .sp-season-row:hover { background: #ede9fe; }
         .sp-season-row.active { background: #ede9fe; color: ${purpleD}; }
         .sp-season-row.active::after { content: '✓'; font-size: 12px; color: ${purpleD}; }
-        @media (max-width: 600px) {
+        @media (max-width: 600px), (pointer: coarse) and (max-width: 900px) {
           .sb-layout { flex-direction: column; }
           .sb-sidebar { display: none !important; }
           .sb-main { padding: 10px; width: 100%; }
           .form-grid { grid-template-columns: 1fr; }
           .store-table th, .store-table td { font-size: 11px; padding: 4px 6px; }
+          .sb-new-btn { display: none !important; }
+          .sb-drop-new { display: none !important; }
+          .sb-click-hint { display: none !important; }
+          .sb-subbar { flex-direction: row-reverse; gap: 6px; padding: 6px 10px; }
+          .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 90px; }
+          .sb-subbar-divider { display: none !important; }
         }
       `}</style>
 
@@ -936,7 +942,7 @@ export default function SeasonBookPage() {
             )}
           </div>
 
-          <button onClick={() => {
+          <button className="sb-new-btn" onClick={() => {
               if (cutoffInEffect && !isAdmin) {
                 alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.')
                 return
@@ -997,7 +1003,7 @@ export default function SeasonBookPage() {
         {/* Drop dropdown — left edge, no sidebar spacer needed here */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 4 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>
-          <select
+          <select className="sb-drop-select"
             value={activeDropName ?? ''}
             onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
             style={{ fontSize: 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none' }}>
@@ -1019,7 +1025,7 @@ export default function SeasonBookPage() {
                 style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 6px', cursor: 'pointer' }}>✕</button>
             </div>
           ) : (
-            <button onClick={() => setShowDropNameMgr(true)}
+            <button className="sb-drop-new" onClick={() => setShowDropNameMgr(true)}
               style={{ fontSize: 11, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 7, padding: '3px 8px', cursor: 'pointer', color: gray }}>
               + New
             </button>
@@ -1027,7 +1033,7 @@ export default function SeasonBookPage() {
         </div>
 
         {/* Divider */}
-        <div style={{ width: 1, height: 20, background: border, flexShrink: 0 }} />
+        <div className="sb-subbar-divider" style={{ width: 1, height: 20, background: border, flexShrink: 0 }} />
 
         {/* Search — aligns with grand total box */}
         <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
@@ -1282,7 +1288,7 @@ export default function SeasonBookPage() {
                             ✓ Paid
                           </span>
                         )}
-                        <span style={{ fontSize: 10, color: gray, marginLeft: 'auto' }}>click to open invoice</span>
+                        <span className="sb-click-hint" style={{ fontSize: 10, color: gray, marginLeft: 'auto' }}>click to open invoice</span>
                       </div>
 
                       {/* Per-store summary rows — click to open single-store invoice */}
