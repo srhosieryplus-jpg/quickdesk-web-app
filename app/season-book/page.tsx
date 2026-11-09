@@ -45,6 +45,11 @@ interface SmartPasteRow {
   vendorMatch: string | null
   warning: string | null
   skip: boolean
+  // user overrides
+  brandOverride: string | null   // user picked a different brand
+  vendorOverride: string | null  // user picked a different vendor id
+  brandCreateNew: boolean        // user wants to create new vendor entry
+  vendorCreateNew: boolean
 }
 
 interface LedgerRow {
@@ -423,6 +428,7 @@ export default function SeasonBookPage() {
         raw: cols, brand, vendor_id, drop_num, drop_name, store, units, total,
         deposit, duties, currency, invoice_num, order_num, comment,
         brandMatch, vendorMatch, warning, skip: false,
+        brandOverride: null, vendorOverride: null, brandCreateNew: false, vendorCreateNew: false,
       }
     })
   }
@@ -2745,11 +2751,73 @@ export default function SeasonBookPage() {
                               <input type="checkbox" checked={!r.skip} onChange={() => setPasteRows(prev => prev.map((p, j) => j === i ? { ...p, skip: !p.skip } : p))}
                                 style={{ accentColor: purpleD }} />
                             </td>
-                            <td style={{ padding: '5px 8px', fontWeight: 700, color: r.brandMatch ? (r.brandMatch !== r.brand ? '#92400e' : purpleD) : '#dc2626' }}>
-                              {(r.brandMatch ?? r.brand) || <span style={{ color: '#dc2626' }}>—</span>}
+                            <td style={{ padding: '5px 8px', minWidth: 140 }}>
+                              {(() => {
+                                const resolved = r.brandOverride ?? r.brandMatch
+                                const isExact = resolved === r.brand
+                                const isMissing = !resolved && !r.brandCreateNew
+                                return r.brandCreateNew ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 5, padding: '1px 6px' }}>+ Create new</span>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>{r.brand}</span>
+                                    <button onClick={() => setPasteRows(prev => prev.map((p, j) => j === i ? { ...p, brandCreateNew: false, brandOverride: null } : p))}
+                                      style={{ fontSize: 10, color: gray, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>↩ undo</button>
+                                  </div>
+                                ) : (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                    <span style={{ fontWeight: 700, color: isMissing ? '#dc2626' : isExact ? purpleD : '#92400e', fontSize: 12 }}>
+                                      {resolved || <span style={{ color: '#dc2626' }}>Not found</span>}
+                                    </span>
+                                    {!isExact && (
+                                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                        <select value={r.brandOverride ?? ''} onChange={e => setPasteRows(prev => prev.map((p, j) => j === i ? { ...p, brandOverride: e.target.value || null } : p))}
+                                          style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 4, padding: '1px 4px', maxWidth: 120 }}>
+                                          <option value="">— pick brand —</option>
+                                          {Array.from(new Set(liveVendors.map(v => v.brand))).sort().map(b => <option key={b} value={b}>{b}</option>)}
+                                        </select>
+                                        <button onClick={() => setPasteRows(prev => prev.map((p, j) => j === i ? { ...p, brandCreateNew: true, brandOverride: null } : p))}
+                                          style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                          + New
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </td>
-                            <td style={{ padding: '5px 8px', color: r.vendorMatch ? (r.vendorMatch !== r.vendor_id ? '#92400e' : gray) : '#dc2626' }}>
-                              {(r.vendorMatch ?? r.vendor_id) || '—'}
+                            <td style={{ padding: '5px 8px', minWidth: 120 }}>
+                              {(() => {
+                                const resolved = r.vendorOverride ?? r.vendorMatch
+                                const isExact = resolved === r.vendor_id
+                                const isMissing = !resolved && !r.vendorCreateNew
+                                return r.vendorCreateNew ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 5, padding: '1px 6px' }}>+ Create new</span>
+                                    <span style={{ fontSize: 11, color: gray }}>{r.vendor_id}</span>
+                                    <button onClick={() => setPasteRows(prev => prev.map((p, j) => j === i ? { ...p, vendorCreateNew: false, vendorOverride: null } : p))}
+                                      style={{ fontSize: 10, color: gray, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>↩ undo</button>
+                                  </div>
+                                ) : (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                    <span style={{ color: isMissing ? '#dc2626' : isExact ? gray : '#92400e', fontSize: 12 }}>
+                                      {resolved || (r.vendor_id ? <span style={{ color: '#dc2626' }}>Not found</span> : <span style={{ color: gray }}>—</span>)}
+                                    </span>
+                                    {!isExact && r.vendor_id && (
+                                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                        <select value={r.vendorOverride ?? ''} onChange={e => setPasteRows(prev => prev.map((p, j) => j === i ? { ...p, vendorOverride: e.target.value || null } : p))}
+                                          style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 4, padding: '1px 4px', maxWidth: 120 }}>
+                                          <option value="">— pick vendor —</option>
+                                          {Array.from(new Set(liveVendors.map(v => v.vendor_id))).sort().map(v => <option key={v} value={v}>{v}</option>)}
+                                        </select>
+                                        <button onClick={() => setPasteRows(prev => prev.map((p, j) => j === i ? { ...p, vendorCreateNew: true, vendorOverride: null } : p))}
+                                          style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                          + New
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </td>
                             <td style={{ padding: '5px 8px', color: gray }}>{r.drop_num}</td>
                             <td style={{ padding: '5px 8px', color: gray }}>{r.store}</td>
@@ -2759,9 +2827,13 @@ export default function SeasonBookPage() {
                             <td style={{ padding: '5px 8px', color: gray }}>{r.invoice_num}</td>
                             <td style={{ padding: '5px 8px', color: gray }}>{r.order_num}</td>
                             <td style={{ padding: '5px 8px' }}>
-                              {r.warning
-                                ? <span title={r.warning} style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 6, padding: '1px 6px', cursor: 'help' }}>⚠️ {r.warning.length > 40 ? r.warning.slice(0, 40) + '…' : r.warning}</span>
-                                : <span style={{ fontSize: 10, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 6, padding: '1px 6px' }}>✓ OK</span>
+                              {r.brandCreateNew || r.vendorCreateNew
+                                ? <span style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 6, padding: '1px 6px' }}>+ New entry</span>
+                                : (r.brandOverride || r.vendorOverride)
+                                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 6, padding: '1px 6px' }}>✓ Overridden</span>
+                                  : r.warning
+                                    ? <span title={r.warning} style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 6, padding: '1px 6px', cursor: 'help' }}>⚠️ Review</span>
+                                    : <span style={{ fontSize: 10, fontWeight: 700, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 6, padding: '1px 6px' }}>✓ OK</span>
                               }
                             </td>
                           </tr>
@@ -2786,17 +2858,28 @@ export default function SeasonBookPage() {
                       <button disabled={pasteSaving || pasteRows.every(r => r.skip)} onClick={async () => {
                         if (!user) return
                         setPasteSaving(true)
-                        const toInsert = pasteRows.filter(r => !r.skip).map(r => {
+                        const activeRows = pasteRows.filter(r => !r.skip)
+                        // Create new vendor entries first
+                        const newVendorRows = activeRows.filter(r => r.brandCreateNew || r.vendorCreateNew).map(r => ({
+                          vendor_id: r.vendorCreateNew ? r.vendor_id : (r.vendorOverride ?? r.vendorMatch ?? r.vendor_id),
+                          brand: r.brandCreateNew ? r.brand : (r.brandOverride ?? r.brandMatch ?? r.brand),
+                        })).filter(v => v.vendor_id && v.brand)
+                        if (newVendorRows.length > 0) {
+                          await supabase.from('vendors').insert(newVendorRows)
+                        }
+                        const toInsert = activeRows.map(r => {
                           const stripCurrency = (s: string) => parseFloat(s.replace(/[$€,\s]/g, '')) || null
                           const init = stripCurrency(r.total)
                           const dep  = stripCurrency(r.deposit)
                           const dut  = stripCurrency(r.duties)
                           const bal  = init != null ? (init - (dep ?? 0) - (dut ?? 0)) : null
                           const cur: Currency = (r.currency?.toUpperCase() === 'EUR') ? 'EUR' : 'USD'
+                          const finalBrand = r.brandCreateNew ? r.brand : (r.brandOverride ?? r.brandMatch ?? r.brand)
+                          const finalVendor = r.vendorCreateNew ? r.vendor_id : ((r.vendorOverride ?? r.vendorMatch ?? r.vendor_id) || null)
                           return {
                             season,
-                            brand: r.brandMatch ?? r.brand,
-                            vendor_id: r.vendorMatch ?? (r.vendor_id || null),
+                            brand: finalBrand,
+                            vendor_id: finalVendor,
                             drop_num: parseInt(r.drop_num) || 1,
                             drop_name: r.drop_name || null,
                             store: r.store,
