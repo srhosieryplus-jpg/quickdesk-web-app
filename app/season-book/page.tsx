@@ -1449,10 +1449,22 @@ export default function SeasonBookPage() {
                       </div>
 
                       {/* Rows table — Brand is first column */}
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '16%' }} />{/* Brand */}
+                          <col style={{ width: '12%' }} />{/* Drop */}
+                          <col style={{ width: '7%' }} />{/* Store */}
+                          <col style={{ width: '10%' }} />{/* Invoice # */}
+                          <col style={{ width: '10%' }} />{/* Order # */}
+                          <col style={{ width: '5%' }} />{/* PDF */}
+                          <col style={{ width: '7%' }} />{/* Units */}
+                          <col style={{ width: '11%' }} />{/* Total */}
+                          <col style={{ width: '11%' }} />{/* Deposits */}
+                          <col style={{ width: '11%' }} />{/* Balance Due */}
+                        </colgroup>
                         <thead>
                           <tr style={{ background: '#f8f7ff' }}>
-                            <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Brand</th>
+                            <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Brand</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Drop</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
@@ -1496,7 +1508,7 @@ export default function SeasonBookPage() {
                                   onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
                                   onMouseLeave={e => (e.currentTarget.style.background = '')}
                                   onContextMenu={e => { e.preventDefault(); setRowCtxMenu({ x: e.clientX, y: e.clientY, rows: dropRows }); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false) }}>
-                                  <td style={{ padding: '8px 14px', fontSize: 11, fontWeight: 700, color: purpleD, whiteSpace: 'nowrap' }}>
+                                  <td style={{ padding: '8px 14px', fontSize: 11, fontWeight: 700, color: purpleD, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {brand}
                                   </td>
                                   <td style={{ padding: '8px 10px', fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>
