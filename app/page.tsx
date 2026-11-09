@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { loginUser, lookupUser, setSession } from '@/lib/auth'
+import { loginUser, lookupUser, setSession, hasPassword } from '@/lib/auth'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -22,19 +22,20 @@ export default function LoginPage() {
     e.preventDefault()
     if (!userid.trim()) return
 
-    // Step 1: if we don't yet know if this is admin, look them up first
+    // Step 1: look up user, check if they have a password set
     if (!needsPassword) {
       setChecking(true)
       setErr('')
       const user = await lookupUser(userid)
+      if (!user) { setChecking(false); setErr('User ID not found.'); return }
+      const pwRequired = await hasPassword(userid)
       setChecking(false)
-      if (!user) { setErr('User ID not found.'); return }
-      if (user.store === 'ALL') {
-        // Admin — ask for password before proceeding
+      if (pwRequired) {
+        // Password set — ask for it before proceeding
         setNeedsPassword(true)
         return
       }
-      // Non-admin — proceed straight to login
+      // No password — proceed straight to login
       const result = await loginUser(userid)
       if (!result || result === 'wrong-password') { setErr('Sign-in failed.'); return }
       setSession(result)
@@ -42,7 +43,7 @@ export default function LoginPage() {
       return
     }
 
-    // Step 2: admin password check
+    // Step 2: password check
     setLoading(true)
     setErr('')
     const result = await loginUser(userid, password)
@@ -158,7 +159,7 @@ export default function LoginPage() {
           QUICKDESK
         </h1>
         <p style={{ color: '#9b8ec4', fontSize: 12, marginBottom: 22 }}>
-          {needsPassword ? 'Enter your admin password' : 'Enter your User ID to continue'}
+          {needsPassword ? 'Enter your password' : 'Enter your User ID to continue'}
         </p>
 
         <form onSubmit={handleLogin} style={{
@@ -212,7 +213,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={e => { setPassword(e.target.value); setErr('') }}
-                placeholder="Admin password"
+                placeholder="Password"
                 style={{
                   background: '#f5f3ff',
                   border: '1.5px solid #c4b5fd',

@@ -13,22 +13,37 @@ export async function lookupUser(userid: string): Promise<User | null> {
   return data as User
 }
 
-/** Full login: for admin accounts (store === 'ALL') the password must match.
- *  For non-admin accounts the password param is ignored. */
+/** Check if a user has a password set in Supabase without attempting login. */
+export async function hasPassword(userid: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('users')
+    .select('password')
+    .eq('userid', userid.toUpperCase().trim())
+    .single()
+  const stored = (data as any)?.password as string | null | undefined
+  return !!stored
+}
+
+/** Full login: if the user has a password set in Supabase, it must match.
+ *  Users with no password set can log in without one. */
 export async function loginUser(userid: string, password?: string): Promise<User | 'wrong-password' | null> {
   const user = await lookupUser(userid)
   if (!user) return null
-  if (user.store === 'ALL') {
-    // Admin: password required
-    const { data } = await supabase
-      .from('users')
-      .select('password')
-      .eq('userid', userid.toUpperCase().trim())
-      .single()
-    const stored = (data as any)?.password
-    if (!stored) return null                       // admin with no password set — block
+
+  // Always fetch password column to check if one is set
+  const { data } = await supabase
+    .from('users')
+    .select('password')
+    .eq('userid', userid.toUpperCase().trim())
+    .single()
+  const stored = (data as any)?.password as string | null | undefined
+
+  if (stored) {
+    // Password is set — must match
     if (!password || password !== stored) return 'wrong-password'
   }
+  // No password set — allow in without one
+
   return user
 }
 
