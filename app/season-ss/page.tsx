@@ -650,21 +650,18 @@ export default function SeasonSSPage() {
           </div>
 
           {hasMultiStore && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 90 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em' }}>STORE</label>
-              <select
-                value={ssStoreFilter}
-                onChange={e => setSsStoreFilter(e.target.value)}
-                style={{ border: `1.5px solid ${border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, fontWeight: 700, color: ssStoreFilter !== 'ALL' ? green : '#374151', background: ssStoreFilter !== 'ALL' ? '#f0fdf4' : '#fff', cursor: 'pointer' }}>
-                <option value="ALL">All Stores</option>
-                {(isAdmin
-                  ? Array.from(new Set(ssRows.map(r => r.store))).sort()
-                  : viewStores
-                ).map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={ssStoreFilter}
+              onChange={e => setSsStoreFilter(e.target.value)}
+              style={{ border: `1.5px solid ${border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, fontWeight: 700, color: ssStoreFilter !== 'ALL' ? green : '#374151', background: ssStoreFilter !== 'ALL' ? '#f0fdf4' : '#fff', cursor: 'pointer', flexShrink: 0, width: 'auto' }}>
+              <option value="ALL">All Stores</option>
+              {(isAdmin
+                ? Array.from(new Set(ssRows.map(r => r.store))).sort()
+                : viewStores
+              ).map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
           )}
 
           <button type="submit" disabled={(!invoiceQ.trim() && !brandQ.trim()) || searching}

@@ -1304,6 +1304,7 @@ export default function SeasonBookPage() {
                           <tr style={{ background: '#f8f7ff' }}>
                             <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PO #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PDF</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Units</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Total</th>
@@ -1342,6 +1343,16 @@ export default function SeasonBookPage() {
                                     </span>
                                   )) : <span style={{ color: gray }}>—</span>}
                                 </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'left' }}>
+                                  {(() => {
+                                    const orderNums = Array.from(new Set(activeRows.map(r => r.order_num).filter((n): n is string => !!n)))
+                                    return orderNums.length > 0 ? orderNums.map(o => (
+                                      <span key={o} style={{ fontSize: 10, color: '#6b21a8', fontWeight: 700, background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>
+                                        {o}
+                                      </span>
+                                    )) : <span style={{ color: gray }}>—</span>
+                                  })()}
+                                </td>
                                 <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                                   {invoiceFileUrls.length > 0
                                     ? invoiceFileUrls.map((url, i) => (
@@ -1366,7 +1377,7 @@ export default function SeasonBookPage() {
                         {storesPresent.length > 1 && (
                           <tfoot>
                             <tr style={{ background: totBal > 0.001 ? '#fef2f2' : '#f0fdf4', borderTop: `2px solid ${border}` }}>
-                              <td colSpan={6} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
+                              <td colSpan={7} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
                                 Total Owed
                               </td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 13, fontWeight: 900, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>

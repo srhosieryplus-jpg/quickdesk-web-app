@@ -804,12 +804,12 @@ export default function SeasonAWPage() {
           <span style={{ fontSize: 11, fontWeight: 700, color: blueD }}>Filter:</span>
           <input value={tableFilter} onChange={e => setTableFilter(e.target.value)}
             placeholder="invoice, brand, PO, user…"
-            style={{ ...inputSt, flex: 1 }} />
+            style={{ ...inputSt, flex: 1, minWidth: 0 }} />
           {hasMultiStore && (
             <select
               value={awStoreFilter}
               onChange={e => setAwStoreFilter(e.target.value)}
-              style={{ ...inputSt, minWidth: 90, fontWeight: 700, color: awStoreFilter !== 'ALL' ? blueD : '#374151', background: awStoreFilter !== 'ALL' ? '#eff6ff' : '#fff', cursor: 'pointer' }}>
+              style={{ ...inputSt, width: 'auto', flexShrink: 0, fontWeight: 700, color: awStoreFilter !== 'ALL' ? blueD : '#374151', background: awStoreFilter !== 'ALL' ? '#eff6ff' : '#fff', cursor: 'pointer' }}>
               <option value="ALL">All Stores</option>
               {(isAdmin
                 ? Array.from(new Set(awRows.map(r => r.store))).sort()
@@ -819,9 +819,6 @@ export default function SeasonAWPage() {
               ))}
             </select>
           )}
-          <button onClick={() => fetchStoreRows()} className="aw-refresh-btn" style={{ background: '#dbeafe', border: 'none', color: blueD, borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            ↺ Refresh
-          </button>
           <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
             {filteredStore.length} rows · <span style={{ color: '#15803d', fontWeight: 700 }}>✓ {loggedCount}</span>
             {flaggedCount > 0 && <> · <span style={{ color: '#92400e', fontWeight: 700 }}>⚑ {flaggedCount}</span></>}
