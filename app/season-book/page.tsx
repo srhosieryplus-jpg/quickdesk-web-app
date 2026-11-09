@@ -809,6 +809,7 @@ export default function SeasonBookPage() {
           .sb-sidebar { display: none !important; }
           .sb-main { padding: 10px; width: 100%; }
           .form-grid { grid-template-columns: 1fr; }
+          .sb-financials { grid-template-columns: 1fr !important; }
           .store-table th, .store-table td { font-size: 11px; padding: 4px 6px; }
           .sb-new-btn { display: none !important; }
           .sb-drop-new { display: none !important; }
@@ -816,10 +817,11 @@ export default function SeasonBookPage() {
           .sb-header-title { position: static !important; transform: none !important; flex: 1; justify-content: flex-end; }
           .sb-header-left { flex: 0 !important; }
           .sb-header-right { display: none !important; }
-          .sb-subbar { gap: 6px; padding: 6px 10px; }
-          .sb-subbar-drop { order: 2; flex-shrink: 0; }
-          .sb-subbar-search { order: 1; flex: 1; min-width: 0; max-width: none !important; }
-          .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 80px; }
+          .sb-subbar { gap: 6px; padding: 6px 8px; }
+          .sb-subbar-drop { flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
+          .sb-subbar-search { flex: 1; min-width: 0; max-width: none !important; }
+          .sb-drop-label { display: none !important; }
+          .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 70px; }
           .sb-subbar-divider { display: none !important; }
         }
       `}</style>
@@ -1007,7 +1009,7 @@ export default function SeasonBookPage() {
       <div className="sb-subbar">
         {/* Drop dropdown — left edge, no sidebar spacer needed here */}
         <div className="sb-subbar-drop" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>
+          <span className="sb-drop-label" style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>
           <select className="sb-drop-select"
             value={activeDropName ?? ''}
             onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
@@ -1554,7 +1556,7 @@ export default function SeasonBookPage() {
                         </div>
                       </div>
                       {/* Row 2: Units + Initial Total */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div className="sb-financials" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div>
                           <label style={lbl}>Units</label>
                           <input type="number" value={entry.units} placeholder="0"
@@ -1567,7 +1569,7 @@ export default function SeasonBookPage() {
                         </div>
                       </div>
                       {/* Row 3: Deposit + Duties + Payment Date */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                      <div className="sb-financials" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                         <div>
                           <label style={lbl}>Deposit ({sym})</label>
                           <input type="number" value={entry.deposit} placeholder="0.00" step="0.01"
@@ -1754,7 +1756,7 @@ export default function SeasonBookPage() {
                 {/* Section 2: Financials — 2 column layout */}
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: gray, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Financials</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div className="sb-financials" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     {/* Left column */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 6 }}>
