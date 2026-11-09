@@ -691,27 +691,61 @@ export default function SeasonBookPage() {
       if (fileRef.current) fileRef.current.value = ''
     }
 
+    const [showDelMenu, setShowDelMenu] = useState(false)
+    const [delPw, setDelPw] = useState('')
+    const [delErr, setDelErr] = useState(false)
+
     async function handleRemove() {
       if (!row.invoice_file_url) return
       const path = row.invoice_file_url.split('/invoices/').pop()
       if (path) await supabase.storage.from('invoices').remove([path])
       await supabase.from('season_ledger').update({ invoice_file_url: null }).eq('id', row.id)
       showToast('🗑 Invoice removed')
+      setShowDelMenu(false)
+      setDelPw('')
       onUpdated()
     }
 
     return (
-      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', position: 'relative' }}>
         {row.invoice_file_url ? (
           <>
             <a href={row.invoice_file_url} target="_blank" rel="noopener noreferrer"
+              onContextMenu={e => { e.preventDefault(); setShowDelMenu(v => !v); setDelPw(''); setDelErr(false) }}
               style={{ fontSize: 11, fontWeight: 700, color: purpleD, background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
               📄 View Invoice
             </a>
-            <button onClick={handleRemove}
-              style={{ fontSize: 10, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>
-              Remove
-            </button>
+            {showDelMenu && (
+              <div style={{ position: 'absolute', top: '110%', left: 0, background: '#fff', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '10px 12px', zIndex: 999, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>🗑 Delete Invoice PDF</div>
+                <input
+                  autoFocus
+                  type="password"
+                  placeholder="Enter password…"
+                  value={delPw}
+                  onChange={e => { setDelPw(e.target.value); setDelErr(false) }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      if (delPw === 'delete') handleRemove()
+                      else setDelErr(true)
+                    }
+                    if (e.key === 'Escape') { setShowDelMenu(false); setDelPw('') }
+                  }}
+                  style={{ width: '100%', border: `1.5px solid ${delErr ? '#dc2626' : '#e5e7eb'}`, borderRadius: 5, padding: '4px 8px', fontSize: 12, marginBottom: 4 }}
+                />
+                {delErr && <div style={{ fontSize: 10, color: '#dc2626', marginBottom: 4 }}>Incorrect password</div>}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => { if (delPw === 'delete') handleRemove(); else setDelErr(true) }}
+                    style={{ flex: 1, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    Confirm Delete
+                  </button>
+                  <button onClick={() => { setShowDelMenu(false); setDelPw('') }}
+                    style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 5, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -1612,7 +1646,7 @@ export default function SeasonBookPage() {
                         const dut  = parseFloat(entry.duties) || 0
                         const bal  = init - dep - dut
                         return (
-                          <div style={{ background: bal > 0.001 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${bal > 0.001 ? '#fca5a5' : '#86efac'}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
+                          <div style={{ fontSize: 12, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
                             Balance Due: {sym}{bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
                         )
@@ -1813,13 +1847,7 @@ export default function SeasonBookPage() {
                       {/* Live balance — right column bottom */}
                       <div style={{ marginTop: 'auto', paddingTop: 4 }}>
                         <label style={{ ...lbl, color: liveBal > 0.001 ? '#dc2626' : '#166534' }}>Balance Due</label>
-                        <div style={{
-                          background: liveBal > 0.001 ? '#fef2f2' : '#f0fdf4',
-                          border: `1.5px solid ${liveBal > 0.001 ? '#fca5a5' : '#86efac'}`,
-                          borderRadius: 7, padding: '7px 10px',
-                          fontSize: 15, fontWeight: 900,
-                          color: liveBal > 0.001 ? '#dc2626' : '#166534',
-                        }}>
+                        <div style={{ fontSize: 15, fontWeight: 900, color: liveBal > 0.001 ? '#dc2626' : '#166534', padding: '7px 0' }}>
                           {sym}{liveBal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
