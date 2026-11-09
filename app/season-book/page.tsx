@@ -1338,7 +1338,7 @@ export default function SeasonBookPage() {
                           <tr style={{ background: '#f8f7ff' }}>
                             <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
-                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PO #</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Order #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PDF</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Units</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Total</th>
