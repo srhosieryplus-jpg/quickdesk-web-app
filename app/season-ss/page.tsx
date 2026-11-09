@@ -223,7 +223,10 @@ export default function SeasonSSPage() {
     if (!usr) return
     setTableLoading(true)
     let q = supabase.from('season_ss').select('*').order('created_at', { ascending: false })
-    if (usr.store !== 'ALL') q = q.eq('store', usr.store)
+    if (usr.store !== 'ALL') {
+      const viewStores = [usr.store, ...(usr.admin_stores ?? [])].filter(Boolean)
+      q = viewStores.length === 1 ? q.eq('store', viewStores[0]) : q.in('store', viewStores)
+    }
     const { data } = await q
     setTableLoading(false)
     setStoreRows((data || []) as SSRow[])
@@ -276,7 +279,10 @@ export default function SeasonSSPage() {
 
     if (inv) {
       let q = supabase.from('season_ss').select('*').ilike('invoice_no', inv)
-      if (user.store !== 'ALL') q = q.eq('store', user.store)
+      if (user.store !== 'ALL') {
+        const viewStores = [user.store, ...(user.admin_stores ?? [])].filter(Boolean)
+        q = viewStores.length === 1 ? q.eq('store', viewStores[0]) : q.in('store', viewStores)
+      }
       const { data } = await q.maybeSingle()
       setSearching(false)
       if (data) setState({ phase: 'found', row: data as SSRow })
@@ -289,7 +295,10 @@ export default function SeasonSSPage() {
         setState({ phase: 'brand', results: inMemory, term: br })
       } else {
         let q = supabase.from('season_ss').select('*').ilike('brand', `%${br}%`)
-        if (user.store !== 'ALL') q = q.eq('store', user.store)
+        if (user.store !== 'ALL') {
+          const viewStores = [user.store, ...(user.admin_stores ?? [])].filter(Boolean)
+          q = viewStores.length === 1 ? q.eq('store', viewStores[0]) : q.in('store', viewStores)
+        }
         const { data } = await q.order('created_at', { ascending: false })
         setSearching(false)
         const results = (data || []) as SSRow[]

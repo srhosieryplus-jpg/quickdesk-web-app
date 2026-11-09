@@ -31,7 +31,7 @@ const DEFAULT_STORES = ['ALL','PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS',
 const LOCATIONS = ['Hosiery Plus','Tiptoe','Purple Orchid']
 const DELETE_PASSWORD = 'star'
 
-interface DBUser { id: string; userid: string; store: string; location: string; modules: string[] }
+interface DBUser { id: string; userid: string; store: string; location: string; modules: string[]; admin_stores?: string[] }
 interface CtxMenu { x: number; y: number; kind: 'user'; userId: string }
 interface VCtxMenu { x: number; y: number; kind: 'vendor'; idx: number }
 
@@ -228,7 +228,10 @@ export default function SettingsPage() {
   async function saveEditUser() {
     if (!editUser) return
     const { error } = await supabase.from('users').update({
-      userid: editUser.userid, store: editUser.store, location: editUser.location
+      userid: editUser.userid,
+      store: editUser.store,
+      location: editUser.location,
+      admin_stores: editUser.admin_stores ?? [],
     }).eq('id', editUser.id)
     if (error) { showToast(`❌ ${error.message}`, 'err'); return }
     setUsers(prev => prev.map(x => x.id === editUser.id ? { ...x, ...editUser } : x))
@@ -384,6 +387,7 @@ export default function SettingsPage() {
                       <th style={{ width: 90 }}>User ID</th>
                       <th style={{ width: 80 }}>Store</th>
                       <th style={{ width: 130 }}>Location</th>
+                      <th style={{ width: 90, textAlign: 'center', fontSize: 10 }}>Admin Stores</th>
                       {ALL_MODULES.map(m => (
                         <th key={m.id} style={{ width: 66, textAlign: 'center', fontSize: 10 }}>{m.label}</th>
                       ))}
@@ -391,7 +395,7 @@ export default function SettingsPage() {
                   </thead>
                   <tbody>
                     {users.length === 0 && (
-                      <tr><td colSpan={ALL_MODULES.length + 4} style={{ textAlign: 'center', color: '#b8aed8', padding: 28 }}>No users yet.</td></tr>
+                      <tr><td colSpan={ALL_MODULES.length + 5} style={{ textAlign: 'center', color: '#b8aed8', padding: 28 }}>No users yet.</td></tr>
                     )}
                     {users.filter(u => !userSearch || [u.userid, u.store, u.location].some(v => v?.toLowerCase().includes(userSearch.toLowerCase()))).map((u, i) => {
                       const mods = getModules(u)
@@ -422,6 +426,13 @@ export default function SettingsPage() {
                               <option value="">—</option>
                               {LOCATIONS.map(l => <option key={l}>{l}</option>)}
                             </select>
+                          </td>
+                          <td style={{ textAlign: 'center', cursor: 'pointer' }}
+                            onClick={() => { const full = users.find(x => x.id === u.id); if (full) setEditUser({ ...full }) }}>
+                            {(u.admin_stores && u.admin_stores.length > 0)
+                              ? <span style={{ fontSize: 11, background: '#ede9fe', color: '#6d28d9', borderRadius: 4, padding: '1px 7px', fontWeight: 700 }}>{u.admin_stores.length} store{u.admin_stores.length !== 1 ? 's' : ''}</span>
+                              : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
+                            }
                           </td>
                           {ALL_MODULES.map(m => (
                             <td key={m.id} className="cell-check">
@@ -594,6 +605,26 @@ export default function SettingsPage() {
               <option value="">—</option>
               {LOCATIONS.map(l => <option key={l}>{l}</option>)}
             </select>
+            <label>Admin Stores <span style={{ fontWeight: 400, color: '#9b8ec4', fontSize: 10 }}>— extra stores this user can view data for</span></label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {stores.filter(s => s !== 'ALL' && s !== editUser.store).map(s => {
+                const on = (editUser.admin_stores ?? []).includes(s)
+                return (
+                  <button key={s} type="button"
+                    onClick={() => setEditUser(u => {
+                      if (!u) return u
+                      const cur = u.admin_stores ?? []
+                      return { ...u, admin_stores: on ? cur.filter(x => x !== s) : [...cur, s] }
+                    })}
+                    style={{ background: on ? purpleD : '#f3f4f6', color: on ? '#fff' : '#6b7280', border: `1.5px solid ${on ? purpleD : '#d1d5db'}`, borderRadius: 5, padding: '3px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    {s}
+                  </button>
+                )
+              })}
+              {stores.filter(s => s !== 'ALL' && s !== editUser.store).length === 0 && (
+                <span style={{ fontSize: 11, color: '#9b8ec4' }}>No other stores available.</span>
+              )}
+            </div>
             <div className="modal-btns">
               <button className="btn-cancel" onClick={() => setEditUser(null)}>Cancel</button>
               <button className="btn-save" onClick={saveEditUser}>Save</button>

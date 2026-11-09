@@ -237,7 +237,10 @@ export default function SeasonAWPage() {
     if (!usr) return
     setTableLoading(true)
     let q = supabase.from('season_aw').select('*').order('created_at', { ascending: false })
-    if (usr.store !== 'ALL') q = q.eq('store', usr.store)
+    if (usr.store !== 'ALL') {
+      const viewStores = [usr.store, ...(usr.admin_stores ?? [])].filter(Boolean)
+      q = viewStores.length === 1 ? q.eq('store', viewStores[0]) : q.in('store', viewStores)
+    }
     const { data } = await q
     setTableLoading(false)
     setStoreRows((data || []) as AWRow[])
@@ -297,7 +300,10 @@ export default function SeasonAWPage() {
     if (inv) {
       // Invoice # search — exact match for this store
       let q = supabase.from('season_aw').select('*').ilike('invoice_no', inv)
-      if (user.store !== 'ALL') q = q.eq('store', user.store)
+      if (user.store !== 'ALL') {
+        const viewStores = [user.store, ...(user.admin_stores ?? [])].filter(Boolean)
+        q = viewStores.length === 1 ? q.eq('store', viewStores[0]) : q.in('store', viewStores)
+      }
       const { data } = await q.maybeSingle()
       setSearching(false)
       if (data) setState({ phase: 'found', row: data as AWRow })
@@ -310,7 +316,10 @@ export default function SeasonAWPage() {
         setState({ phase: 'brand', results: inMemory, term: br })
       } else {
         let q = supabase.from('season_aw').select('*').ilike('brand', `%${br}%`)
-        if (user.store !== 'ALL') q = q.eq('store', user.store)
+        if (user.store !== 'ALL') {
+          const viewStores = [user.store, ...(user.admin_stores ?? [])].filter(Boolean)
+          q = viewStores.length === 1 ? q.eq('store', viewStores[0]) : q.in('store', viewStores)
+        }
         const { data } = await q.order('created_at', { ascending: false })
         setSearching(false)
         const results = (data || []) as AWRow[]

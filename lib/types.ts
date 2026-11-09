@@ -4,6 +4,7 @@ export interface User {
   store: string
   location: string
   modules: string[]
+  admin_stores?: string[]  // extra stores this user can view data for
 }
 
 export interface Task {

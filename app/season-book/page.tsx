@@ -373,7 +373,10 @@ export default function SeasonBookPage() {
   const fetchRows = useCallback(async (s: string, u: User) => {
     setLoading(true)
     let q = supabase.from('season_ledger').select('*').eq('season', s).order('brand').order('drop_num').order('store')
-    if (u.store !== 'ALL') q = q.in('store', [u.store])
+    if (u.store !== 'ALL') {
+      const viewStores = [u.store, ...(u.admin_stores ?? [])].filter(Boolean)
+      q = q.in('store', viewStores)
+    }
     const { data, error } = await q
     if (error) { showToast('❌ ' + error.message, 'err') }
     else setRows((data as unknown as LedgerRow[]) || [])
@@ -803,8 +806,8 @@ export default function SeasonBookPage() {
         .sp-season-row.active::after { content: '✓'; font-size: 12px; color: ${purpleD}; }
         @media (max-width: 600px) {
           .sb-layout { flex-direction: column; }
-          .sb-sidebar { width: 100%; border-right: none; border-bottom: 1px solid ${border}; max-height: 180px; }
-          .sb-main { padding: 10px; }
+          .sb-sidebar { display: none !important; }
+          .sb-main { padding: 10px; width: 100%; }
           .form-grid { grid-template-columns: 1fr; }
           .store-table th, .store-table td { font-size: 11px; padding: 4px 6px; }
         }

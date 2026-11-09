@@ -66,7 +66,10 @@ export default function TasksPage() {
   async function fetchTasks(u: User) {
     setLoading(true)
     let q = supabase.from('tasks').select('*').order('saved_at', { ascending: false })
-    if (u.store !== 'ALL') q = q.eq('store', u.store)
+    if (u.store !== 'ALL') {
+      const viewStores = [u.store, ...(u.admin_stores ?? [])].filter(Boolean)
+      q = viewStores.length === 1 ? q.eq('store', viewStores[0]) : q.in('store', viewStores)
+    }
     const { data, error } = await q
     if (error) showToast('❌ Could not load tasks', 'err')
     else setTasks((data as Task[]) || [])
