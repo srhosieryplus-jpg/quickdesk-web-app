@@ -813,8 +813,13 @@ export default function SeasonBookPage() {
           .sb-new-btn { display: none !important; }
           .sb-drop-new { display: none !important; }
           .sb-click-hint { display: none !important; }
-          .sb-subbar { flex-direction: row-reverse; gap: 6px; padding: 6px 10px; }
-          .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 90px; }
+          .sb-header-title { position: static !important; transform: none !important; flex: 1; justify-content: flex-end; }
+          .sb-header-left { flex: 0 !important; }
+          .sb-header-right { display: none !important; }
+          .sb-subbar { gap: 6px; padding: 6px 10px; }
+          .sb-subbar-drop { order: 2; flex-shrink: 0; }
+          .sb-subbar-search { order: 1; flex: 1; min-width: 0; max-width: none !important; }
+          .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 80px; }
           .sb-subbar-divider { display: none !important; }
         }
       `}</style>
@@ -859,7 +864,7 @@ export default function SeasonBookPage() {
       {/* Header */}
       <div className="sb-header">
         {/* Left: hamburger + home */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+        <div className="sb-header-left" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
           <button onClick={() => setShowSeasonPanel(true)} title="Switch season"
             style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', cursor: 'pointer', borderRadius: 6, padding: '5px 7px', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', width: 34, height: 34, flexShrink: 0 }}>
             <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
@@ -873,7 +878,7 @@ export default function SeasonBookPage() {
         </div>
 
         {/* Center: title + season badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+        <div className="sb-header-title" style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
           <span style={{ fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>📒 SEASON BOOK</span>
           <span style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', fontSize: 12, fontWeight: 800, borderRadius: 12, padding: '3px 10px', border: '1.5px solid rgba(255,255,255,0.4)', cursor: 'pointer', whiteSpace: 'nowrap' }}
             onClick={() => setShowSeasonPanel(true)}>
@@ -882,7 +887,7 @@ export default function SeasonBookPage() {
         </div>
 
         {/* Right: action buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
+        <div className="sb-header-right" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
 
           {/* Cut-off date alert/admin control */}
           <div ref={cutoffPopoverRef} style={{ position: 'relative' }}>
@@ -1001,7 +1006,7 @@ export default function SeasonBookPage() {
       {/* Combined sub-bar: Drop | search | active filters */}
       <div className="sb-subbar">
         {/* Drop dropdown — left edge, no sidebar spacer needed here */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 4 }}>
+        <div className="sb-subbar-drop" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 4 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>
           <select className="sb-drop-select"
             value={activeDropName ?? ''}
@@ -1036,7 +1041,7 @@ export default function SeasonBookPage() {
         <div className="sb-subbar-divider" style={{ width: 1, height: 20, background: border, flexShrink: 0 }} />
 
         {/* Search — aligns with grand total box */}
-        <div ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
+        <div className="sb-subbar-search" ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
           <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
             <span style={{ padding: '0 8px', color: gray, fontSize: 14 }}>🔍</span>
             <input
