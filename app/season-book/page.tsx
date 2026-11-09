@@ -169,7 +169,9 @@ function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () =
     const { error: upErr } = await supabase.storage.from('invoices').upload(path, file, { upsert: true })
     if (upErr) { setUploading(false); return }
     const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path)
-    const { error: dbErr } = await supabase.from('season_ledger').update({ invoice_file_url: urlData.publicUrl }).eq('id', row.id)
+    // append cache-buster so browser doesn't serve a stale cached PDF for a different file
+    const urlWithBust = `${urlData.publicUrl}?v=${Date.now()}`
+    const { error: dbErr } = await supabase.from('season_ledger').update({ invoice_file_url: urlWithBust }).eq('id', row.id)
     if (dbErr) { setUploading(false); return }
     setUploading(false)
     onUpdated()
