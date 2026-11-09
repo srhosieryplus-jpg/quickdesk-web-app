@@ -289,11 +289,16 @@ export default function SettingsPage() {
   function saveEditVendor() {
     if (!editVendor) return
     const target = filteredVendors[editVendor.idx]
-    setVendors(prev => prev.map((v, i) => {
-      const fullIdx = prev.findIndex(x => x === target)
-      return i === fullIdx ? { vendor_id: editVendor.vendor_id, brand: editVendor.brand } : v
-    }))
-    saveVendorEdit(target.vendor_id, target.brand, editVendor.vendor_id, editVendor.brand)
+    if (!target) return
+    const origVid = target.vendor_id
+    const origBrand = target.brand
+    // Match by value not reference
+    setVendors(prev => prev.map(v =>
+      v.vendor_id === origVid && v.brand === origBrand
+        ? { vendor_id: editVendor.vendor_id, brand: editVendor.brand }
+        : v
+    ))
+    saveVendorEdit(origVid, origBrand, editVendor.vendor_id, editVendor.brand)
     setEditVendor(null)
     showToast('✅ Saved')
   }
