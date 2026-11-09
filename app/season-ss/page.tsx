@@ -546,6 +546,8 @@ export default function SeasonSSPage() {
           .qs-header { padding: 10px 12px; }
           .modal-tabs { overflow-x: auto; flex-wrap: nowrap; }
           .modal-tab { padding: 6px 12px; white-space: nowrap; font-size: 11px; }
+          /* Hide the right-side admin panel in header on mobile */
+          .ss-header-right { display: none !important; }
         }
       `}</style>
 
@@ -582,7 +584,7 @@ export default function SeasonSSPage() {
           <span style={{ fontSize: 14, fontWeight: 600, color: '#fcd34d' }}>Invoice Log</span>
         </div>
 
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+        <div className="ss-header-right" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
           {cutoffInEffect && (
             <span style={{ background: '#fef08a', color: '#713f12', border: '1.5px solid #ca8a04', borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap', animation: 'cutoff-pulse 2s ease-in-out infinite' }}>
               ⚠️ SS Cut-Off In Effect
