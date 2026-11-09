@@ -287,6 +287,7 @@ export default function SeasonBookPage() {
   const [quickPayVendorId, setQuickPayVendorId] = useState<string | null>(null)
   // Invoice modal
   const [invoiceBrand, setInvoiceBrand] = useState<string | null>(null)
+  const [invoiceVendorBrands, setInvoiceVendorBrands] = useState<string[] | null>(null) // multi-brand vendor invoice
   const [invoiceStoreFilter, setInvoiceStoreFilter] = useState<string | null>(null) // null = both stores
 
   // Brand search inside new-entry modal
@@ -1431,6 +1432,12 @@ export default function SeasonBookPage() {
 
                       {/* Vendor ID header */}
                       <div
+                        onClick={() => {
+                          setInvoiceVendorBrands(brands)
+                          setInvoiceBrand(null)
+                          setInvoiceStoreFilter(null)
+                          setModal('invoice')
+                        }}
                         onContextMenu={e => {
                           e.preventDefault()
                           if (brands.length === 1) {
@@ -1439,8 +1446,8 @@ export default function SeasonBookPage() {
                             setBrandCtxEditVendor(vid === '—' ? '' : vid)
                           }
                         }}
-                        title="Right-click to edit vendor / brand"
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#f5f3ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap' }}>
+                        title="Click to view invoices · Right-click to edit vendor / brand"
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#f5f3ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap', cursor: 'pointer' }}>
                         <span style={{ fontSize: 13, fontWeight: 800, color: purpleD }}>{vid}</span>
                         <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
                         <span style={{ fontSize: 11, color: gray }}>{totalDrops} drop{totalDrops !== 1 ? 's' : ''}</span>
@@ -1672,12 +1679,23 @@ export default function SeasonBookPage() {
               {/* Only show form once brand is chosen */}
               {activeBrand && <>
 
-              {/* Drop number */}
-              <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <label style={lbl}>Drop #</label>
-                <input type="number" min={1} value={formDrop}
-                  onChange={e => setFormDrop(parseInt(e.target.value) || 1)}
-                  style={{ ...inp, width: 70 }} />
+              {/* Brand + Drop row */}
+              <div style={{ marginBottom: 14, display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end' }}>
+                <div>
+                  <label style={lbl}>Brand</label>
+                  <input
+                    value={activeBrand}
+                    onChange={e => setActiveBrand(e.target.value)}
+                    placeholder="Brand name"
+                    style={{ ...inp, fontSize: 13 }}
+                  />
+                </div>
+                <div>
+                  <label style={lbl}>Drop #</label>
+                  <input type="number" min={1} value={formDrop}
+                    onChange={e => setFormDrop(parseInt(e.target.value) || 1)}
+                    style={{ ...inp, width: 70 }} />
+                </div>
               </div>
 
               {/* Per-store blocks */}
@@ -2071,20 +2089,24 @@ export default function SeasonBookPage() {
       })()}
 
       {/* ── Invoice Modal ───────────────────────────────────────────────────── */}
-      {modal === 'invoice' && invoiceBrand && (() => {
-        const iRows = rows.filter(r => r.brand === invoiceBrand)
+      {modal === 'invoice' && (invoiceBrand || invoiceVendorBrands) && (() => {
+        const activeBrands = invoiceVendorBrands ?? (invoiceBrand ? [invoiceBrand] : [])
+        const iRows = rows.filter(r => activeBrands.includes(r.brand))
         const storesToShow = invoiceStoreFilter
           ? [invoiceStoreFilter]
           : STORES.filter(s => iRows.some(r => r.store === s))
         const iDrops = Array.from(new Set(iRows.map(r => r.drop_num))).sort((a, b) => a - b)
         const sideBySide = !invoiceStoreFilter && storesToShow.length > 1
+        const invoiceTitle = invoiceVendorBrands
+          ? (invoiceVendorBrands.length === 1 ? invoiceVendorBrands[0] : `${invoiceVendorBrands[0]} +${invoiceVendorBrands.length - 1}`)
+          : (invoiceBrand ?? '')
 
         return (
           <div className="modal-bg">
             <div className="modal-box" style={{ maxWidth: sideBySide ? 860 : 520 }}>
               <div className="modal-head">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: 16, fontWeight: 900, color: purpleD }}>📄 {invoiceBrand}</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: purpleD }}>📄 {invoiceTitle}</div>
                   <div style={{ fontSize: 12, color: gray }}>{season}</div>
                   {/* Store tabs */}
                   <div style={{ display: 'flex', gap: 4, marginLeft: 4 }}>
@@ -2103,18 +2125,18 @@ export default function SeasonBookPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {canPay && <button onClick={() => { setQuickPayBrand(invoiceBrand); setQuickPayVendorId(null); setQuickPayAmt(''); setQuickPayDate(today()); setPaySelectedIds(new Set()); setPayBrandSearch(''); setPerRowAmts(new Map()); setUsePerRow(false); setModal('quick-pay') }}
+                  {canPay && <button onClick={() => { setQuickPayBrand(activeBrands[0] ?? null); setQuickPayVendorId(null); setQuickPayAmt(''); setQuickPayDate(today()); setPaySelectedIds(new Set()); setPayBrandSearch(''); setPerRowAmts(new Map()); setUsePerRow(false); setModal('quick-pay') }}
                     style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     💳 Pay
                   </button>}
                   <button onClick={() => {
                       if (cutoffInEffect && !isAdmin) { alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.'); return }
-                      setModal('none'); openNewEntry(invoiceBrand)
+                      setModal('none'); openNewEntry(activeBrands[0] ?? '')
                     }}
                     style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     + Drop
                   </button>
-                  <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => { setModal('none'); setInvoiceVendorBrands(null) }} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
                 </div>
               </div>
               <div className="modal-body" style={{ padding: '12px 14px 18px' }}>
@@ -2144,17 +2166,20 @@ export default function SeasonBookPage() {
                           </div>
                         ) : (
                           <div style={{ border: `1px solid ${border}`, borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
-                            {sDrops.map((dropNum, di) => {
-                              const dRow = sRows.find(r => r.drop_num === dropNum)!
+                            {sRows.map((dRow, di) => {
+                              const dropNum = dRow.drop_num
                               const bal = dRow.balance_due ?? 0
-                              const isLast = di === sDrops.length - 1
+                              const isLast = di === sRows.length - 1
                               const isRowCancelled = dRow.is_cancelled ?? false
                               return (
-                                <div key={dropNum}
+                                <div key={dRow.id}
                                   style={{ borderBottom: isLast ? 'none' : `1px solid #f3f4f6`, padding: '10px 12px', background: isRowCancelled ? '#fafafa' : undefined, opacity: isRowCancelled ? 0.7 : 1 }}>
                                   {/* Drop header row */}
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      {activeBrands.length > 1 && (
+                                        <span style={{ fontSize: 10, fontWeight: 700, color: purpleD, background: '#ede9fe', borderRadius: 4, padding: '1px 6px' }}>{dRow.brand}</span>
+                                      )}
                                       <span style={{ fontWeight: 800, fontSize: 12, color: isRowCancelled ? gray : purpleD, textDecoration: isRowCancelled ? 'line-through' : undefined }}>Drop {dropNum}{dRow.drop_name ? ` · ${dRow.drop_name}` : ''}</span>
                                       {isRowCancelled && (
                                         <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 4, padding: '1px 5px' }}>Cancelled</span>
