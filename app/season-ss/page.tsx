@@ -465,7 +465,9 @@ export default function SeasonSSPage() {
     })
   }, [ssRows, ssFilter, ssStoreFilter])
 
-  const isAdmin      = user?.store === 'ALL'
+  const isAdmin        = user?.store === 'ALL'
+  const hasMultiStore  = isAdmin || (user?.admin_stores?.length ?? 0) > 0
+  const viewStores     = user ? [user.store, ...(user.admin_stores ?? [])].filter(Boolean) : []
   const loggedCount  = storeRows.filter(r => r.logged && !r.flagged).length
   const flaggedCount = storeRows.filter(r => r.flagged).length
   const adminLoggedCount  = ssRows.filter(r => r.logged && !r.flagged).length
@@ -646,6 +648,24 @@ export default function SeasonSSPage() {
               </div>
             )}
           </div>
+
+          {hasMultiStore && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 90 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em' }}>STORE</label>
+              <select
+                value={ssStoreFilter}
+                onChange={e => setSsStoreFilter(e.target.value)}
+                style={{ border: `1.5px solid ${border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, fontWeight: 700, color: ssStoreFilter !== 'ALL' ? green : '#374151', background: ssStoreFilter !== 'ALL' ? '#f0fdf4' : '#fff', cursor: 'pointer' }}>
+                <option value="ALL">All Stores</option>
+                {(isAdmin
+                  ? Array.from(new Set(ssRows.map(r => r.store))).sort()
+                  : viewStores
+                ).map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <button type="submit" disabled={(!invoiceQ.trim() && !brandQ.trim()) || searching}
             className="ss-search-btn"
@@ -830,7 +850,7 @@ export default function SeasonSSPage() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  {isAdmin && <th>Store</th>}
+                  {hasMultiStore && <th>Store</th>}
                   <th>Brand</th>
                   <th>Invoice #</th>
                   <th className="ss-col-hide">PO #</th>
@@ -856,7 +876,7 @@ export default function SeasonSSPage() {
                       onClick={() => { setState({ phase: 'found', row: r }); setInvoiceQ(r.invoice_no); setLoggedRow(r.logged ? r : null) }}
                       onContextMenu={e => { e.preventDefault(); setCtxMenu({ id: r.id, x: e.clientX, y: e.clientY }) }}>
                       <td style={{ color: dim, whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(r.created_at)}</td>
-                      {isAdmin && <td style={{ fontWeight: 700, color: logged ? '#15803d' : greenD, fontSize: 11 }}>{r.store}</td>}
+                      {hasMultiStore && <td style={{ fontWeight: 700, color: logged ? '#15803d' : greenD, fontSize: 11 }}>{r.store}</td>}
                       <td style={{ fontWeight: 600, color: txt }}>{r.brand}</td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: logged ? '#14532d' : greenD, fontWeight: 700 }}>{r.invoice_no}</td>
                       <td className="ss-col-hide" style={{ fontFamily: 'monospace', fontSize: 11, color: txt }}>{r.po_no || '—'}</td>
@@ -911,7 +931,7 @@ export default function SeasonSSPage() {
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, fontSize: 11, color: logged ? '#16a34a' : '#6b7280', flexWrap: 'wrap' }}>
-                    {isAdmin && <><span style={{ fontWeight: 700 }}>{r.store}</span><span>·</span></>}
+                    {hasMultiStore && <><span style={{ fontWeight: 700 }}>{r.store}</span><span>·</span></>}
                     <span>{fmtDate(r.created_at)}</span>
                     {r.logged_by && <><span>·</span><span>{displayUser(r.logged_by)}</span></>}
                     {r.po_no && <><span>·</span><span>PO: {r.po_no}</span></>}

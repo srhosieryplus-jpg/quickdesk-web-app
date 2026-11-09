@@ -503,7 +503,9 @@ export default function SeasonAWPage() {
     )
   }
 
-  const isAdmin      = user?.store === 'ALL'
+  const isAdmin        = user?.store === 'ALL'
+  const hasMultiStore  = isAdmin || (user?.admin_stores?.length ?? 0) > 0
+  const viewStores     = user ? [user.store, ...(user.admin_stores ?? [])].filter(Boolean) : []
   const loggedCount  = storeRows.filter(r => r.logged && !r.flagged).length
   const flaggedCount = storeRows.filter(r => r.flagged).length
   const adminLoggedCount  = awRows.filter(r => r.logged && !r.flagged).length
@@ -803,6 +805,20 @@ export default function SeasonAWPage() {
           <input value={tableFilter} onChange={e => setTableFilter(e.target.value)}
             placeholder="invoice, brand, PO, user…"
             style={{ ...inputSt, flex: 1 }} />
+          {hasMultiStore && (
+            <select
+              value={awStoreFilter}
+              onChange={e => setAwStoreFilter(e.target.value)}
+              style={{ ...inputSt, minWidth: 90, fontWeight: 700, color: awStoreFilter !== 'ALL' ? blueD : '#374151', background: awStoreFilter !== 'ALL' ? '#eff6ff' : '#fff', cursor: 'pointer' }}>
+              <option value="ALL">All Stores</option>
+              {(isAdmin
+                ? Array.from(new Set(awRows.map(r => r.store))).sort()
+                : viewStores
+              ).map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          )}
           <button onClick={() => fetchStoreRows()} className="aw-refresh-btn" style={{ background: '#dbeafe', border: 'none', color: blueD, borderRadius: 5, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ↺ Refresh
           </button>
@@ -841,7 +857,7 @@ export default function SeasonAWPage() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  {isAdmin && <th>Store</th>}
+                  {hasMultiStore && <th>Store</th>}
                   <th>Brand</th>
                   <th>Invoice #</th>
                   <th className="aw-col-hide">PO #</th>
@@ -867,7 +883,7 @@ export default function SeasonAWPage() {
                       onClick={() => { setState({ phase: 'found', row: r }); setInvoiceQ(r.invoice_no); setLoggedRow(r.logged ? r : null) }}
                       onContextMenu={e => { e.preventDefault(); setCtxMenu({ id: r.id, x: e.clientX, y: e.clientY }) }}>
                       <td style={{ color: dim, whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(r.created_at)}</td>
-                      {isAdmin && <td style={{ fontWeight: 700, color: logged ? '#15803d' : blueD, fontSize: 11 }}>{r.store}</td>}
+                      {hasMultiStore && <td style={{ fontWeight: 700, color: logged ? '#15803d' : blueD, fontSize: 11 }}>{r.store}</td>}
                       <td style={{ fontWeight: 600, color: txt }}>{r.brand}</td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: logged ? '#14532d' : blueD, fontWeight: 700 }}>{r.invoice_no}</td>
                       <td className="aw-col-hide" style={{ fontFamily: 'monospace', fontSize: 11, color: txt }}>{r.po_no || '—'}</td>
@@ -922,7 +938,7 @@ export default function SeasonAWPage() {
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, fontSize: 11, color: logged ? '#16a34a' : '#6b7280', flexWrap: 'wrap' }}>
-                    {isAdmin && <><span style={{ fontWeight: 700 }}>{r.store}</span><span>·</span></>}
+                    {hasMultiStore && <><span style={{ fontWeight: 700 }}>{r.store}</span><span>·</span></>}
                     <span>{fmtDate(r.created_at)}</span>
                     {r.logged_by && <><span>·</span><span>{displayUser(r.logged_by)}</span></>}
                     {r.po_no && <><span>·</span><span>PO: {r.po_no}</span></>}
