@@ -302,6 +302,8 @@ export default function SettingsPage() {
 
   function deleteVendorRow(idx: number) {
     const target = filteredVendors[idx]
+    console.log('[deleteVendorRow]', idx, target)
+    if (!target) { console.warn('[deleteVendorRow] no target at idx', idx); return }
     // Only removes from future options — existing ledger rows keep their vendor_id
     setVendors(prev => {
       const fullIdx = prev.findIndex(v => v === target)
