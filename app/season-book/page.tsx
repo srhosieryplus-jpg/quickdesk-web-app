@@ -191,6 +191,11 @@ export default function SeasonBookPage() {
   const [rowCtxDelMode, setRowCtxDelMode] = useState(false)
   const [rowCtxDelErr, setRowCtxDelErr] = useState(false)
   const rowCtxRef = useRef<HTMLDivElement>(null)
+  const [brandCtxMenu, setBrandCtxMenu] = useState<{ x: number; y: number; brand: string; vendorId: string } | null>(null)
+  const [brandCtxEditBrand, setBrandCtxEditBrand] = useState('')
+  const [brandCtxEditVendor, setBrandCtxEditVendor] = useState('')
+  const [brandCtxSaving, setBrandCtxSaving] = useState(false)
+  const brandCtxRef = useRef<HTMLDivElement>(null)
   const [quickPayBrand, setQuickPayBrand] = useState<string | null>(null)
   const [quickPayAmt, setQuickPayAmt] = useState('')
   const [quickPayDate, setQuickPayDate] = useState(today())
@@ -525,6 +530,9 @@ export default function SeasonBookPage() {
       }
       if (rowCtxRef.current && !rowCtxRef.current.contains(e.target as Node)) {
         setRowCtxMenu(null); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false)
+      }
+      if (brandCtxRef.current && !brandCtxRef.current.contains(e.target as Node)) {
+        setBrandCtxMenu(null)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -1418,10 +1426,19 @@ export default function SeasonBookPage() {
                     <div key={brand} id={`brand-${brand}`}
                       style={{ marginBottom: 16, border: `2px solid ${isHighlighted ? purple : border}`, borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
 
-                      {/* Brand header — single-click to open full invoice view */}
+                      {/* Brand header — single-click to open full invoice view, right-click to edit */}
                       <div
                         onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(null); setModal('invoice') }}
-                        title="Click to open invoice view"
+                        onContextMenu={e => {
+                          e.preventDefault()
+                          const assigned = brandAssignedVendors.get(brand)
+                          const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(brand) ?? [])
+                          const vid = vids[0] ?? ''
+                          setBrandCtxMenu({ x: e.clientX, y: e.clientY, brand, vendorId: vid })
+                          setBrandCtxEditBrand(brand)
+                          setBrandCtxEditVendor(vid)
+                        }}
+                        title="Click to open invoice view · Right-click to edit brand / vendor"
                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#f5f3ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap', cursor: 'pointer' }}>
                         {(() => {
                           const assigned = brandAssignedVendors.get(brand)
@@ -2911,6 +2928,55 @@ export default function SeasonBookPage() {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Brand Header Right-Click Edit ─────────────────────────────────────── */}
+      {brandCtxMenu && (
+        <div ref={brandCtxRef} style={{ position: 'fixed', left: brandCtxMenu.x, top: brandCtxMenu.y, zIndex: 2000, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 10, boxShadow: '0 4px 24px rgba(0,0,0,0.18)', minWidth: 260, padding: '14px 16px' }}
+          onMouseDown={e => e.stopPropagation()}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: purpleD, marginBottom: 10 }}>✏️ Edit Brand / Vendor</div>
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: gray, display: 'block', marginBottom: 3 }}>Brand name</label>
+            <input value={brandCtxEditBrand} onChange={e => setBrandCtxEditBrand(e.target.value)}
+              style={{ width: '100%', border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: gray, display: 'block', marginBottom: 3 }}>Vendor ID</label>
+            <input value={brandCtxEditVendor} onChange={e => setBrandCtxEditVendor(e.target.value)}
+              style={{ width: '100%', border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onMouseDown={e => e.stopPropagation()} onClick={() => setBrandCtxMenu(null)}
+              style={{ flex: 1, background: 'none', border: `1.5px solid ${border}`, borderRadius: 6, padding: '6px 0', fontSize: 12, fontWeight: 700, color: gray, cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button disabled={brandCtxSaving} onMouseDown={e => e.stopPropagation()} onClick={async () => {
+              if (!brandCtxMenu) return
+              const newBrand = brandCtxEditBrand.trim()
+              const newVendor = brandCtxEditVendor.trim()
+              if (!newBrand) return
+              setBrandCtxSaving(true)
+              // Update season_ledger rows
+              if (newBrand !== brandCtxMenu.brand) {
+                await supabase.from('season_ledger').update({ brand: newBrand }).eq('brand', brandCtxMenu.brand).eq('season', season)
+              }
+              if (newVendor !== brandCtxMenu.vendorId && brandCtxMenu.vendorId) {
+                await supabase.from('season_ledger').update({ vendor_id: newVendor || null }).eq('vendor_id', brandCtxMenu.vendorId).eq('brand', brandCtxMenu.brand).eq('season', season)
+              }
+              // Update vendors table
+              if (newBrand !== brandCtxMenu.brand || newVendor !== brandCtxMenu.vendorId) {
+                await supabase.from('vendors').update({ brand: newBrand, vendor_id: newVendor || brandCtxMenu.vendorId }).eq('brand', brandCtxMenu.brand).eq('vendor_id', brandCtxMenu.vendorId)
+              }
+              setBrandCtxSaving(false)
+              setBrandCtxMenu(null)
+              showToast('✅ Updated')
+              if (user) fetchRows(season, user)
+            }}
+              style={{ flex: 1, background: purpleD, border: 'none', borderRadius: 6, padding: '6px 0', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer', opacity: brandCtxSaving ? 0.6 : 1 }}>
+              {brandCtxSaving ? 'Saving…' : 'Save'}
+            </button>
           </div>
         </div>
       )}
