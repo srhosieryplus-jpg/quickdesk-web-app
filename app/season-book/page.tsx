@@ -818,8 +818,8 @@ export default function SeasonBookPage() {
           .sb-header-left { flex: 0 !important; }
           .sb-header-right { display: none !important; }
           .sb-subbar { gap: 6px; padding: 6px 8px; }
-          .sb-subbar-drop { flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
-          .sb-subbar-search { flex: 1; min-width: 0; max-width: none !important; }
+          .sb-subbar-drop { order: 99; flex-shrink: 0; display: flex; align-items: center; gap: 4px; margin-left: auto; }
+          .sb-subbar-search { order: 1; flex: 1; min-width: 0; max-width: none !important; }
           .sb-drop-label { display: none !important; }
           .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 70px; }
           .sb-subbar-divider { display: none !important; }
