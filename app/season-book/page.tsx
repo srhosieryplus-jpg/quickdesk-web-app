@@ -1392,74 +1392,68 @@ export default function SeasonBookPage() {
                 )
               })()}
 
-              {/* All brands — compact cards (filtered by drop name if active) */}
-              {filteredBrands
-                .filter(b => !activeBrand || b === activeBrand)
-                .map(brand => {
-                  // Scope rows to active drop name filter
-                  const allBRows = rows.filter(r => r.brand === brand)
-                  const bRows = activeDropName
-                    ? allBRows.filter(r => r.drop_name === activeDropName)
-                    : allBRows
-                  if (bRows.length === 0) return null
-                  const bDrops = Array.from(new Set(bRows.map(r => r.drop_num))).sort((a, b) => a - b)
-                  const totBal = bRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
-                  const totInit = bRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
-                  const isHighlighted = activeBrand === brand
-                  const storesPresent = STORES.filter(s => bRows.some(r => r.store === s))
+              {/* All brands — grouped by Vendor ID, Brand as first column */}
+              {(() => {
+                // Build vendor-grouped cards
+                const brandsToShow = filteredBrands.filter(b => !activeBrand || b === activeBrand)
+
+                // Group brands by their vendor ID
+                const vendorGroups = new Map<string, string[]>()
+                for (const brand of brandsToShow) {
+                  const assigned = brandAssignedVendors.get(brand)
+                  const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(brand) ?? [])
+                  const vid = vids[0] ?? '—'
+                  if (!vendorGroups.has(vid)) vendorGroups.set(vid, [])
+                  vendorGroups.get(vid)!.push(brand)
+                }
+
+                return Array.from(vendorGroups.entries()).map(([vid, brands]) => {
+                  // All rows for this vendor group
+                  const vRows = brands.flatMap(brand => {
+                    const allBRows = rows.filter(r => r.brand === brand)
+                    return activeDropName ? allBRows.filter(r => r.drop_name === activeDropName) : allBRows
+                  })
+                  if (vRows.length === 0) return null
+
+                  const totBal  = vRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                  const totInit = vRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
+                  const totalDrops = Array.from(new Set(vRows.map(r => `${r.brand}|${r.drop_num}`))).length
+                  const isHighlighted = brands.some(b => activeBrand === b)
 
                   return (
-                    <div key={brand} id={`brand-${brand}`}
+                    <div key={vid} id={`vendor-${vid}`}
                       style={{ marginBottom: 16, border: `2px solid ${isHighlighted ? purple : border}`, borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
 
-                      {/* Brand header — single-click to open full invoice view, right-click to edit */}
+                      {/* Vendor ID header */}
                       <div
-                        onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(null); setModal('invoice') }}
                         onContextMenu={e => {
                           e.preventDefault()
-                          const assigned = brandAssignedVendors.get(brand)
-                          const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(brand) ?? [])
-                          const vid = vids[0] ?? ''
-                          setBrandCtxMenu({ x: e.clientX, y: e.clientY, brand, vendorId: vid, editMode: false })
-                          setBrandCtxEditBrand(brand)
-                          setBrandCtxEditVendor(vid)
+                          if (brands.length === 1) {
+                            setBrandCtxMenu({ x: e.clientX, y: e.clientY, brand: brands[0], vendorId: vid === '—' ? '' : vid, editMode: false })
+                            setBrandCtxEditBrand(brands[0])
+                            setBrandCtxEditVendor(vid === '—' ? '' : vid)
+                          }
                         }}
-                        title="Click to open invoice view · Right-click to edit brand / vendor"
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#f5f3ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap', cursor: 'pointer' }}>
-                        {(() => {
-                          const assigned = brandAssignedVendors.get(brand)
-                          const vids = assigned && assigned.size > 0 ? Array.from(assigned) : (brandToVendors.get(brand) ?? [])
-                          if (vids.length === 0) return null
-                          return vids.map(vid => (
-                            <span key={vid}
-                              onClick={e => { e.stopPropagation(); setActiveVendorId(activeVendorId === vid ? null : vid) }}
-                              title={`Filter by vendor ${vid}`}
-                              style={{ fontSize: 13, fontWeight: 700, color: purpleD, cursor: 'pointer' }}>
-                              {vid}
-                            </span>
-                          ))
-                        })()}
-                        <span style={{ fontSize: 13, fontWeight: 500, color: purpleD }}>{brand}</span>
+                        title="Right-click to edit vendor / brand"
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isHighlighted ? '#ede9fe' : '#f5f3ff', borderBottom: `1px solid ${border}`, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: purpleD }}>{vid}</span>
                         <span style={{ fontSize: 11, color: gray, background: '#ede9fe', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{season}</span>
-                        <span style={{ fontSize: 11, color: gray }}>{bDrops.length} drop{bDrops.length !== 1 ? 's' : ''}</span>
+                        <span style={{ fontSize: 11, color: gray }}>{totalDrops} drop{totalDrops !== 1 ? 's' : ''}</span>
                         {totBal <= 0.001 && totInit > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '1px 7px' }}>
-                            ✓ Paid
-                          </span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '1px 7px' }}>✓ Paid</span>
                         )}
-                        {pendingErrorBrands.has(brand) && (
-                          <span title="Open error form(s) for this brand — not yet resolved" style={{ fontSize: 11, fontWeight: 800, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '1px 8px', whiteSpace: 'nowrap' }}>
-                            ⚠️ Error Form
-                          </span>
+                        {brands.some(b => pendingErrorBrands.has(b)) && (
+                          <span title="Open error form(s) — not yet resolved" style={{ fontSize: 11, fontWeight: 800, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '1px 8px', whiteSpace: 'nowrap' }}>⚠️ Error Form</span>
                         )}
-                        <span className="sb-click-hint" style={{ fontSize: 10, color: gray, marginLeft: 'auto' }}>click to open invoice</span>
+                        <span className="sb-click-hint" style={{ fontSize: 10, color: gray, marginLeft: 'auto' }}>click row to open invoice</span>
                       </div>
 
-                      {/* Per-store summary rows — click to open single-store invoice */}
+                      {/* Rows table — Brand is first column */}
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
                           <tr style={{ background: '#f8f7ff' }}>
-                            <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Drop</th>
+                            <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Brand</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Drop</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Order #</th>
@@ -1471,23 +1465,19 @@ export default function SeasonBookPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(() => {
-                            // Build rows: one per unique (drop_num, store) combo, ordered by drop_num then store
+                          {brands.flatMap(brand => {
+                            const allBRows = rows.filter(r => r.brand === brand)
+                            const bRows = activeDropName ? allBRows.filter(r => r.drop_name === activeDropName) : allBRows
                             const dropStoreRows: { dropNum: number; dropName: string | null; store: string; dropRows: LedgerRow[] }[] = []
                             const seenKeys = new Set<string>()
                             for (const r of bRows) {
                               const key = `${r.drop_num}|${r.store}`
                               if (!seenKeys.has(key)) {
                                 seenKeys.add(key)
-                                dropStoreRows.push({
-                                  dropNum: r.drop_num,
-                                  dropName: r.drop_name,
-                                  store: r.store,
-                                  dropRows: bRows.filter(x => x.drop_num === r.drop_num && x.store === r.store),
-                                })
+                                dropStoreRows.push({ dropNum: r.drop_num, dropName: r.drop_name, store: r.store, dropRows: bRows.filter(x => x.drop_num === r.drop_num && x.store === r.store) })
                               }
                             }
-                            return dropStoreRows.map(({ dropNum, dropName, store, dropRows }) => {
+                            return dropStoreRows.map(({ dropNum, dropName, store, dropRows }, rowIdx) => {
                               const activeRows = dropRows.filter(r => !r.is_cancelled)
                               const sUnits = activeRows.reduce((s, r) => s + (r.units ?? 0), 0)
                               const sInit  = activeRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
@@ -1498,47 +1488,39 @@ export default function SeasonBookPage() {
                               const invoiceNums = Array.from(new Set(activeRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
                               const poNums = Array.from(new Set(activeRows.map(r => r.order_num).filter((n): n is string => !!n)))
                               const invoiceFileUrls = Array.from(new Set(activeRows.map(r => r.invoice_file_url).filter((u): u is string => !!u)))
-                              const rowKey = `${dropNum}|${store}`
                               return (
-                                <tr key={rowKey}
+                                <tr key={`${brand}|${dropNum}|${store}`}
                                   onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
                                   title="Click to view invoice · Right-click to delete"
                                   style={{ cursor: 'pointer', borderBottom: `1px solid #f3f4f6` }}
                                   onMouseEnter={e => (e.currentTarget.style.background = '#faf8ff')}
                                   onMouseLeave={e => (e.currentTarget.style.background = '')}
                                   onContextMenu={e => { e.preventDefault(); setRowCtxMenu({ x: e.clientX, y: e.clientY, rows: dropRows }); setRowCtxDelMode(false); setRowCtxDelPw(''); setRowCtxDelErr(false) }}>
-                                  <td style={{ padding: '8px 14px', fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>
+                                  <td style={{ padding: '8px 14px', fontSize: 11, fontWeight: 700, color: purpleD, whiteSpace: 'nowrap' }}>
+                                    {rowIdx === 0 ? brand : ''}
+                                  </td>
+                                  <td style={{ padding: '8px 10px', fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>
                                     {dropName || `Drop ${dropNum}`}
                                   </td>
                                   <td style={{ padding: '8px 10px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>
-                                    {store}
-                                    {hasCancelled && <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', marginLeft: 4 }}>🚫</span>}
+                                    {store}{hasCancelled && <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', marginLeft: 4 }}>🚫</span>}
                                   </td>
                                   <td style={{ padding: '8px 10px', textAlign: 'left' }}>
                                     {invoiceNums.length > 0 ? invoiceNums.map(inv => (
-                                      <span key={inv} style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>
-                                        {inv}
-                                      </span>
+                                      <span key={inv} style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>{inv}</span>
                                     )) : <span style={{ color: gray }}>—</span>}
                                   </td>
                                   <td style={{ padding: '8px 10px', textAlign: 'left' }}>
                                     {poNums.length > 0 ? poNums.map(o => (
-                                      <span key={o} style={{ fontSize: 10, color: '#6b21a8', fontWeight: 700, background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>
-                                        {o}
-                                      </span>
+                                      <span key={o} style={{ fontSize: 10, color: '#6b21a8', fontWeight: 700, background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>{o}</span>
                                     )) : <span style={{ color: gray }}>—</span>}
                                   </td>
                                   <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                                    {invoiceFileUrls.length > 0
-                                      ? invoiceFileUrls.map((url, i) => (
-                                          <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                            style={{ color: purpleD, fontWeight: 700, fontSize: 13, textDecoration: 'none', display: 'inline-block', marginLeft: i > 0 ? 4 : 0 }}
-                                            title="View PDF invoice">
-                                            📄
-                                          </a>
-                                        ))
-                                      : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
-                                    }
+                                    {invoiceFileUrls.length > 0 ? invoiceFileUrls.map((url, i) => (
+                                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                        style={{ color: purpleD, fontWeight: 700, fontSize: 13, textDecoration: 'none', display: 'inline-block', marginLeft: i > 0 ? 4 : 0 }}
+                                        title="View PDF invoice">📄</a>
+                                    )) : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>}
                                   </td>
                                   <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{sUnits || '—'}</td>
                                   <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit, rowCurrency)}</td>
@@ -1547,17 +1529,17 @@ export default function SeasonBookPage() {
                                 </tr>
                               )
                             })
-                          })()}
+                          })}
                         </tbody>
-                        {/* Total Owed footer — aligns under Balance Due */}
-                        {bRows.length > 1 && (
+                        {/* Total Owed footer */}
+                        {vRows.length > 1 && (
                           <tfoot>
                             <tr style={{ background: totBal > 0.001 ? '#fef2f2' : '#f0fdf4', borderTop: `2px solid ${border}` }}>
-                              <td colSpan={8} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
+                              <td colSpan={9} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
                                 Total Owed
                               </td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 13, fontWeight: 900, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>
-                                {fmt$(totBal, (bRows[0]?.currency as Currency) ?? 'USD')}
+                                {fmt$(totBal, (vRows[0]?.currency as Currency) ?? 'USD')}
                               </td>
                             </tr>
                           </tfoot>
@@ -1566,7 +1548,7 @@ export default function SeasonBookPage() {
                     </div>
                   )
                 })
-              }
+              })()}
 
               {/* Show "clear filter" hint when a brand is selected */}
               {activeBrand && (
