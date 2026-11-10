@@ -442,7 +442,7 @@ export default function SeasonBookPage() {
     const { error } = await supabase.from(half).insert({
       store: row.store,
       brand: row.brand,
-      invoice_no: row.invoice_num || `SB-${row.id.slice(0,8)}`,
+      invoice_no: row.invoice_num || null,
       po_no: null,
       qty: row.units,
       logged: false,
