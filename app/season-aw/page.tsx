@@ -499,14 +499,14 @@ export default function SeasonAWPage() {
     const q = tableFilter.toLowerCase()
     const rows = q
       ? storeRows.filter(r =>
-          r.invoice_no.toLowerCase().includes(q) ||
-          r.brand.toLowerCase().includes(q) ||
+          (r.invoice_no || '').toLowerCase().includes(q) ||
+          (r.brand || '').toLowerCase().includes(q) ||
           (r.po_no || '').toLowerCase().includes(q) ||
-          r.store.toLowerCase().includes(q) ||
+          (r.store || '').toLowerCase().includes(q) ||
           (r.logged_by || '').toLowerCase().includes(q)
         )
       : storeRows
-    return [...rows].sort((a, b) => a.brand.localeCompare(b.brand))
+    return [...rows].sort((a, b) => (a.brand ?? '').localeCompare(b.brand ?? ''))
   }, [storeRows, tableFilter])
 
   const filteredAW = useMemo(() => {
@@ -515,10 +515,10 @@ export default function SeasonAWPage() {
       const storeOk = awStoreFilter === 'ALL' || r.store === awStoreFilter
       if (!q) return storeOk
       return storeOk && (
-        r.invoice_no.toLowerCase().includes(q) ||
-        r.brand.toLowerCase().includes(q) ||
+        (r.invoice_no || '').toLowerCase().includes(q) ||
+        (r.brand || '').toLowerCase().includes(q) ||
         (r.po_no || '').toLowerCase().includes(q) ||
-        r.store.toLowerCase().includes(q)
+        (r.store || '').toLowerCase().includes(q)
       )
     })
   }, [awRows, awFilter, awStoreFilter])
