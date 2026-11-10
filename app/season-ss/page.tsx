@@ -579,13 +579,6 @@ export default function SeasonSSPage() {
           .ss-refresh-btn { display: none !important; }
           .ss-table-wrap { display: none; }
           .ss-cards { display: block; padding: 8px 12px; }
-          /* Search bar: stack vertically on mobile */
-          .ss-search-form { flex-direction: column; border-radius: 8px; overflow: hidden; }
-          .ss-search-inv { width: 100%; border-right: none; border-bottom: 1px solid #fef3c7; padding: 4px 10px; }
-          .ss-search-or { display: none; }
-          .ss-search-brand { width: 100%; border-left: none; border-bottom: 1px solid #fef3c7; padding: 4px 10px; }
-          .ss-search-btn { width: 100%; border-radius: 0 0 6px 6px; padding: 10px 16px; }
-          .ss-search-input { padding: 6px 0; font-size: 14px; width: 100%; }
           /* Result card: single column */
           .result-grid { grid-template-columns: 1fr; gap: 0; }
           .result-card { padding: 12px; }
