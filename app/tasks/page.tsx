@@ -150,6 +150,7 @@ export default function TasksPage() {
     const { error } = await supabase.from('tasks').update({
       task: editingTask.task,
       note: editingTask.note,
+      assigned_to: editingTask.assigned_to ?? null,
     }).eq('id', editingTask.id)
     setEditSaving(false)
     if (error) { showToast('❌ Update failed', 'err'); return }
@@ -331,7 +332,7 @@ export default function TasksPage() {
             <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', maxWidth: 900 }}>
               <thead>
                 <tr style={{ background: '#dbeafe', position: 'sticky', top: 0, zIndex: 1 }}>
-                  {['Date', 'Submitted By', 'Assigned To', 'Store', 'Task', 'Note', 'Completed', 'Done'].map(h => (
+                  {['Date', 'Submitted By', 'Assigned To', 'Store', 'Task', 'Note', 'Done', 'Completed'].map(h => (
                     <th key={h} style={{ padding: '6px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: tealD, borderBottom: `2px solid ${border}`, whiteSpace: 'nowrap' }}>
                       {h === 'Date' ? <><span>Date</span><span className="tasks-time-col"> / Time</span></> : h}
                     </th>
@@ -363,14 +364,6 @@ export default function TasksPage() {
                       <td style={{ ...tdSt, color: textColor, fontWeight: 600 }}>{t.store}</td>
                       <td style={{ ...tdSt, color: textColor, textDecoration: t.done ? 'line-through' : 'none' }}>{t.task}</td>
                       <td style={{ ...tdSt, color: dimColor }}>{t.note || ''}</td>
-                      <td style={{ ...tdSt, whiteSpace: 'nowrap', fontSize: 11 }}>
-                        {t.completed_at ? (
-                          <div>
-                            <div style={{ color: '#15803d', fontWeight: 700 }}>{formatDate(t.completed_at)}</div>
-                            {t.completed_by && <div style={{ color: '#16a34a', fontSize: 10 }}>{userNameMap.get(t.completed_by.toUpperCase()) || displayUser(t.completed_by)}</div>}
-                          </div>
-                        ) : <span style={{ color: '#d1d5db' }}>—</span>}
-                      </td>
                       <td style={{ ...tdSt, textAlign: 'center' }}>
                         {canCheck ? (
                           <input type="checkbox" checked={t.done} onChange={() => toggleDone(t)}
@@ -380,6 +373,14 @@ export default function TasksPage() {
                             ? <span style={{ color: '#15803d', fontWeight: 800, fontSize: 14 }}>✓</span>
                             : <span style={{ color: '#d1d5db' }}>—</span>
                         )}
+                      </td>
+                      <td style={{ ...tdSt, whiteSpace: 'nowrap', fontSize: 11 }}>
+                        {t.completed_at ? (
+                          <div>
+                            <div style={{ color: '#15803d', fontWeight: 700 }}>{formatDate(t.completed_at)}</div>
+                            {t.completed_by && <div style={{ color: '#16a34a', fontSize: 10 }}>{userNameMap.get(t.completed_by.toUpperCase()) || displayUser(t.completed_by)}</div>}
+                          </div>
+                        ) : <span style={{ color: '#d1d5db' }}>—</span>}
                       </td>
                     </tr>
                   )
@@ -493,6 +494,17 @@ export default function TasksPage() {
                 <input value={editingTask.task}
                   onChange={e => setEditingTask(prev => prev ? { ...prev, task: e.target.value } : prev)}
                   style={{ ...inputSt, width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>Assign To</label>
+                <select value={editingTask.assigned_to ?? ''}
+                  onChange={e => setEditingTask(prev => prev ? { ...prev, assigned_to: e.target.value || null } : prev)}
+                  style={{ ...inputSt, width: '100%' }}>
+                  <option value="">— Nobody —</option>
+                  {allUsers.map(u => (
+                    <option key={u.userid} value={u.userid}>{userName(u)}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>Note</label>
