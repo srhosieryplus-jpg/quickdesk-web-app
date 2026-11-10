@@ -919,8 +919,7 @@ export default function SeasonSSPage() {
                   const isSeasonLinked = !!r.season_book_id
                   const bg = r.flagged ? '#fffbeb'
                     : logged ? (i % 2 === 0 ? '#dcfce7' : '#d1fae5')
-                    : isSeasonLinked ? (i % 2 === 0 ? '#f0fdf4' : '#ecfdf5')
-                    : (i % 2 === 0 ? '#fff' : '#f9fafb')
+                    : (i % 2 === 0 ? '#fff' : '#f0fdf4')
                   const txt = logged ? '#166534' : r.flagged ? '#92400e' : '#1f2937'
                   const dim = logged ? '#15803d' : r.flagged ? '#b45309' : '#6b7280'
                   return (
