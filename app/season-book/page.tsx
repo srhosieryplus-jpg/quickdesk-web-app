@@ -63,6 +63,7 @@ interface LedgerRow {
   deposit: number | null
   duties: number | null
   shipping: number | null
+  cc_fee: number | null
   balance_due: number | null
   payment_date: string | null
   comment: string | null
@@ -133,6 +134,7 @@ interface StoreEntry {
   deposit: string
   duties: string
   shipping: string
+  cc_fee: string
   payment_date: string
   comment: string
   currency: Currency
@@ -142,7 +144,7 @@ interface StoreEntry {
 }
 
 function blankEntry(store: string): StoreEntry {
-  return { store, units: '', initial_total: '', deposit: '', duties: '', shipping: '', payment_date: '', comment: '', currency: 'USD', invoice_num: '', order_num: '', drop_name: '' }
+  return { store, units: '', initial_total: '', deposit: '', duties: '', shipping: '', cc_fee: '', payment_date: '', comment: '', currency: 'USD', invoice_num: '', order_num: '', drop_name: '' }
 }
 function today() {
   const d = new Date()
@@ -585,7 +587,7 @@ export default function SeasonBookPage() {
     // Re-fetch only payments for THIS ledger row to get accurate total
     const { data: rowPayments } = await supabase.from('season_payments').select('amount').eq('ledger_id', row.id)
     const newDep = (rowPayments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-    const newBal = (row.initial_total ?? 0) - newDep + (row.duties ?? 0) + (row.shipping ?? 0)
+    const newBal = (row.initial_total ?? 0) - newDep + (row.duties ?? 0) + (row.shipping ?? 0) + (row.cc_fee ?? 0)
     await supabase.from('season_ledger').update({ deposit: newDep, balance_due: newBal }).eq('id', row.id)
     setPayHistRecords(prev => prev.filter(p => p.id !== payId))
     if (user) fetchRows(season, user)
@@ -606,7 +608,7 @@ export default function SeasonBookPage() {
     // Re-fetch only payments for THIS ledger row to get accurate total
     const { data: rowPayments } = await supabase.from('season_payments').select('amount').eq('ledger_id', row.id)
     const newDep = (rowPayments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-    const newBal = (row.initial_total ?? 0) - newDep + (row.duties ?? 0) + (row.shipping ?? 0)
+    const newBal = (row.initial_total ?? 0) - newDep + (row.duties ?? 0) + (row.shipping ?? 0) + (row.cc_fee ?? 0)
     await supabase.from('season_ledger').update({ deposit: newDep, balance_due: newBal }).eq('id', row.id)
     setPayHistRecords(prev => prev.map(p => p.id === payId ? { ...p, amount: newAmt, payment_date: payHistEditDate, note: payHistEditNote || null } : p))
     setPayHistEditId(null)
@@ -918,6 +920,7 @@ export default function SeasonBookPage() {
       deposit: row.deposit?.toString() ?? '',
       duties: row.duties?.toString() ?? '',
       shipping: row.shipping?.toString() ?? '',
+      cc_fee: row.cc_fee?.toString() ?? '',
       payment_date: row.payment_date ?? '',
       comment: row.comment ?? '',
       currency: (row.currency as Currency) ?? 'USD',
@@ -958,17 +961,18 @@ export default function SeasonBookPage() {
     }
     setSaving(true)
     const inserts = formStores
-      .filter(e => e.units || e.initial_total || e.deposit || e.duties || e.shipping)
+      .filter(e => e.units || e.initial_total || e.deposit || e.duties || e.shipping || e.cc_fee)
       .map(e => {
         const init = parseFloat(e.initial_total) || null
         const dep  = parseFloat(e.deposit) || null
         const dut  = parseFloat(e.duties) || null
         const shp  = parseFloat(e.shipping) || null
-        const bal  = init != null ? (init - (dep ?? 0) + (dut ?? 0) + (shp ?? 0)) : null
+        const ccf  = parseFloat(e.cc_fee) || null
+        const bal  = init != null ? (init - (dep ?? 0) + (dut ?? 0) + (shp ?? 0) + (ccf ?? 0)) : null
         return {
           season, brand: activeBrand, drop_num: formDrop, store: e.store,
           units: parseInt(e.units) || null,
-          initial_total: init, deposit: dep, duties: dut, shipping: shp, balance_due: bal,
+          initial_total: init, deposit: dep, duties: dut, shipping: shp, cc_fee: ccf, balance_due: bal,
           payment_date: (e.deposit && e.payment_date) ? safeDate(e.payment_date) : null,
           comment: e.comment || null,
           currency: e.currency,
@@ -1018,10 +1022,11 @@ export default function SeasonBookPage() {
     const dep  = parseFloat(e.deposit) || null
     const dut  = parseFloat(e.duties) || null
     const shp  = parseFloat(e.shipping) || null
-    const bal  = init != null ? (init - (dep ?? 0) + (dut ?? 0) + (shp ?? 0)) : null
+    const ccf  = parseFloat(e.cc_fee) || null
+    const bal  = init != null ? (init - (dep ?? 0) + (dut ?? 0) + (shp ?? 0) + (ccf ?? 0)) : null
     const { error } = await supabase.from('season_ledger').update({
       units: parseInt(e.units) || null,
-      initial_total: init, deposit: dep, duties: dut, shipping: shp, balance_due: bal,
+      initial_total: init, deposit: dep, duties: dut, shipping: shp, cc_fee: ccf, balance_due: bal,
       payment_date: (dep && e.payment_date) ? safeDate(e.payment_date) : null,
       comment: e.comment || null,
       currency: e.currency,
@@ -1061,7 +1066,8 @@ export default function SeasonBookPage() {
     const init   = row.initial_total ?? 0
     const dut    = row.duties ?? 0
     const shp    = row.shipping ?? 0
-    const newBal = init - newDep + dut + shp
+    const ccf    = row.cc_fee ?? 0
+    const newBal = init - newDep + dut + shp + ccf
     const { error } = await supabase.from('season_ledger').update({
       deposit: newDep, balance_due: newBal,
       payment_date: safeDate(date || row.payment_date || today()),
@@ -2234,6 +2240,11 @@ export default function SeasonBookPage() {
                             onChange={e => upd({ shipping: e.target.value })} style={inp} />
                         </div>
                         <div>
+                          <label style={lbl}>CC Fee ({sym})</label>
+                          <input type="number" value={entry.cc_fee} placeholder="0.00" step="0.01"
+                            onChange={e => upd({ cc_fee: e.target.value })} style={inp} />
+                        </div>
+                        <div>
                           <label style={lbl}>Payment Date</label>
                           <input type="date" value={entry.payment_date}
                             onChange={e => upd({ payment_date: e.target.value })} style={inp}
@@ -2252,7 +2263,8 @@ export default function SeasonBookPage() {
                         const dep  = parseFloat(entry.deposit) || 0
                         const dut  = parseFloat(entry.duties) || 0
                         const shp  = parseFloat(entry.shipping) || 0
-                        const bal  = init - dep + dut + shp
+                        const ccf  = parseFloat(entry.cc_fee) || 0
+                        const bal  = init - dep + dut + shp + ccf
                         return (
                           <div style={{ fontSize: 12, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
                             Balance Due: {sym}{bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -2296,7 +2308,8 @@ export default function SeasonBookPage() {
         const dep  = parseFloat(entry.deposit) || 0
         const dut  = parseFloat(entry.duties) || 0
         const shpLive = parseFloat(entry.shipping) || 0
-        const liveBal = init - dep + dut + shpLive
+        const ccfLive = parseFloat(entry.cc_fee) || 0
+        const liveBal = init - dep + dut + shpLive + ccfLive
         const isCancelled = editRow.is_cancelled ?? false
 
         return (
@@ -2521,6 +2534,11 @@ export default function SeasonBookPage() {
                           <input type="number" value={entry.shipping} step="0.01" placeholder="0.00"
                             onChange={e => upd({ shipping: e.target.value })} style={inp} />
                         </div>
+                        <div>
+                          <label style={lbl}>CC Fee ({sym})</label>
+                          <input type="number" value={entry.cc_fee} step="0.01" placeholder="0.00"
+                            onChange={e => upd({ cc_fee: e.target.value })} style={inp} />
+                        </div>
                       </div>
                       <div>
                         <label style={lbl}>Payment Date</label>
@@ -2679,6 +2697,7 @@ export default function SeasonBookPage() {
                     const storeDeposit = sRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
                     const storeDuties  = sRows.reduce((s, r) => s + (r.duties ?? 0), 0)
                     const storeShipping = sRows.reduce((s, r) => s + (r.shipping ?? 0), 0)
+                    const storeCcFee   = sRows.reduce((s, r) => s + (r.cc_fee ?? 0), 0)
                     const storeBal     = sRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
 
                     return (
@@ -2746,6 +2765,9 @@ export default function SeasonBookPage() {
                                     {(dRow.shipping ?? 0) > 0 && (
                                       <div style={{ color: gray }}>Shipping: <span style={{ color: '#1d4ed8', fontWeight: 600 }}>{fmt$(dRow.shipping, dRow.currency)}</span></div>
                                     )}
+                                    {(dRow.cc_fee ?? 0) > 0 && (
+                                      <div style={{ color: gray }}>CC Fee: <span style={{ color: '#059669', fontWeight: 600 }}>{fmt$(dRow.cc_fee, dRow.currency)}</span></div>
+                                    )}
                                     {/* Payment history lines */}
                                     {(() => {
                                       const pmts = invoicePayments.get(dRow.id)
@@ -2794,6 +2816,7 @@ export default function SeasonBookPage() {
                                     <span>Deposit: <strong style={{ color: '#166534' }}>{fmt$(storeDeposit, storeCurrency)}</strong></span>
                                     {storeDuties > 0 && <span>Duties: <strong style={{ color: '#92400e' }}>{fmt$(storeDuties, storeCurrency)}</strong></span>}
                                     {storeShipping > 0 && <span>Shipping: <strong style={{ color: '#1d4ed8' }}>{fmt$(storeShipping, storeCurrency)}</strong></span>}
+                                    {storeCcFee > 0 && <span>CC Fee: <strong style={{ color: '#059669' }}>{fmt$(storeCcFee, storeCurrency)}</strong></span>}
                                   </div>
                                   <span style={{ fontSize: 13, fontWeight: 800, color: storeBal > 0.001 ? '#dc2626' : '#166534' }}>
                                     {storeBal > 0.001 ? `Owe ${fmt$(storeBal, storeCurrency)}` : '✓ Clear'}
@@ -2815,6 +2838,7 @@ export default function SeasonBookPage() {
                   const grandDep  = iRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
                   const grandDuties = iRows.reduce((s, r) => s + (r.duties ?? 0), 0)
                   const grandShipping = iRows.reduce((s, r) => s + (r.shipping ?? 0), 0)
+                  const grandCcFee = iRows.reduce((s, r) => s + (r.cc_fee ?? 0), 0)
                   const grandCurrency = (iRows[0]?.currency as Currency) ?? 'USD'
                   return (
                     <div style={{ marginTop: 14, background: purpleD, borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -2823,6 +2847,7 @@ export default function SeasonBookPage() {
                         <span>Deposits: <strong style={{ color: '#a7f3d0' }}>{fmt$(grandDep, grandCurrency)}</strong></span>
                         {grandDuties > 0 && <span>Duties: <strong style={{ color: '#fde68a' }}>{fmt$(grandDuties, grandCurrency)}</strong></span>}
                         {grandShipping > 0 && <span>Shipping: <strong style={{ color: '#bfdbfe' }}>{fmt$(grandShipping, grandCurrency)}</strong></span>}
+                        {grandCcFee > 0 && <span>CC Fee: <strong style={{ color: '#6ee7b7' }}>{fmt$(grandCcFee, grandCurrency)}</strong></span>}
                       </div>
                       <span style={{ fontSize: 14, fontWeight: 900, color: grandBal > 0.001 ? '#fca5a5' : '#a7f3d0' }}>
                         {grandBal > 0.001 ? `Balance: ${fmt$(grandBal, grandCurrency)}` : '✓ Fully Paid'}
