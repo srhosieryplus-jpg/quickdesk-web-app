@@ -47,8 +47,12 @@ export default function TasksPage() {
   }, [router])
 
   async function fetchUsers() {
-    const { data } = await supabase.from('users').select('userid, store').order('userid')
+    const { data } = await supabase.from('users').select('userid, name, store').order('userid')
     if (data) setAllUsers(data as User[])
+  }
+
+  function userName(u: User) {
+    return u.name?.trim() || displayUser(u.userid)
   }
 
   // ── return to selector after screen lock / idle ───────────────────────────
@@ -173,6 +177,9 @@ export default function TasksPage() {
 
   const isAdmin = user?.store === 'ALL'
 
+  // Map userid → display name using name field if available
+  const userNameMap = new Map(allUsers.map(u => [u.userid.toUpperCase(), u.name?.trim() || displayUser(u.userid)]))
+
   const filtered = tasks.filter(t => {
     if (!showCompleted && t.done) return false
     const q = filter.toLowerCase()
@@ -259,20 +266,20 @@ export default function TasksPage() {
               style={{ ...inputSt, flex: 1, minWidth: 0 }} />
           </div>
           <div className="tasks-form-row" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 160 }}>
-            <label style={{ ...labelSt, color: tealD, whiteSpace: 'nowrap' }}>Note:</label>
-            <input value={newNote} onChange={e => setNewNote(e.target.value)}
-              placeholder="optional…"
-              style={{ ...inputSt, flex: 1, minWidth: 0, width: 140 }} />
-          </div>
-          <div className="tasks-form-row" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 160 }}>
             <label style={{ ...labelSt, color: tealD, whiteSpace: 'nowrap' }}>Assign to:</label>
             <select value={newAssignTo} onChange={e => setNewAssignTo(e.target.value)}
               style={{ ...inputSt, flex: 1, minWidth: 0, width: 140 }}>
               <option value="">— Nobody —</option>
               {allUsers.filter(u => u.userid !== user?.userid).map(u => (
-                <option key={u.userid} value={u.userid}>{displayUser(u.userid)}</option>
+                <option key={u.userid} value={u.userid}>{userName(u)}</option>
               ))}
             </select>
+          </div>
+          <div className="tasks-form-row" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 160 }}>
+            <label style={{ ...labelSt, color: tealD, whiteSpace: 'nowrap' }}>Note:</label>
+            <input value={newNote} onChange={e => setNewNote(e.target.value)}
+              placeholder="optional…"
+              style={{ ...inputSt, flex: 1, minWidth: 0, width: 140 }} />
           </div>
           <button type="submit" disabled={saving || !newTask.trim()} className="tasks-form-submit"
             style={{ background: teal, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: saving || !newTask.trim() ? 'default' : 'pointer', opacity: saving || !newTask.trim() ? 0.6 : 1, whiteSpace: 'nowrap' }}>
@@ -345,9 +352,9 @@ export default function TasksPage() {
                       <td style={{ ...tdSt, color: dimColor, whiteSpace: 'nowrap', fontSize: 11 }}>
                         {formatDate(t.saved_at)}<span className="tasks-time-col" style={{ color: dimColor, fontSize: 10 }}> {formatDateTime(t.saved_at).split(' ').slice(1).join(' ')}</span>
                       </td>
-                      <td style={{ ...tdSt, color: t.done ? '#15803d' : '#1d4ed8', fontWeight: 700 }}>{displayUser(t.logged_by)}</td>
+                      <td style={{ ...tdSt, color: t.done ? '#15803d' : '#1d4ed8', fontWeight: 700 }}>{userNameMap.get(t.logged_by?.toUpperCase()) || displayUser(t.logged_by)}</td>
                       <td style={{ ...tdSt, color: t.assigned_to ? (t.done ? '#15803d' : '#7c3aed') : dimColor, fontWeight: t.assigned_to ? 700 : 400 }}>
-                        {t.assigned_to ? displayUser(t.assigned_to) : '—'}
+                        {t.assigned_to ? (userNameMap.get(t.assigned_to.toUpperCase()) || displayUser(t.assigned_to)) : '—'}
                       </td>
                       <td style={{ ...tdSt, color: textColor, fontWeight: 600 }}>{t.store}</td>
                       <td style={{ ...tdSt, color: textColor, textDecoration: t.done ? 'line-through' : 'none' }}>{t.task}</td>
@@ -417,7 +424,7 @@ export default function TasksPage() {
                   <div style={{ fontSize: 13, fontWeight: 700, color: textColor, textDecoration: t.done ? 'line-through' : 'none', wordBreak: 'break-word' }}>{t.task}</div>
                   {t.assigned_to && (
                     <div style={{ fontSize: 11, color: t.done ? '#15803d' : '#7c3aed', fontWeight: 700, marginTop: 2 }}>
-                      → {displayUser(t.assigned_to)}
+                      → {userNameMap.get(t.assigned_to.toUpperCase()) || displayUser(t.assigned_to)}
                     </div>
                   )}
                   {t.note ? (
@@ -428,7 +435,7 @@ export default function TasksPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 11, color: dimColor }}>
-                <span style={{ fontWeight: 700, color: t.done ? '#15803d' : '#1d4ed8' }}>{displayUser(t.logged_by)}</span>
+                <span style={{ fontWeight: 700, color: t.done ? '#15803d' : '#1d4ed8' }}>{userNameMap.get(t.logged_by?.toUpperCase()) || displayUser(t.logged_by)}</span>
                 <span>·</span>
                 <span>{t.store}</span>
                 <span>·</span>
