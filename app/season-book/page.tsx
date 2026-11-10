@@ -429,17 +429,21 @@ export default function SeasonBookPage() {
   }
 
   // Sync one ledger row to SS or AW table
-  async function syncLedgerRowToModule(row: LedgerRow) {
+  async function syncLedgerRowToModule(row: LedgerRow): Promise<string | null> {
     const half = row.season?.startsWith('SS') ? 'season_ss' : 'season_aw'
-    // Check if already linked
-    const { data: existing } = await supabase.from(half).select('id').eq('season_book_id', row.id).maybeSingle()
-    if (existing) return // already synced
+    // Check if already linked (this will fail if migration hasn't been run)
+    const { data: existing, error: chkErr } = await supabase.from(half).select('id').eq('season_book_id', row.id).maybeSingle()
+    if (chkErr) {
+      // Column doesn't exist — migration hasn't been run yet
+      return `Column 'season_book_id' missing from ${half} — run the SQL migration in Supabase first`
+    }
+    if (existing) return null // already synced
     const status = row.invoice_num ? 'Pending' : 'Not Created'
-    await supabase.from(half).insert({
+    const { error } = await supabase.from(half).insert({
       store: row.store,
       brand: row.brand,
       invoice_no: row.invoice_num || `SB-${row.id.slice(0,8)}`,
-      po_no: row.order_num || null,
+      po_no: null,
       qty: row.units,
       logged: false,
       logged_by: null,
@@ -449,6 +453,7 @@ export default function SeasonBookPage() {
       season_book_id: row.id,
       status,
     })
+    return error ? error.message : null
   }
 
   async function activateSeason(s: string) {
@@ -460,10 +465,20 @@ export default function SeasonBookPage() {
       // Sync all existing ledger rows for this season
       const { data: allRows } = await supabase.from('season_ledger').select('*').eq('season', s)
       if (allRows && allRows.length > 0) {
+        let synced = 0; let firstErr: string | null = null
         for (const row of allRows as LedgerRow[]) {
-          await syncLedgerRowToModule(row)
+          const err = await syncLedgerRowToModule(row)
+          if (err) { firstErr = firstErr ?? err }
+          else synced++
         }
-        showToast(`✅ Season ${s} activated — ${allRows.length} row${allRows.length !== 1 ? 's' : ''} synced to ${s.startsWith('SS') ? 'SS' : 'AW'} module`)
+        if (firstErr) {
+          showToast(`❌ Sync failed: ${firstErr} — have you run the SQL migration in Supabase?`, 'err')
+          // Roll back active flag since sync failed
+          await supabase.from('app_settings').upsert({ key: `season_active_${s}`, value: 'false' }, { onConflict: 'key' })
+          setSeasonActive(false)
+        } else {
+          showToast(`✅ Season ${s} activated — ${synced} row${synced !== 1 ? 's' : ''} synced to ${s.startsWith('SS') ? 'SS' : 'AW'} module`)
+        }
       } else {
         showToast(`✅ Season ${s} activated — new drops will auto-sync`)
       }
@@ -903,8 +918,14 @@ export default function SeasonBookPage() {
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
     // If season is active, auto-sync new rows to SS/AW module
     if (seasonActive && inserted) {
+      let syncErr: string | null = null
       for (const row of inserted as LedgerRow[]) {
-        await syncLedgerRowToModule(row)
+        const err = await syncLedgerRowToModule(row)
+        if (err) syncErr = err
+      }
+      if (syncErr) {
+        showToast(`⚠️ Saved but sync failed: ${syncErr}`, 'err')
+        setSaving(false); return
       }
     }
     showToast(`✅ Drop ${formDrop} saved for ${activeBrand}${seasonActive ? ' · synced to module' : ''}`)
@@ -1066,6 +1087,9 @@ export default function SeasonBookPage() {
         .sp-season-row:hover { background: #ede9fe; }
         .sp-season-row.active { background: #ede9fe; color: ${purpleD}; }
         .sp-season-row.active::after { content: '✓'; font-size: 12px; color: ${purpleD}; }
+        /* Mobile drop cards */
+        .sb-drop-card { display: none; }
+        .sb-drop-table { display: block; }
         @media (max-width: 600px), (pointer: coarse) and (max-width: 900px) {
           .sb-layout { flex-direction: column; }
           .sb-sidebar { display: none !important; }
@@ -1085,6 +1109,8 @@ export default function SeasonBookPage() {
           .sb-drop-label { display: none !important; }
           .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 70px; }
           .sb-subbar-divider { display: none !important; }
+          .sb-drop-table { display: none !important; }
+          .sb-drop-card { display: block !important; }
         }
       `}</style>
 
@@ -1608,6 +1634,7 @@ export default function SeasonBookPage() {
                       </div>
 
                       {/* Rows table — Brand is first column */}
+                      <div className="sb-drop-table">
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
                         <colgroup>
                           <col style={{ width: '16%' }} />{/* Brand */}
@@ -1736,6 +1763,101 @@ export default function SeasonBookPage() {
                           </tfoot>
                         )}
                       </table>
+                      </div>{/* end sb-drop-table */}
+
+                      {/* ── MOBILE CARDS ── */}
+                      <div className="sb-drop-card">
+                        {brands.flatMap(brand => {
+                          const allBRows = rows.filter(r => r.brand === brand)
+                          const bRows = activeDropName ? allBRows.filter(r => r.drop_name === activeDropName) : allBRows
+                          const dropStoreKeys = new Set<string>()
+                          const dropStoreList: { dropNum: number; dropName: string | null; store: string; dropRows: LedgerRow[] }[] = []
+                          for (const r of bRows) {
+                            const key = `${r.drop_num}|${r.store}`
+                            if (!dropStoreKeys.has(key)) {
+                              dropStoreKeys.add(key)
+                              dropStoreList.push({ dropNum: r.drop_num, dropName: r.drop_name, store: r.store, dropRows: bRows.filter(x => x.drop_num === r.drop_num && x.store === r.store) })
+                            }
+                          }
+                          return dropStoreList.map(({ dropNum, dropName, store, dropRows }) => {
+                            const activeRows = dropRows.filter(r => !r.is_cancelled)
+                            const sUnits = activeRows.reduce((s, r) => s + (r.units ?? 0), 0)
+                            const sInit  = activeRows.reduce((s, r) => s + (r.initial_total ?? 0), 0)
+                            const sDep   = activeRows.reduce((s, r) => s + (r.deposit ?? 0), 0)
+                            const sBal   = activeRows.reduce((s, r) => s + (r.balance_due ?? 0), 0)
+                            const rowCurrency = (activeRows[0]?.currency as Currency) ?? 'USD'
+                            const invoiceNums = Array.from(new Set(activeRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
+                            const poNums = Array.from(new Set(activeRows.map(r => r.order_num).filter((n): n is string => !!n)))
+                            const invoiceFileUrls = Array.from(new Set(activeRows.map(r => r.invoice_file_url).filter((u): u is string => !!u)))
+                            const mSt = seasonActive ? (activeRows.map(r => moduleStatusMap.get(r.id)).find(s => s != null) ?? null) : null
+                            return (
+                              <div key={`m-${brand}|${dropNum}|${store}`}
+                                onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
+                                style={{ background: '#fff', border: `1px solid ${border}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                                {/* Top row: brand + store + status */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                  <span style={{ fontWeight: 800, fontSize: 13, color: purpleD }}>{brand}</span>
+                                  <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: purpleD, background: '#ede9fe', borderRadius: 6, padding: '1px 7px' }}>{store}</span>
+                                    {mSt && (() => {
+                                      const stColors: Record<string, { bg: string; color: string }> = {
+                                        'Not Created': { bg: '#f3f4f6', color: '#6b7280' },
+                                        'Pending':     { bg: '#eff6ff', color: '#1e40af' },
+                                        'Adjusted':    { bg: '#fef3c7', color: '#92400e' },
+                                        'Cancelled':   { bg: '#fef2f2', color: '#dc2626' },
+                                        'Logged':      { bg: '#bbf7d0', color: '#14532d' },
+                                      }
+                                      const c = stColors[mSt] ?? stColors['Not Created']
+                                      return <span style={{ fontSize: 10, fontWeight: 700, background: c.bg, color: c.color, borderRadius: 6, padding: '1px 6px' }}>{mSt}</span>
+                                    })()}
+                                  </div>
+                                </div>
+                                {/* Drop # + name */}
+                                <div style={{ fontSize: 11, color: gray, marginBottom: 6 }}>
+                                  Drop {dropNum}{dropName ? ` · ${dropName}` : ''}
+                                </div>
+                                {/* Invoice + Order chips */}
+                                {(invoiceNums.length > 0 || poNums.length > 0) && (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                                    {invoiceNums.map(inv => (
+                                      <span key={inv} style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px' }}>{inv}</span>
+                                    ))}
+                                    {poNums.map(o => (
+                                      <span key={o} style={{ fontSize: 10, color: '#6b21a8', fontWeight: 700, background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: 4, padding: '1px 5px' }}>{o}</span>
+                                    ))}
+                                    {invoiceFileUrls.map((url, i) => (
+                                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                        style={{ fontSize: 10, fontWeight: 700, color: purpleD, background: '#faf5ff', border: `1px solid ${border}`, borderRadius: 4, padding: '1px 5px', textDecoration: 'none' }}>📄 PDF</a>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Financials row */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 4 }}>
+                                  {[
+                                    { label: 'Units', value: sUnits || '—' },
+                                    { label: 'Total', value: fmt$(sInit, rowCurrency) },
+                                    { label: 'Deposit', value: fmt$(sDep, rowCurrency) },
+                                    { label: 'Balance', value: fmt$(sBal, rowCurrency), red: sBal > 0.001 },
+                                  ].map(({ label, value, red }) => (
+                                    <div key={label} style={{ background: '#f8f7ff', borderRadius: 6, padding: '4px 6px', textAlign: 'center' }}>
+                                      <div style={{ fontSize: 9, color: gray, fontWeight: 600 }}>{label}</div>
+                                      <div style={{ fontSize: 11, fontWeight: 800, color: red ? '#dc2626' : '#1f2937' }}>{value}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })
+                        })}
+                        {/* Total footer on mobile */}
+                        {vRows.length > 1 && (
+                          <div style={{ background: totBal > 0.001 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${totBal > 0.001 ? '#fca5a5' : '#86efac'}`, borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>Total Owed</span>
+                            <span style={{ fontSize: 14, fontWeight: 900, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(totBal, (vRows[0]?.currency as Currency) ?? 'USD')}</span>
+                          </div>
+                        )}
+                      </div>{/* end sb-drop-card */}
+
                     </div>
                   )
                 })

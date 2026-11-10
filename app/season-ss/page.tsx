@@ -746,7 +746,10 @@ export default function SeasonSSPage() {
                   <InfoRow label="PO #"      value={state.row.po_no} />
                   <InfoRow label="Brand"     value={state.row.brand} />
                   <InfoRow label="Qty"       value={state.row.qty} />
-                  {state.row.logged_at && <InfoRow label="Logged at" value={fmtTs(state.row.logged_at)} />}
+                  {state.row.logged_at && <InfoRow label="Logged" value={`${displayUser(state.row.logged_by)} · ${fmtTs(state.row.logged_at)}`} />}
+                  {state.row.adj_qty != null && <InfoRow label="Adj Qty" value={String(state.row.adj_qty)} />}
+                  {state.row.adj_amount != null && <InfoRow label="Adj Amt" value={String(state.row.adj_amount)} />}
+                  {state.row.adj_note && <InfoRow label="Adj Note" value={state.row.adj_note} />}
                   {state.row.note && <InfoRow label="Note" value={state.row.note} />}
                 </div>
 
@@ -757,11 +760,23 @@ export default function SeasonSSPage() {
                     <button onClick={() => logRow(state.row)} disabled={logging} className="ss-btn ss-btn-primary">
                       {logging ? '…' : '✓ Log Invoice'}
                     </button>
+                    {state.row.season_book_id && (
+                      <button onClick={() => { setAdjustRow(state.row); setAdjQty(state.row.adj_qty?.toString() ?? ''); setAdjAmount(state.row.adj_amount?.toString() ?? ''); setAdjNote(state.row.adj_note ?? '') }}
+                        style={{ fontSize: 12, fontWeight: 700, padding: '5px 10px', borderRadius: 6, border: '1px solid #fcd34d', background: '#fffbeb', color: '#92400e', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        ⚠️ Adjust
+                      </button>
+                    )}
                     <button onClick={reset} className="ss-btn ss-btn-gray">Cancel</button>
                   </div>
                 )}
                 {state.row.logged && (
                   <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    {state.row.season_book_id && (
+                      <button onClick={() => { setAdjustRow(state.row); setAdjQty(state.row.adj_qty?.toString() ?? ''); setAdjAmount(state.row.adj_amount?.toString() ?? ''); setAdjNote(state.row.adj_note ?? '') }}
+                        style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: '1px solid #fcd34d', background: '#fffbeb', color: '#92400e', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        ⚠️ Adjust
+                      </button>
+                    )}
                     {isAdmin && (
                       <button onClick={() => unlogRow(state.row)} className="ss-btn ss-btn-amber" style={{ fontSize: 11 }}>↩ Un-log</button>
                     )}
@@ -891,7 +906,6 @@ export default function SeasonSSPage() {
                   <th>Status</th>
                   <th className="ss-col-hide">Logged By</th>
                   <th className="ss-col-hide">Note</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -902,7 +916,11 @@ export default function SeasonSSPage() {
                 )}
                 {filteredStore.map((r, i) => {
                   const logged = r.logged && !r.flagged
-                  const bg = r.flagged ? '#fffbeb' : logged ? (i % 2 === 0 ? '#dcfce7' : '#d1fae5') : (i % 2 === 0 ? '#fff' : '#eff6ff')
+                  const isSeasonLinked = !!r.season_book_id
+                  const bg = r.flagged ? '#fffbeb'
+                    : logged ? (i % 2 === 0 ? '#dcfce7' : '#d1fae5')
+                    : isSeasonLinked ? (i % 2 === 0 ? '#f0fdf4' : '#ecfdf5')
+                    : (i % 2 === 0 ? '#fff' : '#f9fafb')
                   const txt = logged ? '#166534' : r.flagged ? '#92400e' : '#1f2937'
                   const dim = logged ? '#15803d' : r.flagged ? '#b45309' : '#6b7280'
                   return (
@@ -935,14 +953,6 @@ export default function SeasonSSPage() {
                       </td>
                       <td className="ss-col-hide" style={{ fontSize: 10, color: dim }}>{r.logged_by ? displayUser(r.logged_by) : '—'}</td>
                       <td className="ss-col-hide" style={{ fontSize: 10, color: dim, maxWidth: 140 }}>{r.adj_qty != null ? `⚠️ Adj qty: ${r.adj_qty}` : r.note || ''}</td>
-                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                        {r.season_book_id && (
-                          <button onClick={() => { setAdjustRow(r); setAdjQty(r.adj_qty?.toString() ?? ''); setAdjAmount(r.adj_amount?.toString() ?? ''); setAdjNote(r.adj_note ?? '') }}
-                            style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, border: '1px solid #fcd34d', background: '#fffbeb', color: '#92400e', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                            Adjust
-                          </button>
-                        )}
-                      </td>
                     </tr>
                   )
                 })}
