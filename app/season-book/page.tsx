@@ -289,6 +289,7 @@ export default function SeasonBookPage() {
   const [invoiceBrand, setInvoiceBrand] = useState<string | null>(null)
   const [invoiceVendorBrands, setInvoiceVendorBrands] = useState<string[] | null>(null) // multi-brand vendor invoice
   const [invoiceStoreFilter, setInvoiceStoreFilter] = useState<string | null>(null) // null = both stores
+  const [invoicePayments, setInvoicePayments] = useState<Map<string, PaymentRecord[]>>(new Map())
 
   // Brand search inside new-entry modal
   const [modalBrandQ, setModalBrandQ] = useState('')
@@ -736,6 +737,24 @@ export default function SeasonBookPage() {
     const all = Array.from(new Set([...BRAND_LIST, ...inSeason]))
     setModalBrandSuggs(all.filter(b => b.toLowerCase().includes(q)).slice(0, 10))
   }, [modalBrandQ, rows])
+
+  // Load payment records when invoice modal opens
+  useEffect(() => {
+    if (modal !== 'invoice') { setInvoicePayments(new Map()); return }
+    const activeBrands = invoiceVendorBrands ?? (invoiceBrand ? [invoiceBrand] : [])
+    const rowIds = rows.filter(r => activeBrands.includes(r.brand)).map(r => r.id)
+    if (rowIds.length === 0) return
+    supabase.from('season_payments').select('*').in('ledger_id', rowIds).order('payment_date', { ascending: true })
+      .then(({ data }) => {
+        const map = new Map<string, PaymentRecord[]>()
+        for (const p of (data ?? []) as PaymentRecord[]) {
+          const list = map.get(p.ledger_id) ?? []
+          list.push(p)
+          map.set(p.ledger_id, list)
+        }
+        setInvoicePayments(map)
+      })
+  }, [modal, invoiceBrand, invoiceVendorBrands, rows])
 
   const cutoffPopoverRef = useRef<HTMLDivElement>(null)
 
@@ -2628,13 +2647,29 @@ export default function SeasonBookPage() {
                                       <div style={{ color: gray }}>Units: <span style={{ color: '#374151', fontWeight: 600 }}>{dRow.units}</span></div>
                                     )}
                                     <div style={{ color: gray }}>Total: <span style={{ color: '#374151', fontWeight: 600 }}>{fmt$(dRow.initial_total, dRow.currency)}</span></div>
-                                    <div style={{ color: gray }}>Deposits: <span style={{ color: '#166534', fontWeight: 600 }}>{fmt$(dRow.deposit, dRow.currency)}</span></div>
                                     {(dRow.duties ?? 0) > 0 && (
                                       <div style={{ color: gray }}>Duties: <span style={{ color: '#92400e', fontWeight: 600 }}>{fmt$(dRow.duties, dRow.currency)}</span></div>
                                     )}
-                                    {dRow.payment_date && (
-                                      <div style={{ color: gray }}>Paid on: <span style={{ color: '#374151', fontWeight: 600 }}>{fmtDate(dRow.payment_date)}</span></div>
-                                    )}
+                                    {/* Payment history lines */}
+                                    {(() => {
+                                      const pmts = invoicePayments.get(dRow.id)
+                                      if (pmts && pmts.length > 0) {
+                                        return (
+                                          <div style={{ gridColumn: 'span 2', marginTop: 2 }}>
+                                            {pmts.map((p, pi) => (
+                                              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '2px 0', borderTop: pi === 0 ? `1px solid #f3f4f6` : 'none' }}>
+                                                <span style={{ color: gray }}>Payment {pi + 1} · <span style={{ color: '#374151' }}>{fmtDate(p.payment_date)}</span>{p.note ? <span style={{ color: '#9ca3af' }}> · {p.note}</span> : ''}</span>
+                                                <span style={{ fontWeight: 700, color: '#166534' }}>{fmt$(p.amount, dRow.currency)}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )
+                                      }
+                                      // Fallback to legacy single deposit line
+                                      return (dRow.deposit ?? 0) > 0 ? (
+                                        <div style={{ color: gray }}>Deposits: <span style={{ color: '#166534', fontWeight: 600 }}>{fmt$(dRow.deposit, dRow.currency)}{dRow.payment_date ? ` · ${fmtDate(dRow.payment_date)}` : ''}</span></div>
+                                      ) : null
+                                    })()}
                                     {dRow.comment && (
                                       <div style={{ color: gray, gridColumn: 'span 2' }}>Note: <span style={{ color: '#374151' }}>{dRow.comment}</span></div>
                                     )}
