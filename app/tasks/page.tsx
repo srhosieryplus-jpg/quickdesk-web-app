@@ -118,8 +118,12 @@ export default function TasksPage() {
     const admin = user.store === 'ALL'
     const canToggle = admin || t.assigned_to?.toUpperCase() === user.userid?.toUpperCase()
     if (!canToggle) { showToast('❌ Only the assigned user or admin can mark this done', 'err'); return }
-    await supabase.from('tasks').update({ done: !t.done }).eq('id', t.id)
-    setTasks(prev => prev.map(x => x.id === t.id ? { ...x, done: !x.done } : x))
+    const nowDone = !t.done
+    const patch = nowDone
+      ? { done: true, completed_at: new Date().toISOString(), completed_by: user.userid }
+      : { done: false, completed_at: null, completed_by: null }
+    await supabase.from('tasks').update(patch).eq('id', t.id)
+    setTasks(prev => prev.map(x => x.id === t.id ? { ...x, ...patch } : x))
   }
 
   async function deleteTask(id: string) {
@@ -327,7 +331,7 @@ export default function TasksPage() {
             <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', maxWidth: 900 }}>
               <thead>
                 <tr style={{ background: '#dbeafe', position: 'sticky', top: 0, zIndex: 1 }}>
-                  {['Date', 'Submitted By', 'Assigned To', 'Store', 'Task', 'Note', 'Done'].map(h => (
+                  {['Date', 'Submitted By', 'Assigned To', 'Store', 'Task', 'Note', 'Completed', 'Done'].map(h => (
                     <th key={h} style={{ padding: '6px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: tealD, borderBottom: `2px solid ${border}`, whiteSpace: 'nowrap' }}>
                       {h === 'Date' ? <><span>Date</span><span className="tasks-time-col"> / Time</span></> : h}
                     </th>
@@ -336,7 +340,7 @@ export default function TasksPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No tasks found.</td></tr>
+                  <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No tasks found.</td></tr>
                 )}
                 {filtered.map((t, i) => {
                   const rowBg = t.done
@@ -359,6 +363,14 @@ export default function TasksPage() {
                       <td style={{ ...tdSt, color: textColor, fontWeight: 600 }}>{t.store}</td>
                       <td style={{ ...tdSt, color: textColor, textDecoration: t.done ? 'line-through' : 'none' }}>{t.task}</td>
                       <td style={{ ...tdSt, color: dimColor }}>{t.note || ''}</td>
+                      <td style={{ ...tdSt, whiteSpace: 'nowrap', fontSize: 11 }}>
+                        {t.completed_at ? (
+                          <div>
+                            <div style={{ color: '#15803d', fontWeight: 700 }}>{formatDate(t.completed_at)}</div>
+                            {t.completed_by && <div style={{ color: '#16a34a', fontSize: 10 }}>{userNameMap.get(t.completed_by.toUpperCase()) || displayUser(t.completed_by)}</div>}
+                          </div>
+                        ) : <span style={{ color: '#d1d5db' }}>—</span>}
+                      </td>
                       <td style={{ ...tdSt, textAlign: 'center' }}>
                         {canCheck ? (
                           <input type="checkbox" checked={t.done} onChange={() => toggleDone(t)}
@@ -434,12 +446,16 @@ export default function TasksPage() {
                   ) : null}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 11, color: dimColor }}>
+              <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 11, color: dimColor, flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 700, color: t.done ? '#15803d' : '#1d4ed8' }}>{userNameMap.get(t.logged_by?.toUpperCase()) || displayUser(t.logged_by)}</span>
                 <span>·</span>
                 <span>{t.store}</span>
                 <span>·</span>
                 <span>{formatDate(t.saved_at)}</span>
+                {t.completed_at && <>
+                  <span>·</span>
+                  <span style={{ color: '#15803d', fontWeight: 700 }}>✓ {formatDate(t.completed_at)}{t.completed_by ? ` · ${userNameMap.get(t.completed_by.toUpperCase()) || displayUser(t.completed_by)}` : ''}</span>
+                </>}
               </div>
             </div>
           )

@@ -18,6 +18,8 @@ export interface Task {
   logged_by: string
   saved_at: string
   assigned_to: string | null
+  completed_at: string | null
+  completed_by: string | null
 }
 
 export interface SeasonLog {
