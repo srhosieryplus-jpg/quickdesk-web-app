@@ -581,7 +581,7 @@ export default function SeasonBookPage() {
     // Re-fetch only payments for THIS ledger row to get accurate total
     const { data: rowPayments } = await supabase.from('season_payments').select('amount').eq('ledger_id', row.id)
     const newDep = (rowPayments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-    const newBal = (row.initial_total ?? 0) - newDep - (row.duties ?? 0) - (row.shipping ?? 0)
+    const newBal = (row.initial_total ?? 0) - newDep + (row.duties ?? 0) + (row.shipping ?? 0)
     await supabase.from('season_ledger').update({ deposit: newDep, balance_due: newBal }).eq('id', row.id)
     setPayHistRecords(prev => prev.filter(p => p.id !== payId))
     if (user) fetchRows(season, user)
@@ -602,7 +602,7 @@ export default function SeasonBookPage() {
     // Re-fetch only payments for THIS ledger row to get accurate total
     const { data: rowPayments } = await supabase.from('season_payments').select('amount').eq('ledger_id', row.id)
     const newDep = (rowPayments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-    const newBal = (row.initial_total ?? 0) - newDep - (row.duties ?? 0) - (row.shipping ?? 0)
+    const newBal = (row.initial_total ?? 0) - newDep + (row.duties ?? 0) + (row.shipping ?? 0)
     await supabase.from('season_ledger').update({ deposit: newDep, balance_due: newBal }).eq('id', row.id)
     setPayHistRecords(prev => prev.map(p => p.id === payId ? { ...p, amount: newAmt, payment_date: payHistEditDate, note: payHistEditNote || null } : p))
     setPayHistEditId(null)
@@ -939,7 +939,7 @@ export default function SeasonBookPage() {
         const dep  = parseFloat(e.deposit) || null
         const dut  = parseFloat(e.duties) || null
         const shp  = parseFloat(e.shipping) || null
-        const bal  = init != null ? (init - (dep ?? 0) - (dut ?? 0) - (shp ?? 0)) : null
+        const bal  = init != null ? (init - (dep ?? 0) + (dut ?? 0) + (shp ?? 0)) : null
         return {
           season, brand: activeBrand, drop_num: formDrop, store: e.store,
           units: parseInt(e.units) || null,
@@ -991,7 +991,7 @@ export default function SeasonBookPage() {
     const dep  = parseFloat(e.deposit) || null
     const dut  = parseFloat(e.duties) || null
     const shp  = parseFloat(e.shipping) || null
-    const bal  = init != null ? (init - (dep ?? 0) - (dut ?? 0) - (shp ?? 0)) : null
+    const bal  = init != null ? (init - (dep ?? 0) + (dut ?? 0) + (shp ?? 0)) : null
     const { error } = await supabase.from('season_ledger').update({
       units: parseInt(e.units) || null,
       initial_total: init, deposit: dep, duties: dut, shipping: shp, balance_due: bal,
@@ -1032,7 +1032,7 @@ export default function SeasonBookPage() {
     const init   = row.initial_total ?? 0
     const dut    = row.duties ?? 0
     const shp    = row.shipping ?? 0
-    const newBal = init - newDep - dut - shp
+    const newBal = init - newDep + dut + shp
     const { error } = await supabase.from('season_ledger').update({
       deposit: newDep, balance_due: newBal,
       payment_date: safeDate(date || row.payment_date || today()),
@@ -2201,7 +2201,8 @@ export default function SeasonBookPage() {
                         const init = parseFloat(entry.initial_total) || 0
                         const dep  = parseFloat(entry.deposit) || 0
                         const dut  = parseFloat(entry.duties) || 0
-                        const bal  = init - dep - dut
+                        const shp  = parseFloat(entry.shipping) || 0
+                        const bal  = init - dep + dut + shp
                         return (
                           <div style={{ fontSize: 12, color: bal > 0.001 ? '#dc2626' : '#166534', fontWeight: 700 }}>
                             Balance Due: {sym}{bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -2244,7 +2245,8 @@ export default function SeasonBookPage() {
         const init = parseFloat(entry.initial_total) || 0
         const dep  = parseFloat(entry.deposit) || 0
         const dut  = parseFloat(entry.duties) || 0
-        const liveBal = init - dep - dut
+        const shpLive = parseFloat(entry.shipping) || 0
+        const liveBal = init - dep + dut + shpLive
         const isCancelled = editRow.is_cancelled ?? false
 
         return (
@@ -3400,7 +3402,7 @@ export default function SeasonBookPage() {
                           const init = stripCurrency(r.total)
                           const dep  = stripCurrency(r.deposit)
                           const dut  = stripCurrency(r.duties)
-                          const bal  = init != null ? (init - (dep ?? 0) - (dut ?? 0)) : null
+                          const bal  = init != null ? (init - (dep ?? 0) + (dut ?? 0)) : null
                           const cur: Currency = (r.currency?.toUpperCase() === 'EUR') ? 'EUR' : 'USD'
                           const finalBrand = r.brandCreateNew ? r.brand : (r.brandOverride ?? r.brandMatch ?? r.brand)
                           const finalVendor = r.vendorCreateNew ? r.vendor_id : ((r.vendorOverride ?? r.vendorMatch ?? r.vendor_id) || null)
