@@ -532,7 +532,7 @@ export default function SeasonSSPage() {
         .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
         .brand-row:hover { background: ${greenL}; border-color: ${border}; }
         .ss-main-table { border-collapse: collapse; width: 100%; font-size: 12px; }
-        .ss-main-table th { background: #dbeafe; color: #1e3a8a; font-size: 11px; font-weight: 700; padding: 7px 10px; text-align: left; border-bottom: 2px solid #93c5fd; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+        .ss-main-table th { background: ${greenL}; color: ${greenD}; font-size: 11px; font-weight: 700; padding: 7px 10px; text-align: left; border-bottom: 2px solid ${border}; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
         .ss-main-table td { padding: 5px 10px; border-bottom: 1px solid #e5e7eb; height: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; vertical-align: middle; }
         .ss-main-table tr:hover td { filter: brightness(0.97); }
         .ss-preview-table { border-collapse: collapse; width: 100%; font-size: 11px; }

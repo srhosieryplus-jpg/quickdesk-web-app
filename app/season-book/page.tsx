@@ -345,6 +345,7 @@ export default function SeasonBookPage() {
   const [activating, setActivating] = useState(false)
   // Map: ledger row id → module status string
   const [moduleStatusMap, setModuleStatusMap] = useState<Map<string, string>>(new Map())
+  const [moduleAdjMap, setModuleAdjMap] = useState<Map<string, { qty: number | null; amount: number | null }>>(new Map())
 
   // ── Cut-off date ──────────────────────────────────────────────────────────
   // Stored in app_settings: key = 'cutoff_SS' / 'cutoff_AW', value = 'YYYY-MM-DD|active' or 'YYYY-MM-DD|inactive'
@@ -414,17 +415,21 @@ export default function SeasonBookPage() {
   async function loadModuleStatus(s: string) {
     const half = s.startsWith('SS') ? 'season_ss' : 'season_aw'
     try {
-      const { data } = await supabase.from(half).select('season_book_id, status, adj_qty, po_no').not('season_book_id', 'is', null)
+      const { data } = await supabase.from(half).select('season_book_id, status, adj_qty, adj_amount, po_no').not('season_book_id', 'is', null)
       if (!data) return
-      const map = new Map<string, string>()
-      for (const r of data as { season_book_id: string; status: string | null; adj_qty: number | null; po_no: string | null }[]) {
+      const statusMap = new Map<string, string>()
+      const adjMap = new Map<string, { qty: number | null; amount: number | null }>()
+      for (const r of data as { season_book_id: string; status: string | null; adj_qty: number | null; adj_amount: number | null; po_no: string | null }[]) {
         if (!r.season_book_id) continue
-        // Compute display status
         let st = r.status || (r.po_no ? 'Pending' : 'Not Created')
-        if (r.adj_qty != null) st = 'Adjusted'
-        map.set(r.season_book_id, st)
+        if (r.adj_qty != null || r.adj_amount != null) st = 'Adjusted'
+        statusMap.set(r.season_book_id, st)
+        if (r.adj_qty != null || r.adj_amount != null) {
+          adjMap.set(r.season_book_id, { qty: r.adj_qty, amount: r.adj_amount })
+        }
       }
-      setModuleStatusMap(map)
+      setModuleStatusMap(statusMap)
+      setModuleAdjMap(adjMap)
     } catch { /* columns may not exist yet */ }
   }
 
@@ -494,12 +499,32 @@ export default function SeasonBookPage() {
     try {
       await supabase.from('app_settings').upsert({ key: `season_active_${s}`, value: 'false' }, { onConflict: 'key' })
       setSeasonActive(false)
-      showToast(`⏸ Season ${s} deactivated — data remains in ${s.startsWith('SS') ? 'SS' : 'AW'} module until cleared there`)
+      showToast(`⏸ Season ${s} deactivated — existing data in ${s.startsWith('SS') ? 'SS' : 'AW'} module stays until you Clear Season there. No new drops will sync.`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       showToast('❌ ' + msg, 'err')
     }
     setActivating(false)
+  }
+
+  function downloadSeasonCSV() {
+    const headers = ['Brand','Vendor ID','Drop #','Drop Name','Store','Units','Total','Deposit','Duties','Balance Due','Currency','Invoice #','Order #','Payment Date','Comment']
+    const csvRows = [headers.join(',')]
+    for (const r of rows) {
+      csvRows.push([
+        r.brand, r.vendor_id, r.drop_num, r.drop_name ?? '',
+        r.store, r.units ?? '', r.initial_total ?? '', r.deposit ?? '',
+        r.duties ?? '', r.balance_due ?? '', r.currency ?? 'USD',
+        r.invoice_num ?? '', r.order_num ?? '',
+        r.payment_date ?? '', (r.comment ?? '').replace(/,/g, ';'),
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    }
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `${season}_season_book.csv`; a.click()
+    URL.revokeObjectURL(url)
+    showToast(`✅ Downloaded ${season} season book (${rows.length} rows)`)
   }
 
   async function openPayHistory(row: LedgerRow) {
@@ -1237,29 +1262,40 @@ export default function SeasonBookPage() {
             )}
           </div>
 
-          {/* Activate button — STAR only */}
+          {/* Admin-only buttons — STAR only */}
           {isAdmin && (
-            <button
-              onClick={() => {
-                if (seasonActive) {
-                  if (!window.confirm(`Deactivate ${season}?\n\nData already in the ${seasonHalf} module will stay there until you Clear Season from that module.`)) return
-                  deactivateSeason(season)
-                } else {
-                  if (!window.confirm(`Activate ${season}?\n\nThis will sync all current drops to the ${seasonHalf} module and auto-sync any new ones going forward.`)) return
-                  activateSeason(season)
-                }
-              }}
-              disabled={activating}
-              style={{
-                background: seasonActive ? '#d1fae5' : 'rgba(255,255,255,0.15)',
-                color: seasonActive ? '#065f46' : 'rgba(255,255,255,0.85)',
-                border: seasonActive ? '1.5px solid #6ee7b7' : '1px dashed rgba(255,255,255,0.4)',
-                borderRadius: 7, padding: '5px 12px', fontSize: 11, fontWeight: 800,
-                cursor: activating ? 'wait' : 'pointer', whiteSpace: 'nowrap',
-                opacity: activating ? 0.6 : 1,
-              }}>
-              {activating ? '⏳ Working…' : seasonActive ? `✅ ${seasonHalf} Active` : `▶ Activate ${seasonHalf}`}
-            </button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button
+                onClick={downloadSeasonCSV}
+                style={{
+                  background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.85)',
+                  border: '1px solid rgba(255,255,255,0.3)', borderRadius: 7,
+                  padding: '5px 12px', fontSize: 11, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
+                }}>
+                ⬇ Download
+              </button>
+              <button
+                onClick={() => {
+                  if (seasonActive) {
+                    if (!window.confirm(`Deactivate ${season}?\n\nExisting data in the ${seasonHalf} module stays — no rows will be deleted. New drops just won't sync until you reactivate.`)) return
+                    deactivateSeason(season)
+                  } else {
+                    if (!window.confirm(`Activate ${season}?\n\nThis will sync all current drops to the ${seasonHalf} module and auto-sync any new ones going forward.`)) return
+                    activateSeason(season)
+                  }
+                }}
+                disabled={activating}
+                style={{
+                  background: seasonActive ? '#d1fae5' : 'rgba(255,255,255,0.15)',
+                  color: seasonActive ? '#065f46' : 'rgba(255,255,255,0.85)',
+                  border: seasonActive ? '1.5px solid #6ee7b7' : '1px dashed rgba(255,255,255,0.4)',
+                  borderRadius: 7, padding: '5px 12px', fontSize: 11, fontWeight: 800,
+                  cursor: activating ? 'wait' : 'pointer', whiteSpace: 'nowrap',
+                  opacity: activating ? 0.6 : 1,
+                }}>
+                {activating ? '⏳ Working…' : seasonActive ? `✅ ${seasonHalf} Active` : `▶ Activate ${seasonHalf}`}
+              </button>
+            </div>
           )}
 
           <button className="sb-new-btn" onClick={() => {
@@ -1646,8 +1682,9 @@ export default function SeasonBookPage() {
                           <col style={{ width: '7%' }} />{/* Units */}
                           <col style={{ width: '11%' }} />{/* Total */}
                           <col style={{ width: '11%' }} />{/* Deposits */}
-                          <col style={{ width: seasonActive ? '8%' : '11%' }} />{/* Balance Due */}
-                          {seasonActive && <col style={{ width: '8%' }} />}{/* Status */}
+                          <col style={{ width: seasonActive ? '7%' : '11%' }} />{/* Balance Due */}
+                          {seasonActive && <col style={{ width: '7%' }} />}{/* Adj Qty */}
+                          {seasonActive && <col style={{ width: '8%' }} />}{/* Adj Amt */}
                         </colgroup>
                         <thead>
                           <tr style={{ background: '#f8f7ff' }}>
@@ -1661,7 +1698,8 @@ export default function SeasonBookPage() {
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Total</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Deposits</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Balance Due</th>
-                            {seasonActive && <th style={{ padding: '5px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>{seasonHalf} Status</th>}
+                            {seasonActive && <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#dc2626', borderBottom: `1px solid ${border}` }}>Adj Qty</th>}
+                            {seasonActive && <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#dc2626', borderBottom: `1px solid ${border}` }}>Adj Amt</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -1727,22 +1765,15 @@ export default function SeasonBookPage() {
                                   <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep, rowCurrency)}</td>
                                   <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: sBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(sBal, rowCurrency)}</td>
                                   {seasonActive && (() => {
-                                    // Find status for any of this drop's row IDs
-                                    const st = activeRows.map(r => moduleStatusMap.get(r.id)).find(s => s != null) ?? null
-                                    const stColors: Record<string, { bg: string; color: string; border: string }> = {
-                                      'Not Created': { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' },
-                                      'Pending':     { bg: '#eff6ff', color: '#1e40af', border: '#93c5fd' },
-                                      'Adjusted':    { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' },
-                                      'Cancelled':   { bg: '#fef2f2', color: '#dc2626', border: '#fca5a5' },
-                                    }
-                                    const c = st ? (stColors[st] ?? stColors['Not Created']) : { bg: '#f3f4f6', color: '#9ca3af', border: '#e5e7eb' }
-                                    return (
-                                      <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                                        <span style={{ fontSize: 9, fontWeight: 700, background: c.bg, color: c.color, border: `1px solid ${c.border}`, borderRadius: 5, padding: '2px 5px', whiteSpace: 'nowrap' }}>
-                                          {st ?? '—'}
-                                        </span>
+                                    const adj = activeRows.map(r => moduleAdjMap.get(r.id)).find(a => a != null) ?? null
+                                    return (<>
+                                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, color: adj?.qty != null ? '#dc2626' : '#9ca3af', fontSize: 12 }}>
+                                        {adj?.qty != null ? adj.qty : '—'}
                                       </td>
-                                    )
+                                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, color: adj?.amount != null ? '#dc2626' : '#9ca3af', fontSize: 12 }}>
+                                        {adj?.amount != null ? fmt$(adj.amount, (activeRows[0]?.currency as Currency) ?? 'USD') : '—'}
+                                      </td>
+                                    </>)
                                   })()}
                                 </tr>
                               )
@@ -1753,12 +1784,13 @@ export default function SeasonBookPage() {
                         {vRows.length > 1 && (
                           <tfoot>
                             <tr style={{ background: totBal > 0.001 ? '#fef2f2' : '#f0fdf4', borderTop: `2px solid ${border}` }}>
-                              <td colSpan={seasonActive ? 10 : 9} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
+                              <td colSpan={seasonActive ? 9 : 9} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
                                 Total Owed
                               </td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 13, fontWeight: 900, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>
                                 {fmt$(totBal, (vRows[0]?.currency as Currency) ?? 'USD')}
                               </td>
+                              {seasonActive && <td colSpan={2} />}
                             </tr>
                           </tfoot>
                         )}
@@ -1799,16 +1831,10 @@ export default function SeasonBookPage() {
                                   <span style={{ fontWeight: 800, fontSize: 13, color: purpleD }}>{brand}</span>
                                   <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
                                     <span style={{ fontSize: 11, fontWeight: 700, color: purpleD, background: '#ede9fe', borderRadius: 6, padding: '1px 7px' }}>{store}</span>
-                                    {mSt && (() => {
-                                      const stColors: Record<string, { bg: string; color: string }> = {
-                                        'Not Created': { bg: '#f3f4f6', color: '#6b7280' },
-                                        'Pending':     { bg: '#eff6ff', color: '#1e40af' },
-                                        'Adjusted':    { bg: '#fef3c7', color: '#92400e' },
-                                        'Cancelled':   { bg: '#fef2f2', color: '#dc2626' },
-                                        'Logged':      { bg: '#bbf7d0', color: '#14532d' },
-                                      }
-                                      const c = stColors[mSt] ?? stColors['Not Created']
-                                      return <span style={{ fontSize: 10, fontWeight: 700, background: c.bg, color: c.color, borderRadius: 6, padding: '1px 6px' }}>{mSt}</span>
+                                    {(() => {
+                                      const mAdj = seasonActive ? (activeRows.map(r => moduleAdjMap.get(r.id)).find(a => a != null) ?? null) : null
+                                      if (mAdj) return <span style={{ fontSize: 10, fontWeight: 800, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, padding: '1px 6px' }}>⚠️ Adj</span>
+                                      return null
                                     })()}
                                   </div>
                                 </div>
