@@ -193,7 +193,7 @@ export default function ICLogPage() {
   async function addEntry(e: React.FormEvent) {
     e.preventDefault()
     const order = newOrder.trim()
-    if (!order) { showToast('❌ Invoice # required', 'err'); return }
+    if (!order) { showToast('❌ Customer PO# required', 'err'); return }
     if (!newStore) { showToast('❌ StoreID required', 'err'); return }
     setAdding(true)
     const payload = {
@@ -397,7 +397,7 @@ export default function ICLogPage() {
           <select value={newStore} onChange={e => setNewStore(e.target.value)} style={{ ...inputSt, width: 80 }}>
             {STORES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <label style={{ ...labelSt, color: purpleD }}>Invoice #:</label>
+          <label style={{ ...labelSt, color: purpleD }}>Customer PO#:</label>
           <input value={newOrder} onChange={e => setNewOrder(e.target.value)}
             placeholder="e.g. 2976440" style={{ ...inputSt, width: 120 }} />
           <label style={{ ...labelSt, color: purpleD }}>Note:</label>
@@ -452,7 +452,7 @@ export default function ICLogPage() {
                 <th>Pushed (CSV)</th>
                 <th>User</th>
                 <th>Store</th>
-                <th>Invoice #</th>
+                <th>Customer PO#</th>
                 <th>Status</th>
                 <th className="ic-col-hide">In Log</th>
                 <th className="ic-col-hide">PO #</th>
@@ -627,7 +627,7 @@ export default function ICLogPage() {
                 </select>
               </div>
               <div>
-                <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>Invoice #</label>
+                <label style={{ ...labelSt, display: 'block', marginBottom: 4 }}>Customer PO#</label>
                 <input value={editingEntry.order_num}
                   onChange={e => setEditingEntry(prev => prev ? { ...prev, order_num: e.target.value } : prev)}
                   style={{ ...inputSt, width: '100%' }} />
@@ -667,7 +667,7 @@ export default function ICLogPage() {
               autoFocus
               value={attachSearch}
               onChange={e => setAttachSearch(e.target.value)}
-              placeholder="Search by invoice #, PO #…"
+              placeholder="Search by customer PO#, PO #…"
               style={{ ...inputSt, width: '100%', fontSize: 13 }}
             />
             <div style={{ overflowY: 'auto', flex: 1, border: `1px solid ${border}`, borderRadius: 8 }}>
@@ -684,7 +684,7 @@ export default function ICLogPage() {
                     style={{ padding: '10px 14px', borderBottom: i < rows.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: i % 2 === 0 ? '#fff' : '#f5f3ff', cursor: 'pointer' }}
                     onClick={() => { if (!attachSaving) doAttach(r) }}>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>INV# {r.invoice_num}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>PO# {r.invoice_num}</div>
                       <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
                         {r.store} · Qty: {r.qty_total}
                         {r.po_num ? ` · PO# ${r.po_num}` : ''}
