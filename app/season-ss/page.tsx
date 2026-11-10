@@ -25,6 +25,12 @@ interface SSRow {
   note: string | null
   flagged: boolean
   created_at: string
+  // Season Book link fields (may be absent if migration not yet run)
+  season_book_id?: string | null
+  adj_qty?: number | null
+  adj_amount?: number | null
+  adj_note?: string | null
+  status?: string | null
 }
 
 // ── theme (Spring/Summer — amber yellow) ─────────────────────────────────────
@@ -183,6 +189,13 @@ export default function SeasonSSPage() {
   const ctxRef = useRef<HTMLDivElement>(null)
 
   const [clearing, setClearing]     = useState(false)
+
+  // Adjust modal (season book link)
+  const [adjustRow, setAdjustRow]   = useState<SSRow | null>(null)
+  const [adjQty, setAdjQty]         = useState('')
+  const [adjAmount, setAdjAmount]   = useState('')
+  const [adjNote, setAdjNote]       = useState('')
+  const [adjSaving, setAdjSaving]   = useState(false)
 
   const SS_STORES = ['HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
 
@@ -422,6 +435,29 @@ export default function SeasonSSPage() {
       .eq('id', row.id)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     showToast('↩ Un-logged')
+    fetchSS(); fetchStoreRows()
+  }
+
+  async function saveAdjust() {
+    if (!adjustRow) return
+    setAdjSaving(true)
+    const qNum = adjQty ? parseInt(adjQty) : null
+    const aNum = adjAmount ? parseFloat(adjAmount) : null
+    const { error } = await supabase.from('season_ss').update({
+      adj_qty: qNum,
+      adj_amount: aNum,
+      adj_note: adjNote.trim() || null,
+      status: 'Adjusted',
+    }).eq('id', adjustRow.id)
+    if (error) { showToast('❌ ' + error.message, 'err'); setAdjSaving(false); return }
+    // If linked to season book, write an update back (note on ledger row)
+    if (adjustRow.season_book_id) {
+      const noteText = `⚠️ Adjust logged in SS module: ${qNum != null ? `Qty ${qNum} received` : ''}${aNum != null ? ` / ${aNum} amt` : ''}${adjNote.trim() ? ` — ${adjNote.trim()}` : ''}`
+      await supabase.from('season_ledger').update({ comment: noteText }).eq('id', adjustRow.season_book_id)
+    }
+    showToast('✅ Adjustment saved' + (adjustRow.season_book_id ? ' — season book updated' : ''))
+    setAdjSaving(false)
+    setAdjustRow(null)
     fetchSS(); fetchStoreRows()
   }
 
@@ -855,6 +891,7 @@ export default function SeasonSSPage() {
                   <th>Status</th>
                   <th className="ss-col-hide">Logged By</th>
                   <th className="ss-col-hide">Note</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -876,18 +913,36 @@ export default function SeasonSSPage() {
                       {hasMultiStore && <td style={{ fontWeight: 700, color: logged ? '#15803d' : greenD, fontSize: 11 }}>{r.store}</td>}
                       <td style={{ fontWeight: 600, color: txt }}>{r.brand}</td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: logged ? '#14532d' : greenD, fontWeight: 700 }}>{r.invoice_no}</td>
-                      <td className="ss-col-hide" style={{ fontFamily: 'monospace', fontSize: 11, color: txt }}>{r.po_no || '—'}</td>
+                      <td className="ss-col-hide" style={{ fontFamily: 'monospace', fontSize: 11, color: txt }}>{r.po_no || <span style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: 10 }}>Not Created</span>}</td>
                       <td className="ss-col-hide" style={{ textAlign: 'right', color: txt }}>{r.qty ?? '—'}</td>
                       <td>
-                        {r.flagged
-                          ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>⚑ Flagged</span>
-                          : r.logged
-                            ? <span style={{ background: '#bbf7d0', color: '#14532d', border: '1px solid #86efac', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>✓ Logged</span>
-                            : <span style={{ background: '#fef3c7', color: greenD, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px' }}>Pending</span>
-                        }
+                        {(() => {
+                          const st = r.adj_qty != null || r.adj_amount != null ? 'Adjusted'
+                            : r.flagged ? 'Flagged'
+                            : r.logged ? 'Logged'
+                            : r.po_no ? 'Pending'
+                            : 'Not Created'
+                          const stMap: Record<string, { bg: string; color: string; border?: string }> = {
+                            'Not Created': { bg: '#f3f4f6', color: '#6b7280' },
+                            'Pending':     { bg: '#fef3c7', color: '#92400e' },
+                            'Logged':      { bg: '#bbf7d0', color: '#14532d', border: '1px solid #86efac' },
+                            'Flagged':     { bg: '#fef3c7', color: '#92400e' },
+                            'Adjusted':    { bg: '#fef08a', color: '#713f12', border: '1px solid #ca8a04' },
+                          }
+                          const c = stMap[st] ?? stMap['Not Created']
+                          return <span style={{ background: c.bg, color: c.color, border: c.border, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>{st === 'Logged' ? '✓ ' : st === 'Flagged' ? '⚑ ' : ''}{st}</span>
+                        })()}
                       </td>
-                      <td className="ss-col-hide" style={{ fontSize: 10, color: dim }}>{r.logged_by || '—'}</td>
-                      <td className="ss-col-hide" style={{ fontSize: 10, color: dim, maxWidth: 140 }}>{r.note || ''}</td>
+                      <td className="ss-col-hide" style={{ fontSize: 10, color: dim }}>{r.logged_by ? displayUser(r.logged_by) : '—'}</td>
+                      <td className="ss-col-hide" style={{ fontSize: 10, color: dim, maxWidth: 140 }}>{r.adj_qty != null ? `⚠️ Adj qty: ${r.adj_qty}` : r.note || ''}</td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        {r.season_book_id && (
+                          <button onClick={() => { setAdjustRow(r); setAdjQty(r.adj_qty?.toString() ?? ''); setAdjAmount(r.adj_amount?.toString() ?? ''); setAdjNote(r.adj_note ?? '') }}
+                            style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, border: '1px solid #fcd34d', background: '#fffbeb', color: '#92400e', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            Adjust
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   )
                 })}
@@ -940,6 +995,53 @@ export default function SeasonSSPage() {
           </>
         )}
       </div>
+
+      {/* ── ADJUST MODAL ── */}
+      {adjustRow && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setAdjustRow(null) }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: '20px 22px', width: 360, maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: greenD }}>⚠️ Adjust Invoice</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{adjustRow.invoice_no} · {adjustRow.brand}</div>
+              </div>
+              <button onClick={() => setAdjustRow(null)} style={{ background: 'none', border: 'none', fontSize: 18, color: '#9ca3af', cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4 }}>Expected Qty</label>
+              <input readOnly value={adjustRow.qty ?? '—'} style={{ width: '100%', boxSizing: 'border-box', background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: 5, padding: '5px 8px', fontSize: 12, color: '#374151' }} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4 }}>Actual Qty Received</label>
+              <input type="number" value={adjQty} onChange={e => setAdjQty(e.target.value)} placeholder="e.g. 40"
+                style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #fcd34d', borderRadius: 5, padding: '5px 8px', fontSize: 12, background: '#fffbeb' }} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4 }}>Adjusted Amount (optional)</label>
+              <input type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} placeholder="e.g. 1200.00"
+                style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #fcd34d', borderRadius: 5, padding: '5px 8px', fontSize: 12, background: '#fffbeb' }} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4 }}>Note / Reason</label>
+              <textarea value={adjNote} onChange={e => setAdjNote(e.target.value)} placeholder="e.g. 5 units missing from shipment"
+                rows={3} style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #fcd34d', borderRadius: 5, padding: '5px 8px', fontSize: 12, background: '#fffbeb', resize: 'vertical' }} />
+            </div>
+            {adjustRow.season_book_id && (
+              <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 6, padding: '7px 10px', fontSize: 11, color: '#1e40af', marginBottom: 14 }}>
+                📗 Linked to Season Book — a note will be written back to that drop automatically.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setAdjustRow(null)} style={{ flex: 1, background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 6, padding: '8px 0', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveAdjust} disabled={adjSaving || (!adjQty && !adjAmount)}
+                style={{ flex: 2, background: '#d97706', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: (!adjQty && !adjAmount) || adjSaving ? 0.6 : 1 }}>
+                {adjSaving ? 'Saving…' : 'Save Adjustment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── TOAST ── */}
       {toast && (

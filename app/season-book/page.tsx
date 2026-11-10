@@ -339,6 +339,13 @@ export default function SeasonBookPage() {
   const [payHistEditNote, setPayHistEditNote] = useState('')
   const [payHistSearch, setPayHistSearch] = useState('')
 
+  // ── Season activation (STAR only) ────────────────────────────────────────
+  // Stored in app_settings: key = 'season_active_{season}', value = 'true'/'false'
+  const [seasonActive, setSeasonActive] = useState(false)
+  const [activating, setActivating] = useState(false)
+  // Map: ledger row id → module status string
+  const [moduleStatusMap, setModuleStatusMap] = useState<Map<string, string>>(new Map())
+
   // ── Cut-off date ──────────────────────────────────────────────────────────
   // Stored in app_settings: key = 'cutoff_SS' / 'cutoff_AW', value = 'YYYY-MM-DD|active' or 'YYYY-MM-DD|inactive'
   const [cutoffDate, setCutoffDate] = useState<string>('')       // 'YYYY-MM-DD' or ''
@@ -392,6 +399,92 @@ export default function SeasonBookPage() {
     setCutoffDate(date); setCutoffActive(active)
     showToast(savedToDb ? '✅ Cut-off date saved' : '✅ Cut-off date saved (local)')
     setShowCutoffPopover(false)
+  }
+
+  // ── Season activation helpers ─────────────────────────────────────────────
+  async function loadSeasonActive(s: string) {
+    try {
+      const { data } = await supabase.from('app_settings').select('value').eq('key', `season_active_${s}`).maybeSingle()
+      const active = data?.value === 'true'
+      setSeasonActive(active)
+      if (active) loadModuleStatus(s)
+    } catch { setSeasonActive(false) }
+  }
+
+  async function loadModuleStatus(s: string) {
+    const half = s.startsWith('SS') ? 'season_ss' : 'season_aw'
+    try {
+      const { data } = await supabase.from(half).select('season_book_id, status, adj_qty, po_no').not('season_book_id', 'is', null)
+      if (!data) return
+      const map = new Map<string, string>()
+      for (const r of data as { season_book_id: string; status: string | null; adj_qty: number | null; po_no: string | null }[]) {
+        if (!r.season_book_id) continue
+        // Compute display status
+        let st = r.status || (r.po_no ? 'Pending' : 'Not Created')
+        if (r.adj_qty != null) st = 'Adjusted'
+        map.set(r.season_book_id, st)
+      }
+      setModuleStatusMap(map)
+    } catch { /* columns may not exist yet */ }
+  }
+
+  // Sync one ledger row to SS or AW table
+  async function syncLedgerRowToModule(row: LedgerRow) {
+    const half = row.season?.startsWith('SS') ? 'season_ss' : 'season_aw'
+    // Check if already linked
+    const { data: existing } = await supabase.from(half).select('id').eq('season_book_id', row.id).maybeSingle()
+    if (existing) return // already synced
+    const status = row.invoice_num ? 'Pending' : 'Not Created'
+    await supabase.from(half).insert({
+      store: row.store,
+      brand: row.brand,
+      invoice_no: row.invoice_num || `SB-${row.id.slice(0,8)}`,
+      po_no: row.order_num || null,
+      qty: row.units,
+      logged: false,
+      logged_by: null,
+      logged_at: null,
+      note: `Auto-linked from Season Book drop ${row.drop_num}${row.drop_name ? ` · ${row.drop_name}` : ''}`,
+      flagged: false,
+      season_book_id: row.id,
+      status,
+    })
+  }
+
+  async function activateSeason(s: string) {
+    setActivating(true)
+    try {
+      // Save activation flag
+      await supabase.from('app_settings').upsert({ key: `season_active_${s}`, value: 'true' }, { onConflict: 'key' })
+      setSeasonActive(true)
+      // Sync all existing ledger rows for this season
+      const { data: allRows } = await supabase.from('season_ledger').select('*').eq('season', s)
+      if (allRows && allRows.length > 0) {
+        for (const row of allRows as LedgerRow[]) {
+          await syncLedgerRowToModule(row)
+        }
+        showToast(`✅ Season ${s} activated — ${allRows.length} row${allRows.length !== 1 ? 's' : ''} synced to ${s.startsWith('SS') ? 'SS' : 'AW'} module`)
+      } else {
+        showToast(`✅ Season ${s} activated — new drops will auto-sync`)
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      showToast('❌ ' + msg, 'err')
+    }
+    setActivating(false)
+  }
+
+  async function deactivateSeason(s: string) {
+    setActivating(true)
+    try {
+      await supabase.from('app_settings').upsert({ key: `season_active_${s}`, value: 'false' }, { onConflict: 'key' })
+      setSeasonActive(false)
+      showToast(`⏸ Season ${s} deactivated — data remains in ${s.startsWith('SS') ? 'SS' : 'AW'} module until cleared there`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      showToast('❌ ' + msg, 'err')
+    }
+    setActivating(false)
   }
 
   async function openPayHistory(row: LedgerRow) {
@@ -587,6 +680,7 @@ export default function SeasonBookPage() {
     setUser(u)
     fetchRows(season, u)
     loadCutoff(season.startsWith('SS') ? 'SS' : 'AW')
+    loadSeasonActive(season)
     // Load live vendors from Supabase, fall back to static VENDOR_DATA
     supabase.from('vendors').select('vendor_id, brand').order('vendor_id').then(({ data, error }) => {
       if (!error && data && data.length > 0) setLiveVendors(data as typeof VENDOR_DATA)
@@ -805,9 +899,15 @@ export default function SeasonBookPage() {
     const dupe = inserts.find(i => existStores.includes(i.store))
     if (dupe) { showToast(`❌ Drop ${formDrop} already has a ${dupe.store} entry`, 'err'); setSaving(false); return }
 
-    const { error } = await supabase.from('season_ledger').insert(inserts)
+    const { data: inserted, error } = await supabase.from('season_ledger').insert(inserts).select()
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
-    showToast(`✅ Drop ${formDrop} saved for ${activeBrand}`)
+    // If season is active, auto-sync new rows to SS/AW module
+    if (seasonActive && inserted) {
+      for (const row of inserted as LedgerRow[]) {
+        await syncLedgerRowToModule(row)
+      }
+    }
+    showToast(`✅ Drop ${formDrop} saved for ${activeBrand}${seasonActive ? ' · synced to module' : ''}`)
     setModal('none')
     fetchRows(season, user)
     setSaving(false)
@@ -1110,6 +1210,31 @@ export default function SeasonBookPage() {
               </div>
             )}
           </div>
+
+          {/* Activate button — STAR only */}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                if (seasonActive) {
+                  if (!window.confirm(`Deactivate ${season}?\n\nData already in the ${seasonHalf} module will stay there until you Clear Season from that module.`)) return
+                  deactivateSeason(season)
+                } else {
+                  if (!window.confirm(`Activate ${season}?\n\nThis will sync all current drops to the ${seasonHalf} module and auto-sync any new ones going forward.`)) return
+                  activateSeason(season)
+                }
+              }}
+              disabled={activating}
+              style={{
+                background: seasonActive ? '#d1fae5' : 'rgba(255,255,255,0.15)',
+                color: seasonActive ? '#065f46' : 'rgba(255,255,255,0.85)',
+                border: seasonActive ? '1.5px solid #6ee7b7' : '1px dashed rgba(255,255,255,0.4)',
+                borderRadius: 7, padding: '5px 12px', fontSize: 11, fontWeight: 800,
+                cursor: activating ? 'wait' : 'pointer', whiteSpace: 'nowrap',
+                opacity: activating ? 0.6 : 1,
+              }}>
+              {activating ? '⏳ Working…' : seasonActive ? `✅ ${seasonHalf} Active` : `▶ Activate ${seasonHalf}`}
+            </button>
+          )}
 
           <button className="sb-new-btn" onClick={() => {
               if (cutoffInEffect && !isAdmin) {
@@ -1494,7 +1619,8 @@ export default function SeasonBookPage() {
                           <col style={{ width: '7%' }} />{/* Units */}
                           <col style={{ width: '11%' }} />{/* Total */}
                           <col style={{ width: '11%' }} />{/* Deposits */}
-                          <col style={{ width: '11%' }} />{/* Balance Due */}
+                          <col style={{ width: seasonActive ? '8%' : '11%' }} />{/* Balance Due */}
+                          {seasonActive && <col style={{ width: '8%' }} />}{/* Status */}
                         </colgroup>
                         <thead>
                           <tr style={{ background: '#f8f7ff' }}>
@@ -1508,6 +1634,7 @@ export default function SeasonBookPage() {
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Total</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Deposits</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Balance Due</th>
+                            {seasonActive && <th style={{ padding: '5px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>{seasonHalf} Status</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -1572,6 +1699,24 @@ export default function SeasonBookPage() {
                                   <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit, rowCurrency)}</td>
                                   <td style={{ padding: '8px 10px', textAlign: 'right', color: '#166534' }}>{fmt$(sDep, rowCurrency)}</td>
                                   <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: sBal > 0.001 ? '#dc2626' : '#166534' }}>{fmt$(sBal, rowCurrency)}</td>
+                                  {seasonActive && (() => {
+                                    // Find status for any of this drop's row IDs
+                                    const st = activeRows.map(r => moduleStatusMap.get(r.id)).find(s => s != null) ?? null
+                                    const stColors: Record<string, { bg: string; color: string; border: string }> = {
+                                      'Not Created': { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' },
+                                      'Pending':     { bg: '#eff6ff', color: '#1e40af', border: '#93c5fd' },
+                                      'Adjusted':    { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' },
+                                      'Cancelled':   { bg: '#fef2f2', color: '#dc2626', border: '#fca5a5' },
+                                    }
+                                    const c = st ? (stColors[st] ?? stColors['Not Created']) : { bg: '#f3f4f6', color: '#9ca3af', border: '#e5e7eb' }
+                                    return (
+                                      <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                        <span style={{ fontSize: 9, fontWeight: 700, background: c.bg, color: c.color, border: `1px solid ${c.border}`, borderRadius: 5, padding: '2px 5px', whiteSpace: 'nowrap' }}>
+                                          {st ?? '—'}
+                                        </span>
+                                      </td>
+                                    )
+                                  })()}
                                 </tr>
                               )
                             })
@@ -1581,7 +1726,7 @@ export default function SeasonBookPage() {
                         {vRows.length > 1 && (
                           <tfoot>
                             <tr style={{ background: totBal > 0.001 ? '#fef2f2' : '#f0fdf4', borderTop: `2px solid ${border}` }}>
-                              <td colSpan={9} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
+                              <td colSpan={seasonActive ? 10 : 9} style={{ padding: '6px 14px', fontSize: 11, fontWeight: 800, color: totBal > 0.001 ? '#dc2626' : '#166534', textAlign: 'right' }}>
                                 Total Owed
                               </td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 13, fontWeight: 900, color: totBal > 0.001 ? '#dc2626' : '#166534' }}>
