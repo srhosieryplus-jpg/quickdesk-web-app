@@ -475,17 +475,20 @@ export default function SeasonSSPage() {
 
   const filteredStore = useMemo(() => {
     const q = tableFilter.toLowerCase()
-    const rows = q
-      ? storeRows.filter(r =>
-          r.invoice_no.toLowerCase().includes(q) ||
-          r.brand.toLowerCase().includes(q) ||
-          (r.po_no || '').toLowerCase().includes(q) ||
-          r.store.toLowerCase().includes(q) ||
-          (r.logged_by || '').toLowerCase().includes(q)
-        )
-      : storeRows
+    const rows = storeRows.filter(r => {
+      const storeOk = ssStoreFilter === 'ALL' || r.store === ssStoreFilter
+      if (!storeOk) return false
+      if (!q) return true
+      return (
+        (r.invoice_no || '').toLowerCase().includes(q) ||
+        r.brand.toLowerCase().includes(q) ||
+        (r.po_no || '').toLowerCase().includes(q) ||
+        r.store.toLowerCase().includes(q) ||
+        (r.logged_by || '').toLowerCase().includes(q)
+      )
+    })
     return [...rows].sort((a, b) => a.brand.localeCompare(b.brand))
-  }, [storeRows, tableFilter])
+  }, [storeRows, tableFilter, ssStoreFilter])
 
   const filteredSS = useMemo(() => {
     const q = ssFilter.toLowerCase()
