@@ -47,13 +47,13 @@ export default function TasksPage() {
   }, [router])
 
   async function fetchUsers(u: User) {
-    const { data } = await supabase.from('users').select('userid, name, store').order('userid')
+    const { data } = await supabase.from('users').select('userid, name, store, location').order('userid')
     if (!data) return
     const all = data as User[]
-    // Show users from the same store + STAR admin; admin sees everyone
+    // Show users from the same location + STAR admin; admin sees everyone
     const filtered = u.store === 'ALL'
       ? all
-      : all.filter(x => x.store === u.store || x.store === 'ALL')
+      : all.filter(x => x.location === u.location || x.store === 'ALL')
     setAllUsers(filtered)
   }
 
