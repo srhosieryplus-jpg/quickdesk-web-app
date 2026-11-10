@@ -301,11 +301,15 @@ export default function SeasonBookPage() {
   // Inline brand/vendor dropdowns on the new-entry form (after brand chosen)
   const [showFormBrandDrop, setShowFormBrandDrop] = useState(false)
   const [showFormVendorDrop, setShowFormVendorDrop] = useState(false)
+  const [formBrandHi, setFormBrandHi] = useState(-1)
+  const [formVendorHi, setFormVendorHi] = useState(-1)
   const formBrandRef = useRef<HTMLDivElement>(null)
   const formVendorRef = useRef<HTMLDivElement>(null)
   // Inline brand/vendor dropdowns on the edit-entry form
   const [showEditBrandDrop, setShowEditBrandDrop] = useState(false)
   const [showEditVendorDrop, setShowEditVendorDrop] = useState(false)
+  const [editBrandHi, setEditBrandHi] = useState(-1)
+  const [editVendorHi, setEditVendorHi] = useState(-1)
   const editBrandRef = useRef<HTMLDivElement>(null)
   const editVendorRef = useRef<HTMLDivElement>(null)
 
@@ -2026,10 +2030,22 @@ export default function SeasonBookPage() {
                   <label style={lbl}>Brand</label>
                   <input
                     value={activeBrand}
-                    onChange={e => { setActiveBrand(e.target.value); setShowFormBrandDrop(true) }}
-                    onFocus={() => setShowFormBrandDrop(true)}
+                    onChange={e => { setActiveBrand(e.target.value); setShowFormBrandDrop(true); setFormBrandHi(-1) }}
+                    onFocus={() => { setShowFormBrandDrop(true); setFormBrandHi(-1) }}
                     placeholder="Brand name"
                     style={{ ...inp, fontSize: 13 }}
+                    onKeyDown={e => {
+                      const q = activeBrand.toLowerCase()
+                      const allB = Array.from(new Set([...liveVendors.map(v => v.brand), ...rows.map(r => r.brand)])).sort()
+                      const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== activeBrand).slice(0, 8)
+                      if (!showFormBrandDrop || suggs.length === 0) return
+                      if (e.key === 'ArrowDown') { e.preventDefault(); setFormBrandHi(h => Math.min(h + 1, suggs.length - 1)) }
+                      else if (e.key === 'ArrowUp') { e.preventDefault(); setFormBrandHi(h => Math.max(h - 1, 0)) }
+                      else if (e.key === 'Enter' && formBrandHi >= 0) {
+                        e.preventDefault(); const b = suggs[formBrandHi]; setActiveBrand(b); setShowFormBrandDrop(false); setFormBrandHi(-1)
+                        const vids = brandToVendors.get(b); if (vids && vids.length === 1) setFormVendorId(vids[0])
+                      } else if (e.key === 'Escape') { setShowFormBrandDrop(false); setFormBrandHi(-1) }
+                    }}
                   />
                   {showFormBrandDrop && (() => {
                     const q = activeBrand.toLowerCase()
@@ -2037,15 +2053,14 @@ export default function SeasonBookPage() {
                     const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== activeBrand).slice(0, 8)
                     return suggs.length > 0 ? (
                       <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
-                        {suggs.map(b => (
+                        {suggs.map((b, bi) => (
                           <div key={b}
-                            onMouseDown={e => { e.preventDefault(); setActiveBrand(b); setShowFormBrandDrop(false)
+                            onMouseDown={e => { e.preventDefault(); setActiveBrand(b); setShowFormBrandDrop(false); setFormBrandHi(-1)
                               const vids = brandToVendors.get(b)
                               if (vids && vids.length === 1) setFormVendorId(vids[0])
                             }}
-                            style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
-                            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                            onMouseEnter={() => setFormBrandHi(bi)}
+                            style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', background: bi === formBrandHi ? '#ede9fe' : '#fff' }}>
                             {b}
                           </div>
                         ))}
@@ -2058,10 +2073,21 @@ export default function SeasonBookPage() {
                   <label style={lbl}>Vendor ID</label>
                   <input
                     value={formVendorId ?? ''}
-                    onChange={e => { setFormVendorId(e.target.value || null); setShowFormVendorDrop(true) }}
-                    onFocus={() => setShowFormVendorDrop(true)}
+                    onChange={e => { setFormVendorId(e.target.value || null); setShowFormVendorDrop(true); setFormVendorHi(-1) }}
+                    onFocus={() => { setShowFormVendorDrop(true); setFormVendorHi(-1) }}
                     placeholder="e.g. 1984 by Ladida"
                     style={{ ...inp, fontSize: 13 }}
+                    onKeyDown={e => {
+                      const q = (formVendorId ?? '').toLowerCase()
+                      const allV = Array.from(new Set(liveVendors.map(v => v.vendor_id).filter(Boolean))).sort() as string[]
+                      const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== formVendorId).slice(0, 8)
+                      if (!showFormVendorDrop || suggs.length === 0) return
+                      if (e.key === 'ArrowDown') { e.preventDefault(); setFormVendorHi(h => Math.min(h + 1, suggs.length - 1)) }
+                      else if (e.key === 'ArrowUp') { e.preventDefault(); setFormVendorHi(h => Math.max(h - 1, 0)) }
+                      else if (e.key === 'Enter' && formVendorHi >= 0) {
+                        e.preventDefault(); setFormVendorId(suggs[formVendorHi]); setShowFormVendorDrop(false); setFormVendorHi(-1)
+                      } else if (e.key === 'Escape') { setShowFormVendorDrop(false); setFormVendorHi(-1) }
+                    }}
                   />
                   {showFormVendorDrop && (() => {
                     const q = (formVendorId ?? '').toLowerCase()
@@ -2069,12 +2095,11 @@ export default function SeasonBookPage() {
                     const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== formVendorId).slice(0, 8)
                     return suggs.length > 0 ? (
                       <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
-                        {suggs.map(v => (
+                        {suggs.map((v, vi) => (
                           <div key={v}
-                            onMouseDown={e => { e.preventDefault(); setFormVendorId(v); setShowFormVendorDrop(false) }}
-                            style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
-                            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                            onMouseDown={e => { e.preventDefault(); setFormVendorId(v); setShowFormVendorDrop(false); setFormVendorHi(-1) }}
+                            onMouseEnter={() => setFormVendorHi(vi)}
+                            style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', background: vi === formVendorHi ? '#ede9fe' : '#fff' }}>
                             {v}
                           </div>
                         ))}
@@ -2328,12 +2353,25 @@ export default function SeasonBookPage() {
                       <input
                         value={editRow.vendor_id ?? ''}
                         placeholder="e.g. 1984 by Ladida"
-                        onFocus={() => setShowEditVendorDrop(true)}
+                        onFocus={() => { setShowEditVendorDrop(true); setEditVendorHi(-1) }}
                         onChange={async e => {
                           const newVid = e.target.value
                           setEditRow({ ...editRow, vendor_id: newVid || null })
-                          setShowEditVendorDrop(true)
+                          setShowEditVendorDrop(true); setEditVendorHi(-1)
                           await supabase.from('season_ledger').update({ vendor_id: newVid || null }).eq('id', editRow.id)
+                        }}
+                        onKeyDown={e => {
+                          const q = (editRow.vendor_id ?? '').toLowerCase()
+                          const allV = Array.from(new Set(liveVendors.map(v => v.vendor_id).filter(Boolean))).sort() as string[]
+                          const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== editRow.vendor_id).slice(0, 8)
+                          if (!showEditVendorDrop || suggs.length === 0) return
+                          if (e.key === 'ArrowDown') { e.preventDefault(); setEditVendorHi(h => Math.min(h + 1, suggs.length - 1)) }
+                          else if (e.key === 'ArrowUp') { e.preventDefault(); setEditVendorHi(h => Math.max(h - 1, 0)) }
+                          else if (e.key === 'Enter' && editVendorHi >= 0) {
+                            e.preventDefault(); const v = suggs[editVendorHi]
+                            setEditRow({ ...editRow, vendor_id: v }); setShowEditVendorDrop(false); setEditVendorHi(-1)
+                            supabase.from('season_ledger').update({ vendor_id: v }).eq('id', editRow.id)
+                          } else if (e.key === 'Escape') { setShowEditVendorDrop(false); setEditVendorHi(-1) }
                         }}
                         style={inp} />
                       {showEditVendorDrop && (() => {
@@ -2342,17 +2380,15 @@ export default function SeasonBookPage() {
                         const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== editRow.vendor_id).slice(0, 8)
                         return suggs.length > 0 ? (
                           <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
-                            {suggs.map(v => (
+                            {suggs.map((v, vi) => (
                               <div key={v}
                                 onMouseDown={async e => {
                                   e.preventDefault()
-                                  setEditRow({ ...editRow, vendor_id: v })
-                                  setShowEditVendorDrop(false)
+                                  setEditRow({ ...editRow, vendor_id: v }); setShowEditVendorDrop(false); setEditVendorHi(-1)
                                   await supabase.from('season_ledger').update({ vendor_id: v }).eq('id', editRow.id)
                                 }}
-                                style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
-                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                onMouseEnter={() => setEditVendorHi(vi)}
+                                style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, borderBottom: '1px solid #f3f4f6', background: vi === editVendorHi ? '#ede9fe' : '#fff' }}>
                                 {v}
                               </div>
                             ))}
@@ -2365,12 +2401,25 @@ export default function SeasonBookPage() {
                       <input
                         value={editRow.brand}
                         placeholder="Brand name"
-                        onFocus={() => setShowEditBrandDrop(true)}
+                        onFocus={() => { setShowEditBrandDrop(true); setEditBrandHi(-1) }}
                         onChange={async e => {
                           const newBrand = e.target.value
                           setEditRow({ ...editRow, brand: newBrand })
-                          setShowEditBrandDrop(true)
+                          setShowEditBrandDrop(true); setEditBrandHi(-1)
                           await supabase.from('season_ledger').update({ brand: newBrand }).eq('id', editRow.id)
+                        }}
+                        onKeyDown={e => {
+                          const q = editRow.brand.toLowerCase()
+                          const allB = Array.from(new Set([...liveVendors.map(v => v.brand), ...rows.map(r => r.brand)])).sort()
+                          const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== editRow.brand).slice(0, 8)
+                          if (!showEditBrandDrop || suggs.length === 0) return
+                          if (e.key === 'ArrowDown') { e.preventDefault(); setEditBrandHi(h => Math.min(h + 1, suggs.length - 1)) }
+                          else if (e.key === 'ArrowUp') { e.preventDefault(); setEditBrandHi(h => Math.max(h - 1, 0)) }
+                          else if (e.key === 'Enter' && editBrandHi >= 0) {
+                            e.preventDefault(); const b = suggs[editBrandHi]
+                            setEditRow({ ...editRow, brand: b }); setShowEditBrandDrop(false); setEditBrandHi(-1)
+                            supabase.from('season_ledger').update({ brand: b }).eq('id', editRow.id)
+                          } else if (e.key === 'Escape') { setShowEditBrandDrop(false); setEditBrandHi(-1) }
                         }}
                         style={inp} />
                       {showEditBrandDrop && (() => {
@@ -2379,17 +2428,15 @@ export default function SeasonBookPage() {
                         const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== editRow.brand).slice(0, 8)
                         return suggs.length > 0 ? (
                           <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
-                            {suggs.map(b => (
+                            {suggs.map((b, bi) => (
                               <div key={b}
                                 onMouseDown={async e => {
                                   e.preventDefault()
-                                  setEditRow({ ...editRow, brand: b })
-                                  setShowEditBrandDrop(false)
+                                  setEditRow({ ...editRow, brand: b }); setShowEditBrandDrop(false); setEditBrandHi(-1)
                                   await supabase.from('season_ledger').update({ brand: b }).eq('id', editRow.id)
                                 }}
-                                style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe')}
-                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                onMouseEnter={() => setEditBrandHi(bi)}
+                                style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, borderBottom: '1px solid #f3f4f6', background: bi === editBrandHi ? '#ede9fe' : '#fff' }}>
                                 {b}
                               </div>
                             ))}
