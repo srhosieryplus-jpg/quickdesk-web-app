@@ -17,6 +17,7 @@ export interface Task {
   done: boolean
   logged_by: string
   saved_at: string
+  assigned_to: string | null
 }
 
 export interface SeasonLog {
