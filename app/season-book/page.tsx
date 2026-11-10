@@ -929,6 +929,27 @@ export default function SeasonBookPage() {
   }
 
   // ── Save new log entry ─────────────────────────────────────────────────────
+  // Auto-add brand+vendor to vendors table if not already there
+  async function ensureVendorExists(brand: string, vendorId: string | null) {
+    if (!brand?.trim()) return
+    const normalBrand = brand.trim()
+    const normalVendor = vendorId?.trim() || null
+    // Check if this brand already exists in liveVendors
+    const alreadyExists = liveVendors.some(v =>
+      v.brand.toLowerCase() === normalBrand.toLowerCase() &&
+      (normalVendor ? v.vendor_id?.toLowerCase() === normalVendor.toLowerCase() : true)
+    )
+    if (alreadyExists) return
+    // Insert new vendor entry
+    const { data } = await supabase.from('vendors').upsert(
+      { brand: normalBrand, vendor_id: normalVendor },
+      { onConflict: 'brand,vendor_id', ignoreDuplicates: true }
+    ).select()
+    // Refresh liveVendors
+    const { data: fresh } = await supabase.from('vendors').select('vendor_id, brand').order('vendor_id')
+    if (fresh && fresh.length > 0) setLiveVendors(fresh as typeof VENDOR_DATA)
+  }
+
   async function saveNewEntry() {
     if (!user || !activeBrand) return
     if (cutoffInEffect && !isAdmin) {
@@ -980,6 +1001,8 @@ export default function SeasonBookPage() {
         setSaving(false); return
       }
     }
+    // Auto-add to vendors if new brand/vendor combo
+    await ensureVendorExists(activeBrand, formVendorId ?? null)
     showToast(`✅ Drop ${formDrop} saved for ${activeBrand}${seasonActive ? ' · synced to module' : ''}`)
     setModal('none')
     fetchRows(season, user)
@@ -1008,6 +1031,8 @@ export default function SeasonBookPage() {
       updated_at: new Date().toISOString(),
     }).eq('id', editRow.id)
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
+    // Auto-add to vendors if new brand/vendor combo
+    await ensureVendorExists(editRow.brand, editRow.vendor_id ?? null)
     showToast('✅ Entry updated')
     setModal('none')
     fetchRows(season, user)
