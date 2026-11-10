@@ -14,6 +14,9 @@ const gray        = '#6b7280'
 interface Task {
   id: string; store: string; location: string; task: string
   note: string; done: boolean; logged_by: string; saved_at: string
+  assigned_to: string | null
+  completed_at: string | null
+  completed_by: string | null
 }
 interface SeasonLog {
   id: string; season_type: string; store: string; vendor: string
@@ -68,6 +71,7 @@ export default function ReportsPage() {
   const [toast, setToast]     = useState('')
 
   const [tasks, setTasks]       = useState<Task[]>([])
+  const [allUsers, setAllUsers] = useState<{ userid: string; name: string | null }[]>([])
   const [season, setSeason]     = useState<SeasonLog[]>([])
   const [logRequests, setLogRequests] = useState<LogRequest[]>([])
   const [ic, setIc]             = useState<ICEntry[]>([])
@@ -111,6 +115,9 @@ export default function ReportsPage() {
     if (!u) { router.push('/'); return }
     setUser(u)
     fetchAll(u)
+    supabase.from('users').select('userid, name').order('userid').then(({ data }) => {
+      if (data) setAllUsers(data as { userid: string; name: string | null }[])
+    })
     const interval = setInterval(() => fetchAll(u), 30000)
     return () => clearInterval(interval)
   }, [router, fetchAll])
@@ -141,10 +148,11 @@ export default function ReportsPage() {
   }
 
   const isAdmin = user?.store === 'ALL'
+  const userNameMap = new Map(allUsers.map(u => [u.userid.toUpperCase(), u.name?.trim() || displayUser(u.userid)]))
   const q = filter.toLowerCase()
   const filteredTasks  = tasks.filter(r =>
     (!pendingOnly || !r.done) &&
-    (!q || r.task.toLowerCase().includes(q) || r.store.toLowerCase().includes(q) || r.logged_by?.toLowerCase().includes(q))
+    (!q || r.task.toLowerCase().includes(q) || r.store.toLowerCase().includes(q) || r.logged_by?.toLowerCase().includes(q) || r.assigned_to?.toLowerCase().includes(q))
   )
   const filteredSeason = season.filter(r =>
     (!q || r.vendor.toLowerCase().includes(q) || r.invoice.toLowerCase().includes(q) || r.store.toLowerCase().includes(q))
@@ -449,15 +457,17 @@ export default function ReportsPage() {
                 <thead>
                   <tr>
                     <th>Date</th>
-                    <th>User</th>
+                    <th>Submitted By</th>
+                    <th>Assigned To</th>
                     <th>Store</th>
                     <th>Task</th>
                     <th className="ic-col-hide">Note</th>
-                    <th>Status</th>
+                    <th>Done</th>
+                    <th className="ic-col-hide">Completed</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTasks.length === 0 && <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No tasks found.</td></tr>}
+                  {filteredTasks.length === 0 && <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4', fontSize: 13 }}>No tasks found.</td></tr>}
                   {filteredTasks.map((r, i) => {
                     const done = r.done
                     const rowBg = done ? (i%2===0 ? '#dcfce7' : '#d1fae5') : (i%2===0 ? '#fff' : '#eff6ff')
@@ -466,7 +476,10 @@ export default function ReportsPage() {
                     return (
                       <tr key={r.id} style={{ background: rowBg }}>
                         <td style={{ color: dim, fontSize: 11 }}>{(() => { const f = formatDate(r.saved_at); return <>{f.date}<span className="rpt-time"> {f.full.slice(-5)}</span></> })()}</td>
-                        <td style={{ color: done ? '#166534' : purple, fontWeight: 700 }}>{displayUser(r.logged_by)}</td>
+                        <td style={{ color: done ? '#166534' : purple, fontWeight: 700 }}>{userNameMap.get(r.logged_by?.toUpperCase()) || displayUser(r.logged_by)}</td>
+                        <td style={{ color: r.assigned_to ? (done ? '#15803d' : '#7c3aed') : dim, fontWeight: r.assigned_to ? 700 : 400 }}>
+                          {r.assigned_to ? (userNameMap.get(r.assigned_to.toUpperCase()) || displayUser(r.assigned_to)) : '—'}
+                        </td>
                         <td style={{ color: txt, fontWeight: 600 }}>{r.store}</td>
                         <td style={{ color: done ? '#14532d' : '#111', maxWidth: 300 }}>{r.task}</td>
                         <td className="ic-col-hide" style={{ color: dim, maxWidth: 200 }}>{r.note || ''}</td>
@@ -482,6 +495,14 @@ export default function ReportsPage() {
                             }}>
                             {done ? '✓ Done' : 'Open'}
                           </span>
+                        </td>
+                        <td className="ic-col-hide" style={{ fontSize: 11 }}>
+                          {r.completed_at ? (
+                            <div>
+                              <div style={{ color: '#15803d', fontWeight: 700 }}>{(() => { const f = formatDate(r.completed_at!); return f.date })()}</div>
+                              {r.completed_by && <div style={{ color: '#16a34a', fontSize: 10 }}>{userNameMap.get(r.completed_by.toUpperCase()) || displayUser(r.completed_by)}</div>}
+                            </div>
+                          ) : <span style={{ color: dim }}>—</span>}
                         </td>
                       </tr>
                     )
