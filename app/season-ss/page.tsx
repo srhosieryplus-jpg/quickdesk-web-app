@@ -972,7 +972,7 @@ export default function SeasonSSPage() {
             ) : filteredStore.map((r) => {
               const logged = r.logged && !r.flagged
               const cardBg = r.flagged ? '#fffbeb' : logged ? '#dcfce7' : '#fff'
-              const cardBorder = r.flagged ? '#fcd34d' : logged ? '#86efac' : '#93c5fd'
+              const cardBorder = r.flagged ? '#fcd34d' : logged ? '#86efac' : '#fcd34d'
               return (
                 <div key={r.id}
                   style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8, cursor: 'pointer' }}
