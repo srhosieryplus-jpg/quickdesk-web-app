@@ -650,15 +650,26 @@ export default function SeasonBookPage() {
   }
 
   function downloadSeasonCSV() {
-    const headers = ['Brand','Vendor ID','Drop #','Drop Name','Store','Units','Total','Deposit','Duties','Balance Due','Currency','Invoice #','Order #','Payment Date','Comment']
+    const headers = [
+      'Brand','Vendor ID','Drop #','Drop Name','Drop Label','Store',
+      'Units','Total','Deposit','Duties','Shipping','CC Fee','Balance Due',
+      'Currency','Order #','Invoice #','Payment Date','Comment',
+      'Cancelled','Logged By','Created At','Updated At',
+      'Order PDF Files','Invoice # Files (packing slips)',
+    ]
     const csvRows = [headers.join(',')]
     for (const r of rows) {
+      const orderPDFs = (r.invoice_files ?? []).map(f => f.name || f.url).join(' | ')
+      const slipNums = (r.packing_slips ?? []).map(s => s.invoice_num ? `${s.name || 'slip'}: ${s.invoice_num}` : (s.name || 'slip')).join(' | ')
       csvRows.push([
-        r.brand, r.vendor_id, r.drop_num, r.drop_name ?? '',
+        r.brand, r.vendor_id ?? '', r.drop_num, r.drop_name ?? '', r.drop_label ?? '',
         r.store, r.units ?? '', r.initial_total ?? '', r.deposit ?? '',
-        r.duties ?? '', r.balance_due ?? '', r.currency ?? 'USD',
-        r.invoice_num ?? '', r.order_num ?? '',
+        r.duties ?? '', r.shipping ?? '', r.cc_fee ?? '', r.balance_due ?? '',
+        r.currency ?? 'USD', r.order_num ?? '', r.invoice_num ?? '',
         r.payment_date ?? '', (r.comment ?? '').replace(/,/g, ';'),
+        r.is_cancelled ? 'Yes' : 'No',
+        r.logged_by ?? '', r.created_at ?? '', r.updated_at ?? '',
+        orderPDFs, slipNums,
       ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
     }
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' })
