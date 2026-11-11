@@ -77,8 +77,8 @@ interface LedgerRow {
   created_at: string
   updated_at: string
   invoice_file_url: string | null
-  invoice_files: { url: string; name: string }[] | null
-  packing_slips: { url: string; name: string; uploaded_at: string }[] | null
+  invoice_files: { url: string; name: string; invoice_num?: string }[] | null
+  packing_slips: { url: string; name: string; uploaded_at: string; invoice_num?: string }[] | null
   drop_label: string | null
 }
 
@@ -161,20 +161,20 @@ function safeDate(d: string) {
   return d.slice(0, 10) + 'T12:00:00'
 }
 
-// ── Invoice file attachment (top-level so React never remounts it on re-render) ─
+// ── Order PDF attachment (formerly Invoice attachment) ────────────────────
 function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () => void }) {
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const [delTarget, setDelTarget] = useState<string | null>(null) // url of file being deleted
+  const [delTarget, setDelTarget] = useState<string | null>(null)
   const [delPw, setDelPw] = useState('')
   const [delErr, setDelErr] = useState(false)
   const border = '#e5e7eb'
 
-  // Merge legacy invoice_file_url into the files array for display
-  const files: { url: string; name: string }[] = [
+  // Merge legacy invoice_file_url — treat as { url, name, invoice_num: '' }
+  const files: { url: string; name: string; invoice_num?: string }[] = [
     ...(row.invoice_files ?? []),
     ...(row.invoice_file_url && !(row.invoice_files ?? []).some(f => f.url === row.invoice_file_url)
-      ? [{ url: row.invoice_file_url, name: 'Invoice' }]
+      ? [{ url: row.invoice_file_url, name: 'Order PDF', invoice_num: '' }]
       : []),
   ]
 
@@ -188,8 +188,8 @@ function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () =
     if (upErr) { setUploading(false); return }
     const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path)
     const url = `${urlData.publicUrl}?v=${Date.now()}`
-    const displayName = file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'Invoice'
-    const updated = [...files, { url, name: displayName }]
+    const displayName = file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'Order PDF'
+    const updated = [...files, { url, name: displayName, invoice_num: '' }]
     const { error: dbErr } = await supabase.from('season_ledger').update({ invoice_files: updated }).eq('id', row.id)
     if (dbErr) { setUploading(false); return }
     setUploading(false)
@@ -197,11 +197,16 @@ function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () =
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  async function handleInvoiceNumChange(url: string, invoice_num: string) {
+    const updated = files.map(f => f.url === url ? { ...f, invoice_num } : f)
+    await supabase.from('season_ledger').update({ invoice_files: updated }).eq('id', row.id)
+    onUpdated()
+  }
+
   async function handleRemove(url: string) {
     const pathRaw = url.split('/invoices/').pop()?.split('?')[0]
     if (pathRaw) await supabase.storage.from('invoices').remove([pathRaw])
     const updated = files.filter(f => f.url !== url)
-    // also clear legacy field if it matched
     const patch: Record<string, unknown> = { invoice_files: updated.length ? updated : null }
     if (row.invoice_file_url === url) patch.invoice_file_url = null
     await supabase.from('season_ledger').update(patch).eq('id', row.id)
@@ -210,17 +215,28 @@ function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () =
   }
 
   return (
-    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {/* Existing files */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {files.map((f, fi) => (
-        <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', flexWrap: 'wrap' }}>
-          <a href={f.url} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 11, fontWeight: 700, color: '#6d28d9', background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {/\.(xlsx?|csv|ods)(\?|$)/i.test(f.url) ? '📊' : '📄'} {f.name || `File ${fi + 1}`}
-          </a>
-          <button onClick={() => { setDelTarget(f.url); setDelPw(''); setDelErr(false) }}
-            title="Remove this file"
-            style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', lineHeight: 1 }}>✕</button>
+        <div key={fi} style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'relative', background: '#faf8ff', border: `1px solid #ede9fe`, borderRadius: 7, padding: '6px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <a href={f.url} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 11, fontWeight: 700, color: '#6d28d9', background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {/\.(xlsx?|csv|ods)(\?|$)/i.test(f.url) ? '📊' : '📄'} {f.name || `File ${fi + 1}`}
+            </a>
+            <button onClick={() => { setDelTarget(f.url); setDelPw(''); setDelErr(false) }}
+              title="Remove this file"
+              style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', lineHeight: 1, flexShrink: 0 }}>✕</button>
+          </div>
+          {/* Invoice # per file */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>Invoice #</span>
+            <input
+              defaultValue={f.invoice_num ?? ''}
+              placeholder="e.g. INV-001"
+              onBlur={e => handleInvoiceNumChange(f.url, e.target.value)}
+              style={{ flex: 1, border: `1px solid ${border}`, borderRadius: 4, padding: '3px 6px', fontSize: 10, outline: 'none', background: '#fff' }}
+            />
+          </div>
           {delTarget === f.url && (
             <div onMouseDown={e => e.stopPropagation()} style={{ position: 'absolute', top: '110%', left: 0, background: '#fff', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '10px 12px', zIndex: 999, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>🗑 Delete "{f.name}"?</div>
@@ -239,20 +255,20 @@ function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () =
           )}
         </div>
       ))}
-      {/* Upload button — always visible */}
+      {/* Upload button */}
       <div>
         <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.ods" onChange={handleUpload}
           style={{ display: 'none' }} id={`inv-file-${row.id}`} />
         <label htmlFor={`inv-file-${row.id}`}
           style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', background: '#f9fafb', border: `1px dashed ${border}`, borderRadius: 5, padding: '2px 8px', cursor: uploading ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          {uploading ? '⏳ Uploading…' : files.length > 0 ? '📎 Add Another' : '📎 Attach Invoice'}
+          {uploading ? '⏳ Uploading…' : files.length > 0 ? '📎 Add Order PDF' : '📎 Attach Order PDF'}
         </label>
       </div>
     </div>
   )
 }
 
-// ── Packing slip attachment ────────────────────────────────────────────────
+// ── Packing slip / Invoice attachment (side panel) ────────────────────────
 function PackingSlipAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () => void }) {
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -260,7 +276,7 @@ function PackingSlipAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: 
   const [delPw, setDelPw] = useState('')
   const [delErr, setDelErr] = useState(false)
   const border = '#e5e7eb'
-  const slips = row.packing_slips ?? []
+  const slips: { url: string; name: string; uploaded_at: string; invoice_num?: string }[] = row.packing_slips ?? []
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -273,11 +289,17 @@ function PackingSlipAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: 
     const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path)
     const url = `${urlData.publicUrl}?v=${Date.now()}`
     const displayName = file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'Packing Slip'
-    const updated = [...slips, { url, name: displayName, uploaded_at: new Date().toISOString() }]
+    const updated = [...slips, { url, name: displayName, uploaded_at: new Date().toISOString(), invoice_num: '' }]
     await supabase.from('season_ledger').update({ packing_slips: updated }).eq('id', row.id)
     setUploading(false)
     onUpdated()
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  async function handleInvoiceNumChange(url: string, invoice_num: string) {
+    const updated = slips.map(s => s.url === url ? { ...s, invoice_num } : s)
+    await supabase.from('season_ledger').update({ packing_slips: updated }).eq('id', row.id)
+    onUpdated()
   }
 
   async function handleRemove(url: string) {
@@ -295,17 +317,29 @@ function PackingSlipAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: 
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {slips.map((s, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', flexWrap: 'wrap' }}>
-          <a href={s.url} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {/\.(xlsx?|csv|ods)(\?|$)/i.test(s.url) ? '📊' : '📦'} {s.name || `Slip ${i + 1}`}
-          </a>
-          <span style={{ fontSize: 10, color: '#6b7280' }}>{fmtDate(s.uploaded_at)}</span>
-          <button onClick={() => { setDelTarget(s.url); setDelPw(''); setDelErr(false) }}
-            title="Remove this slip"
-            style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', lineHeight: 1 }}>✕</button>
+        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'relative', background: '#f0f9ff', border: `1px solid #bae6fd`, borderRadius: 7, padding: '6px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <a href={s.url} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {/\.(xlsx?|csv|ods)(\?|$)/i.test(s.url) ? '📊' : '📦'} {s.name || `Slip ${i + 1}`}
+            </a>
+            <button onClick={() => { setDelTarget(s.url); setDelPw(''); setDelErr(false) }}
+              title="Remove this slip"
+              style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', lineHeight: 1, flexShrink: 0 }}>✕</button>
+          </div>
+          {/* Invoice # per slip */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>Invoice #</span>
+            <input
+              defaultValue={s.invoice_num ?? ''}
+              placeholder="e.g. INV-001"
+              onBlur={e => handleInvoiceNumChange(s.url, e.target.value)}
+              style={{ flex: 1, border: `1px solid ${border}`, borderRadius: 4, padding: '3px 6px', fontSize: 10, outline: 'none', background: '#fff' }}
+            />
+          </div>
+          <span style={{ fontSize: 9, color: '#94a3b8' }}>Added {fmtDate(s.uploaded_at)}</span>
           {delTarget === s.url && (
             <div onMouseDown={e => e.stopPropagation()} style={{ position: 'absolute', top: '110%', left: 0, background: '#fff', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '10px 12px', zIndex: 999, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>🗑 Delete "{s.name}"?</div>
@@ -1841,11 +1875,10 @@ export default function SeasonBookPage() {
                       <div className="sb-drop-table">
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
                         <colgroup>
-                          <col style={{ width: '16%' }} />{/* Brand */}
-                          <col style={{ width: '12%' }} />{/* Log # */}
-                          <col style={{ width: '7%' }} />{/* Store */}
-                          <col style={{ width: '10%' }} />{/* Invoice # */}
-                          <col style={{ width: '10%' }} />{/* Order # */}
+                          <col style={{ width: '18%' }} />{/* Brand */}
+                          <col style={{ width: '14%' }} />{/* Log # */}
+                          <col style={{ width: '8%' }} />{/* Store */}
+                          <col style={{ width: '12%' }} />{/* Order # */}
                           <col style={{ width: '5%' }} />{/* PDF */}
                           <col style={{ width: '7%' }} />{/* Units */}
                           <col style={{ width: '11%' }} />{/* Total */}
@@ -1859,7 +1892,6 @@ export default function SeasonBookPage() {
                             <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Brand</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Log #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
-                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Order #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>PDF</th>
                             <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Units</th>
@@ -1915,11 +1947,6 @@ export default function SeasonBookPage() {
                                   </td>
                                   <td style={{ padding: '8px 10px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>
                                     {store}{hasCancelled && <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', marginLeft: 4 }}>🚫</span>}
-                                  </td>
-                                  <td style={{ padding: '8px 10px', textAlign: 'left' }}>
-                                    {invoiceNums.length > 0 ? invoiceNums.map(inv => (
-                                      <span key={inv} style={{ fontSize: 10, color: '#1e40af', fontWeight: 700, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 4, padding: '1px 5px', marginRight: 3, whiteSpace: 'nowrap' }}>{inv}</span>
-                                    )) : <span style={{ color: gray }}>—</span>}
                                   </td>
                                   <td style={{ padding: '8px 10px', textAlign: 'left' }}>
                                     {poNums.length > 0 ? poNums.map(o => (
@@ -2291,13 +2318,8 @@ export default function SeasonBookPage() {
                       </select>
                     </div>
                     <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {/* Row 1: Invoice # + Order # + Drop # + Drop Name */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
-                        <div>
-                          <label style={lbl}>Invoice #</label>
-                          <input value={entry.invoice_num} placeholder="INV-001"
-                            onChange={e => upd({ invoice_num: e.target.value })} style={inp} />
-                        </div>
+                      {/* Row 1: Order # + Drop # + Drop Name */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                         <div>
                           <label style={lbl}>Order #</label>
                           <input value={entry.order_num} placeholder="ORD-001"
@@ -2474,12 +2496,7 @@ export default function SeasonBookPage() {
                 {/* Section 1: Reference fields */}
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: gray, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Reference</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                    <div>
-                      <label style={lbl}>Invoice #</label>
-                      <input value={entry.invoice_num} placeholder="INV-001"
-                        onChange={e => upd({ invoice_num: e.target.value })} style={inp} />
-                    </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div>
                       <label style={lbl}>Order #</label>
                       <input value={entry.order_num} placeholder="ORD-001"
@@ -2698,9 +2715,9 @@ export default function SeasonBookPage() {
                     onChange={e => upd({ comment: e.target.value })} style={inp} />
                 </div>
 
-                {/* Invoice PDF attachment */}
+                {/* Order PDF attachment */}
                 <div style={{ marginBottom: 12 }}>
-                  <label style={lbl}>Invoice PDF(s)</label>
+                  <label style={lbl}>Order PDF</label>
                   <InvoiceAttachment row={editRow} onUpdated={async () => {
                     await fetchRows(season, user!)
                     const { data } = await supabase.from('season_ledger').select('*').eq('id', editRow.id).single()
@@ -2780,8 +2797,8 @@ export default function SeasonBookPage() {
                 return (
                   <div style={{ width: 200, minWidth: 200, background: '#faf8ff', padding: '14px 12px', overflowY: 'auto', display: 'flex', flexDirection: 'column', borderRadius: '0 0 12px 0' }}>
 
-                    {/* Packing Slips */}
-                    <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#0369a1', borderBottom: '1.5px solid #bae6fd', paddingBottom: 4, marginBottom: 7 }}>📦 Packing Slips</div>
+                    {/* Invoice # / Packing Slips */}
+                    <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#0369a1', borderBottom: '1.5px solid #bae6fd', paddingBottom: 4, marginBottom: 7 }}>📦 Invoice #</div>
                     <PackingSlipAttachment row={editRow} onUpdated={async () => {
                       await fetchRows(season, user!)
                       const { data } = await supabase.from('season_ledger').select('*').eq('id', editRow.id).single()
