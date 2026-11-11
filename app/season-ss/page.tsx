@@ -77,7 +77,7 @@ function parsePasteData(raw: string): { brand: string; store: string; invoice_no
       const po_no      = cols[4]?.trim() || null
       if (!store || !brand || !invoice_no) continue
       // skip header row
-      if (store.toLowerCase() === 'storeid' || invoice_no.toLowerCase() === 'invoice #') continue
+      if (store.toLowerCase() === 'storeid' || invoice_no.toLowerCase() === 'invoice #' || invoice_no.toLowerCase() === 'order #') continue
       results.push({ brand, store, invoice_no, po_no, qty })
     }
     return results
@@ -91,7 +91,7 @@ function parsePasteData(raw: string): { brand: string; store: string; invoice_no
     const brand      = cols[2]?.trim()
     const store      = cols[3]?.trim().toUpperCase()
     if (!invoice_no || !brand || !store) continue
-    if (invoice_no.toLowerCase() === 'invoice #' || brand.toLowerCase() === 'brand') continue
+    if (invoice_no.toLowerCase() === 'invoice #' || invoice_no.toLowerCase() === 'order #' || brand.toLowerCase() === 'brand') continue
     const po_no  = cols[6]?.trim() || null
     const qtyRaw = cols[9]?.trim().replace(/[^0-9]/g, '')
     const qty    = qtyRaw ? parseInt(qtyRaw) : null
@@ -175,6 +175,8 @@ export default function SeasonSSPage() {
   const [pastePreview, setPastePreview] = useState<ReturnType<typeof parsePasteData>>([])
   const [pasting, setPasting]       = useState(false)
   const [pasteResult, setPasteResult] = useState<{ok: number; skip: number} | null>(null)
+
+  const [linkedOrderNum, setLinkedOrderNum] = useState<string | null>(null)
 
   const [editRow, setEditRow]       = useState<SSRow | null>(null)
   const [editStore, setEditStore]   = useState('')
@@ -298,8 +300,20 @@ export default function SeasonSSPage() {
       }
       const { data } = await q.maybeSingle()
       setSearching(false)
-      if (data) setState({ phase: 'found', row: data as SSRow })
-      else setState({ phase: 'notfound', term: inv, byBrand: false })
+      if (data) {
+        const row = data as SSRow
+        setState({ phase: 'found', row })
+        // Fetch order_num from linked season book row
+        if (row.season_book_id) {
+          const { data: ledger } = await supabase.from('season_ledger').select('order_num').eq('id', row.season_book_id).maybeSingle()
+          setLinkedOrderNum((ledger as { order_num?: string | null } | null)?.order_num ?? null)
+        } else {
+          setLinkedOrderNum(null)
+        }
+      } else {
+        setState({ phase: 'notfound', term: inv, byBrand: false })
+        setLinkedOrderNum(null)
+      }
     } else {
       // Brand search — first try in-memory from already-loaded rows, fall back to DB
       const inMemory = storeRows.filter(r => r.brand?.toLowerCase().includes(br.toLowerCase()))
@@ -324,6 +338,7 @@ export default function SeasonSSPage() {
   function reset() {
     setState({ phase: 'idle' })
     setLoggedRow(null)
+    setLinkedOrderNum(null)
     setInvoiceQ(''); setBrandQ('')
     setCrNote('PRIORITY — items on floor, not in system')
     setCrBrand(''); setCrPO(''); setCrQty(''); setLogNote('')
@@ -712,7 +727,7 @@ export default function SeasonSSPage() {
             {state.phase === 'found' && (
               <div className="result-card">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: greenD }}>Invoice Found</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: greenD }}>Order Found</span>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {state.row.logged && (
                       <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>
@@ -738,7 +753,7 @@ export default function SeasonSSPage() {
                 )}
 
                 <div className="result-grid">
-                  <InfoRow label="Invoice #" value={state.row.invoice_no} />
+                  <InfoRow label="Order #" value={linkedOrderNum ?? state.row.invoice_no} />
                   <InfoRow label="PO #"      value={state.row.po_no} />
                   <InfoRow label="Brand"     value={state.row.brand} />
                   <InfoRow label="Qty"       value={state.row.qty} />
@@ -754,7 +769,7 @@ export default function SeasonSSPage() {
                     <input value={logNote} onChange={e => setLogNote(e.target.value)}
                       placeholder="Note (optional)…" style={{ ...inputSt, flex: 1, minWidth: 140 }} />
                     <button onClick={() => logRow(state.row)} disabled={logging} className="ss-btn ss-btn-primary">
-                      {logging ? '…' : '✓ Log Invoice'}
+                      {logging ? '…' : '✓ Log Order'}
                     </button>
                     {state.row.season_book_id && (
                       <button onClick={() => { setAdjustRow(state.row); setAdjQty(state.row.adj_qty?.toString() ?? ''); setAdjAmount(state.row.adj_amount?.toString() ?? ''); setAdjNote(state.row.adj_note ?? '') }}
@@ -786,7 +801,7 @@ export default function SeasonSSPage() {
               <div className="result-card">
                 <div style={{ fontSize: 13, fontWeight: 800, color: '#dc2626', marginBottom: 6 }}>
                   {state.byBrand
-                    ? <>No invoices found for brand: <span style={{ fontFamily: 'monospace' }}>{state.term}</span></>
+                    ? <>No orders found for brand: <span style={{ fontFamily: 'monospace' }}>{state.term}</span></>
                     : <>Invoice not found: <span style={{ fontFamily: 'monospace' }}>{state.term}</span></>
                   }
                 </div>
@@ -819,7 +834,7 @@ export default function SeasonSSPage() {
                 </div>
                 {state.results.map(row => (
                   <div key={row.id} className="brand-row"
-                    onClick={() => { setState({ phase: 'found', row }); setInvoiceQ(row.invoice_no) }}>
+                    onClick={async () => { setState({ phase: 'found', row }); setInvoiceQ(row.invoice_no); if (row.season_book_id) { const { data: l } = await supabase.from('season_ledger').select('order_num').eq('id', row.season_book_id).maybeSingle(); setLinkedOrderNum((l as { order_num?: string | null } | null)?.order_num ?? null) } else { setLinkedOrderNum(null) } }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: greenD }}>{row.brand}</div>
                       <div style={{ fontSize: 11, color: '#6b7280' }}>
@@ -896,7 +911,7 @@ export default function SeasonSSPage() {
                   <th>Date</th>
                   {hasMultiStore && <th>Store</th>}
                   <th>Brand</th>
-                  <th>Invoice #</th>
+                  <th>Order #</th>
                   <th className="ss-col-hide">PO #</th>
                   <th className="ss-col-hide">Qty</th>
                   <th>Status</th>
@@ -907,7 +922,7 @@ export default function SeasonSSPage() {
               <tbody>
                 {filteredStore.length === 0 && (
                   <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#fbbf24', fontSize: 13 }}>
-                    {storeRows.length === 0 ? 'No invoices in system yet.' : 'No matches.'}
+                    {storeRows.length === 0 ? 'No orders in system yet.' : 'No matches.'}
                   </td></tr>
                 )}
                 {filteredStore.map((r, i) => {
@@ -960,7 +975,7 @@ export default function SeasonSSPage() {
           <div className="ss-cards" style={{ paddingBottom: 40 }}>
             {filteredStore.length === 0 ? (
               <p style={{ textAlign: 'center', color: '#9b8ec4', fontSize: 13, padding: 24 }}>
-                {storeRows.length === 0 ? 'No invoices in system yet.' : 'No matches.'}
+                {storeRows.length === 0 ? 'No orders in system yet.' : 'No matches.'}
               </p>
             ) : filteredStore.map((r) => {
               const logged = r.logged && !r.flagged
@@ -1082,7 +1097,7 @@ export default function SeasonSSPage() {
             {modalTab === 'paste' && (
               <div className="modal-body" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10, flexShrink: 0 }}>
-                  Copy rows from Excel and paste left. <strong>Date · Vendor ID · Brand · Store · C.I. · Invoice # · PO # · Season · Source · Qty</strong>
+                  Copy rows from Excel and paste left. <strong>Date · Vendor ID · Brand · Store · C.I. · Order # · PO # · Season · Source · Qty</strong>
                 </p>
                 <div className="paste-layout" style={{ flex: 1 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1130,7 +1145,7 @@ export default function SeasonSSPage() {
                     {pastePreview.length > 0 ? (
                       <div style={{ flex: 1, overflow: 'auto', border: '1px solid #fef3c7', borderRadius: 8 }}>
                         <table className="ss-preview-table">
-                          <thead><tr><th>#</th><th>Store</th><th>Brand</th><th>Invoice #</th><th>PO #</th><th>Qty</th></tr></thead>
+                          <thead><tr><th>#</th><th>Store</th><th>Brand</th><th>Order #</th><th>PO #</th><th>Qty</th></tr></thead>
                           <tbody>
                             {pastePreview.map((r, i) => (
                               <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fffbeb' }}>
@@ -1178,7 +1193,7 @@ export default function SeasonSSPage() {
                   <div style={{ overflow: 'auto', maxHeight: 500, border: '1px solid #fef3c7', borderRadius: 8 }}>
                     <table className="ss-preview-table">
                       <thead>
-                        <tr><th>#</th><th>Store</th><th>Brand</th><th>Invoice #</th><th>PO #</th><th>Qty</th><th>Status</th><th>Logged By</th><th>Logged At</th><th>Note</th></tr>
+                        <tr><th>#</th><th>Store</th><th>Brand</th><th>Order #</th><th>PO #</th><th>Qty</th><th>Status</th><th>Logged By</th><th>Logged At</th><th>Note</th></tr>
                       </thead>
                       <tbody>
                         {filteredSS.map((r, i) => {
@@ -1261,7 +1276,7 @@ export default function SeasonSSPage() {
               {([
                 ['Store', editStore, setEditStore, false, true] as const,
                 ['Brand', editBrand, setEditBrand, false, false] as const,
-                ['Invoice #', editInv, setEditInv, false, false] as const,
+                ['Order #', editInv, setEditInv, false, false] as const,
                 ['PO #', editPO, setEditPO, false, false] as const,
                 ['Qty', editQty, setEditQty, true, false] as const,
                 ['Note', editNote, setEditNote, false, false] as const,
