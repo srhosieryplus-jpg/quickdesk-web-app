@@ -197,12 +197,6 @@ function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () =
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  async function handleInvoiceNumChange(url: string, invoice_num: string) {
-    const updated = files.map(f => f.url === url ? { ...f, invoice_num } : f)
-    await supabase.from('season_ledger').update({ invoice_files: updated }).eq('id', row.id)
-    onUpdated()
-  }
-
   async function handleRemove(url: string) {
     const pathRaw = url.split('/invoices/').pop()?.split('?')[0]
     if (pathRaw) await supabase.storage.from('invoices').remove([pathRaw])
@@ -217,7 +211,7 @@ function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () =
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {files.map((f, fi) => (
-        <div key={fi} style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'relative', background: '#faf8ff', border: `1px solid #ede9fe`, borderRadius: 7, padding: '6px 8px' }}>
+        <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <a href={f.url} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 11, fontWeight: 700, color: '#6d28d9', background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -226,16 +220,6 @@ function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () =
             <button onClick={() => { setDelTarget(f.url); setDelPw(''); setDelErr(false) }}
               title="Remove this file"
               style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', lineHeight: 1, flexShrink: 0 }}>✕</button>
-          </div>
-          {/* Invoice # per file */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>Invoice #</span>
-            <input
-              defaultValue={f.invoice_num ?? ''}
-              placeholder="e.g. INV-001"
-              onBlur={e => handleInvoiceNumChange(f.url, e.target.value)}
-              style={{ flex: 1, border: `1px solid ${border}`, borderRadius: 4, padding: '3px 6px', fontSize: 10, outline: 'none', background: '#fff' }}
-            />
           </div>
           {delTarget === f.url && (
             <div onMouseDown={e => e.stopPropagation()} style={{ position: 'absolute', top: '110%', left: 0, background: '#fff', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '10px 12px', zIndex: 999, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
@@ -1338,6 +1322,17 @@ export default function SeasonBookPage() {
           .sb-subbar-divider { display: none !important; }
           .sb-drop-table { display: none !important; }
           .sb-drop-card { display: block !important; }
+          /* Edit modal mobile — bottom sheet */
+          .modal-bg { padding: 0; align-items: flex-end; overflow-y: hidden; }
+          .modal-box { border-radius: 18px 18px 0 0 !important; max-width: 100% !important; max-height: 92vh; display: flex; flex-direction: column; }
+          .modal-head { flex-shrink: 0; }
+          .modal-body { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+          .sb-edit-flex { flex-direction: column !important; }
+          .sb-edit-form { border-right: none !important; border-bottom: 2px solid #ede9fe; }
+          .sb-edit-panel { width: 100% !important; min-width: 0 !important; border-radius: 0 !important; }
+          .sb-edit-grid-3 { grid-template-columns: 1fr 1fr !important; }
+          .sb-edit-grid-4 { grid-template-columns: 1fr 1fr !important; }
+          .sb-financials-grid { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
 
@@ -2489,14 +2484,14 @@ export default function SeasonBookPage() {
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
               </div>
 
-              <div className="modal-body" style={{ opacity: isCancelled ? 0.7 : 1, display: 'flex', gap: 0, padding: 0 }}>
+              <div className="modal-body sb-edit-flex" style={{ opacity: isCancelled ? 0.7 : 1, display: 'flex', gap: 0, padding: 0 }}>
               {/* ── LEFT: edit form ── */}
-              <div style={{ flex: 1, minWidth: 0, padding: '16px 18px', borderRight: `2px solid #ede9fe` }}>
+              <div className="sb-edit-form" style={{ flex: 1, minWidth: 0, padding: '16px 18px', borderRight: `2px solid #ede9fe` }}>
 
                 {/* Section 1: Reference fields */}
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: gray, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Reference</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div className="sb-edit-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div>
                       <label style={lbl}>Order #</label>
                       <input value={entry.order_num} placeholder="ORD-001"
@@ -2642,7 +2637,7 @@ export default function SeasonBookPage() {
                 {/* Section 2: Financials — 2 column layout */}
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: gray, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Financials</div>
-                  <div className="sb-financials" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div className="sb-financials-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     {/* Left column */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 6 }}>
@@ -2795,7 +2790,7 @@ export default function SeasonBookPage() {
                   color, borderBottom: `1.5px solid ${borderColor}`, paddingBottom: 4, marginBottom: 7, marginTop: 14,
                 })
                 return (
-                  <div style={{ width: 200, minWidth: 200, background: '#faf8ff', padding: '14px 12px', overflowY: 'auto', display: 'flex', flexDirection: 'column', borderRadius: '0 0 12px 0' }}>
+                  <div className="sb-edit-panel" style={{ width: 200, minWidth: 200, background: '#faf8ff', padding: '14px 12px', overflowY: 'auto', display: 'flex', flexDirection: 'column', borderRadius: '0 0 12px 0' }}>
 
                     {/* Invoice # / Packing Slips */}
                     <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#0369a1', borderBottom: '1.5px solid #bae6fd', paddingBottom: 4, marginBottom: 7 }}>📦 Invoice #</div>
