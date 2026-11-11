@@ -861,8 +861,8 @@ export default function SeasonBookPage() {
     loadCutoff(season.startsWith('SS') ? 'SS' : 'AW')
     loadSeasonActive(season)
     // Load live vendors from Supabase, fall back to static VENDOR_DATA
-    supabase.from('vendors').select('vendor_id, brand').order('vendor_id').then(({ data, error }) => {
-      if (!error && data && data.length > 0) setLiveVendors(data as typeof VENDOR_DATA)
+    supabase.from('vendors').select('vendor_id, brand, active').order('vendor_id').then(({ data, error }) => {
+      if (!error && data && data.length > 0) setLiveVendors((data as typeof VENDOR_DATA).filter(v => v.active !== false))
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, fetchRows, season])
@@ -1076,12 +1076,12 @@ export default function SeasonBookPage() {
     if (alreadyExists) return
     // Insert new vendor entry
     const { data } = await supabase.from('vendors').upsert(
-      { brand: normalBrand, vendor_id: normalVendor },
+      { brand: normalBrand, vendor_id: normalVendor, active: true },
       { onConflict: 'brand,vendor_id', ignoreDuplicates: true }
     ).select()
-    // Refresh liveVendors
-    const { data: fresh } = await supabase.from('vendors').select('vendor_id, brand').order('vendor_id')
-    if (fresh && fresh.length > 0) setLiveVendors(fresh as typeof VENDOR_DATA)
+    // Refresh liveVendors — only active
+    const { data: fresh } = await supabase.from('vendors').select('vendor_id, brand, active').order('vendor_id')
+    if (fresh && fresh.length > 0) setLiveVendors((fresh as typeof VENDOR_DATA).filter(v => v.active !== false))
   }
 
   async function saveNewEntry() {

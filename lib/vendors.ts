@@ -1,4 +1,4 @@
-export interface VendorRow { vendor_id: string; brand: string }
+export interface VendorRow { vendor_id: string; brand: string; active?: boolean }
 
 export const VENDOR_DATA: VendorRow[] = [
   {vendor_id:"365",brand:"365"},

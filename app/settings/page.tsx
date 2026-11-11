@@ -127,7 +127,7 @@ export default function SettingsPage() {
       }
     })
     // Load vendors from Supabase vendors table (falls back to static VENDOR_DATA)
-    supabase.from('vendors').select('vendor_id, brand').order('vendor_id').then(({ data, error }) => {
+    supabase.from('vendors').select('vendor_id, brand, active').order('vendor_id').then(({ data, error }) => {
       if (!error && data && data.length > 0) {
         setVendors(data as VendorRow[])
       }
@@ -251,8 +251,14 @@ export default function SettingsPage() {
   // Vendor helpers — all mutations go to Supabase `vendors` table
   async function saveVendorAdd(vid: string, br: string) {
     setVendorsSaving(true)
-    await supabase.from('vendors').insert({ vendor_id: vid, brand: br })
+    await supabase.from('vendors').insert({ vendor_id: vid, brand: br, active: true })
     setVendorsSaving(false)
+  }
+
+  async function toggleVendorActive(vid: string, brand: string, currentlyActive: boolean) {
+    const newActive = !currentlyActive
+    setVendors(prev => prev.map(v => v.vendor_id === vid && v.brand === brand ? { ...v, active: newActive } : v))
+    await supabase.from('vendors').update({ active: newActive }).eq('vendor_id', vid).eq('brand', brand)
   }
   async function saveVendorEdit(oldVid: string, oldBrand: string, newVid: string, newBrand: string) {
     setVendorsSaving(true)
@@ -508,65 +514,76 @@ export default function SettingsPage() {
       {/* ══ VENDORS / BRANDS TAB ═════════════════════════════════════════════ */}
       {tab === 'vendors' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {/* Add row + search */}
+          {/* Toolbar */}
           <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <label style={labelStyle}>Search:</label>
             <input value={vendorSearch} onChange={e => setVendorSearch(e.target.value)}
-              placeholder="vendor or brand…" style={{ ...inlineInput, flex: 1, minWidth: 120 }} />
+              placeholder="🔍 Search vendor or brand…" style={{ ...inlineInput, flex: 1, minWidth: 160 }} />
             <form onSubmit={addVendorRow} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={labelStyle}>Vendor:</label>
               <input value={newVendorId} onChange={e => setNewVendorId(e.target.value)}
-                placeholder="Vendor name" style={{ ...inlineInput, width: 140 }} />
-              <label style={labelStyle}>Brand:</label>
+                placeholder="Vendor ID" style={{ ...inlineInput, width: 110 }} />
               <input value={newBrand} onChange={e => setNewBrand(e.target.value)}
                 placeholder="Brand name" style={{ ...inlineInput, width: 140 }} />
               <button type="submit"
-                style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                + Add
+                style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                + Add Brand
               </button>
             </form>
           </div>
 
-          {/* Grouped by Vendor ID */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 14px 40px' }}>
-            {filteredVendors.length === 0 && (
-              <div style={{ textAlign: 'center', color: '#9b8ec4', padding: 28 }}>No matches.</div>
-            )}
-            {(() => {
-              // group by vendor_id
-              const groups = new Map<string, typeof filteredVendors>()
-              filteredVendors.forEach(v => {
-                if (!groups.has(v.vendor_id)) groups.set(v.vendor_id, [])
-                groups.get(v.vendor_id)!.push(v)
-              })
-              return Array.from(groups.entries()).map(([vid, rows]) => (
-                <div key={vid} style={{ marginBottom: 10, border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
-                  {/* Vendor header */}
-                  <div style={{ background: purpleD, color: '#fff', padding: '6px 12px', fontWeight: 800, fontSize: 12, letterSpacing: '0.04em' }}>
-                    {vid}
-                  </div>
-                  {/* Brand rows */}
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <tbody>
-                      {rows.map((v, i) => {
-                        const globalIdx = filteredVendors.indexOf(v)
-                        return (
-                          <tr key={i}
-                            style={{ background: i % 2 === 0 ? '#fff' : '#faf8ff', cursor: 'default' }}
-                            onContextMenu={e => { e.preventDefault(); setVCtxMenu({ x: e.clientX, y: e.clientY, kind: 'vendor', idx: globalIdx }); setCtxMenu(null) }}>
-                            <td style={{ padding: '6px 12px', fontSize: 12, color: '#374151' }}>{v.brand}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ))
-            })()}
+          {/* Table */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                <tr style={{ background: '#f8f7ff', borderBottom: `2px solid ${border}` }}>
+                  <th style={{ padding: '7px 14px', textAlign: 'left', fontWeight: 700, color: '#6b7280', fontSize: 11, width: '28%' }}>Vendor ID</th>
+                  <th style={{ padding: '7px 14px', textAlign: 'left', fontWeight: 700, color: '#6b7280', fontSize: 11 }}>Brand</th>
+                  <th style={{ padding: '7px 14px', textAlign: 'center', fontWeight: 700, color: '#6b7280', fontSize: 11, width: 90 }}>Status</th>
+                  <th style={{ padding: '7px 14px', textAlign: 'center', fontWeight: 700, color: '#6b7280', fontSize: 11, width: 110 }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredVendors.length === 0 && (
+                  <tr><td colSpan={4} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4' }}>No matches.</td></tr>
+                )}
+                {filteredVendors.map((v, i) => {
+                  const isActive = v.active !== false // treat undefined/null as active
+                  const globalIdx = filteredVendors.indexOf(v)
+                  return (
+                    <tr key={i}
+                      style={{ background: isActive ? (i % 2 === 0 ? '#fff' : '#faf8ff') : '#fafafa', borderBottom: `1px solid #f3f4f6`, opacity: isActive ? 1 : 0.55 }}
+                      onContextMenu={e => { e.preventDefault(); setVCtxMenu({ x: e.clientX, y: e.clientY, kind: 'vendor', idx: globalIdx }); setCtxMenu(null) }}>
+                      <td style={{ padding: '7px 14px', fontWeight: 700, color: purpleD, fontFamily: 'monospace', fontSize: 11 }}>{v.vendor_id}</td>
+                      <td style={{ padding: '7px 14px', color: isActive ? '#1f2937' : '#9ca3af' }}>{v.brand}</td>
+                      <td style={{ padding: '7px 14px', textAlign: 'center' }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, borderRadius: 20, padding: '2px 8px',
+                          background: isActive ? '#dcfce7' : '#f3f4f6',
+                          color: isActive ? '#15803d' : '#9ca3af',
+                          border: `1px solid ${isActive ? '#86efac' : '#e5e7eb'}`,
+                        }}>
+                          {isActive ? '● Active' : '○ Inactive'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '7px 14px', textAlign: 'center' }}>
+                        <button
+                          onClick={() => toggleVendorActive(v.vendor_id, v.brand, isActive)}
+                          style={{
+                            fontSize: 11, fontWeight: 700, borderRadius: 5, padding: '3px 10px', cursor: 'pointer', border: 'none',
+                            background: isActive ? '#fef2f2' : '#f0fdf4',
+                            color: isActive ? '#dc2626' : '#16a34a',
+                          }}>
+                          {isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
 
           <div style={{ padding: '5px 14px', background: purpleLight, borderTop: `1px solid ${border}`, fontSize: 11, color: '#9b8ec4', position: 'sticky', bottom: 0 }}>
-            {filteredVendors.length} of {vendors.length} rows · Right-click a row to edit or delete
+            {filteredVendors.filter(v => v.active !== false).length} active · {filteredVendors.filter(v => v.active === false).length} inactive · {filteredVendors.length} shown of {vendors.length} total · Right-click to edit or delete
           </div>
         </div>
       )}
