@@ -78,6 +78,7 @@ interface LedgerRow {
   updated_at: string
   invoice_file_url: string | null
   invoice_files: { url: string; name: string }[] | null
+  packing_slips: { url: string; name: string; uploaded_at: string }[] | null
   drop_label: string | null
 }
 
@@ -245,6 +246,90 @@ function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () =
         <label htmlFor={`inv-file-${row.id}`}
           style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', background: '#f9fafb', border: `1px dashed ${border}`, borderRadius: 5, padding: '2px 8px', cursor: uploading ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           {uploading ? '⏳ Uploading…' : files.length > 0 ? '📎 Add Another' : '📎 Attach Invoice'}
+        </label>
+      </div>
+    </div>
+  )
+}
+
+// ── Packing slip attachment ────────────────────────────────────────────────
+function PackingSlipAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () => void }) {
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [delTarget, setDelTarget] = useState<string | null>(null)
+  const [delPw, setDelPw] = useState('')
+  const [delErr, setDelErr] = useState(false)
+  const border = '#e5e7eb'
+  const slips = row.packing_slips ?? []
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `ps_${row.id}_${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('invoices').upload(path, file, { upsert: true })
+    if (upErr) { setUploading(false); return }
+    const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path)
+    const url = `${urlData.publicUrl}?v=${Date.now()}`
+    const displayName = file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'Packing Slip'
+    const updated = [...slips, { url, name: displayName, uploaded_at: new Date().toISOString() }]
+    await supabase.from('season_ledger').update({ packing_slips: updated }).eq('id', row.id)
+    setUploading(false)
+    onUpdated()
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  async function handleRemove(url: string) {
+    const pathRaw = url.split('/invoices/').pop()?.split('?')[0]
+    if (pathRaw) await supabase.storage.from('invoices').remove([pathRaw])
+    const updated = slips.filter(s => s.url !== url)
+    await supabase.from('season_ledger').update({ packing_slips: updated.length ? updated : null }).eq('id', row.id)
+    setDelTarget(null); setDelPw('')
+    onUpdated()
+  }
+
+  function fmtDate(iso: string) {
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {slips.map((s, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', flexWrap: 'wrap' }}>
+          <a href={s.url} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {/\.(xlsx?|csv|ods)(\?|$)/i.test(s.url) ? '📊' : '📦'} {s.name || `Slip ${i + 1}`}
+          </a>
+          <span style={{ fontSize: 10, color: '#6b7280' }}>{fmtDate(s.uploaded_at)}</span>
+          <button onClick={() => { setDelTarget(s.url); setDelPw(''); setDelErr(false) }}
+            title="Remove this slip"
+            style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', lineHeight: 1 }}>✕</button>
+          {delTarget === s.url && (
+            <div onMouseDown={e => e.stopPropagation()} style={{ position: 'absolute', top: '110%', left: 0, background: '#fff', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '10px 12px', zIndex: 999, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>🗑 Delete "{s.name}"?</div>
+              <input autoFocus type="password" placeholder="Type password"
+                value={delPw} onChange={e => { setDelPw(e.target.value); setDelErr(false) }}
+                onKeyDown={ev => { if (ev.key === 'Enter') { if (delPw.toLowerCase() === 'delete') handleRemove(s.url); else setDelErr(true) } }}
+                style={{ width: '100%', border: `1px solid ${delErr ? '#fca5a5' : border}`, borderRadius: 5, padding: '4px 7px', fontSize: 11, marginBottom: 6, outline: 'none', boxSizing: 'border-box' }} />
+              {delErr && <div style={{ fontSize: 10, color: '#dc2626', marginBottom: 4 }}>Incorrect password</div>}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => { if (delPw.toLowerCase() === 'delete') handleRemove(s.url); else setDelErr(true) }}
+                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}>Delete</button>
+                <button onClick={() => { setDelTarget(null); setDelPw('') }}
+                  style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 5, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      <div>
+        <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.ods" onChange={handleUpload}
+          style={{ display: 'none' }} id={`ps-file-${row.id}`} />
+        <label htmlFor={`ps-file-${row.id}`}
+          style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#f0f9ff', border: `1px dashed #bae6fd`, borderRadius: 5, padding: '2px 8px', cursor: uploading ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {uploading ? '⏳ Uploading…' : slips.length > 0 ? '📦 Add Slip' : '📦 Attach Packing Slip'}
         </label>
       </div>
     </div>
@@ -1805,6 +1890,11 @@ export default function SeasonBookPage() {
                               const invoiceNums = Array.from(new Set(activeRows.map(r => r.invoice_num).filter((n): n is string => !!n)))
                               const poNums = Array.from(new Set(activeRows.map(r => r.order_num).filter((n): n is string => !!n)))
                               const invoiceFileUrls = Array.from(new Set(activeRows.map(r => r.invoice_file_url).filter((u): u is string => !!u)))
+                              const allInvFiles = Array.from(new Map([
+                                ...activeRows.flatMap(r => (r.invoice_files ?? []).map(f => [f.url, f] as [string, {url:string;name:string}])),
+                                ...invoiceFileUrls.map(u => [u, {url:u, name:'Invoice'}] as [string, {url:string;name:string}])
+                              ]).values())
+                              const allPackingSlips = activeRows.flatMap(r => r.packing_slips ?? [])
                               return (
                                 <tr key={`${brand}|${dropNum}|${store}`}
                                   onClick={() => { setInvoiceBrand(brand); setInvoiceStoreFilter(store); setModal('invoice') }}
@@ -1833,11 +1923,17 @@ export default function SeasonBookPage() {
                                     )) : <span style={{ color: gray }}>—</span>}
                                   </td>
                                   <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                                    {invoiceFileUrls.length > 0 ? invoiceFileUrls.map((url, i) => (
-                                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                        style={{ color: purpleD, fontWeight: 700, fontSize: 13, textDecoration: 'none', display: 'inline-block', marginLeft: i > 0 ? 4 : 0 }}
-                                        title="View PDF invoice">📄</a>
-                                    )) : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>}
+                                    {(allInvFiles.length === 0 && allPackingSlips.length === 0) && <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>}
+                                    {allInvFiles.map((f, i) => (
+                                      <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"
+                                        style={{ color: purpleD, fontWeight: 700, fontSize: 13, textDecoration: 'none', display: 'inline-block', marginLeft: i > 0 ? 3 : 0 }}
+                                        title={`Invoice: ${f.name}`}>📄</a>
+                                    ))}
+                                    {allPackingSlips.map((s, i) => (
+                                      <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                                        style={{ color: '#0369a1', fontWeight: 700, fontSize: 13, textDecoration: 'none', display: 'inline-block', marginLeft: 3 }}
+                                        title={`Packing Slip: ${s.name}`}>📦</a>
+                                    ))}
                                   </td>
                                   <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{sUnits || '—'}</td>
                                   <td style={{ padding: '8px 10px', textAlign: 'right', color: '#374151' }}>{fmt$(sInit, rowCurrency)}</td>
@@ -2597,11 +2693,21 @@ export default function SeasonBookPage() {
                 </div>
 
                 {/* Invoice PDF attachment */}
-                <div style={{ marginBottom: 16 }}>
-                  <label style={lbl}>Invoice PDF</label>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={lbl}>Invoice PDF(s)</label>
                   <InvoiceAttachment row={editRow} onUpdated={async () => {
                     await fetchRows(season, user!)
-                    // re-read the updated row so the attachment button refreshes
+                    const { data } = await supabase.from('season_ledger').select('*').eq('id', editRow.id).single()
+                    if (data) setEditRow(data as LedgerRow)
+                  }} />
+                </div>
+
+                {/* Packing Slips */}
+                <div style={{ marginBottom: 16, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '10px 12px' }}>
+                  <label style={{ ...lbl, color: '#0369a1' }}>📦 Packing Slips</label>
+                  <div style={{ fontSize: 10, color: '#0284c7', marginBottom: 6 }}>Each slip is timestamped when uploaded</div>
+                  <PackingSlipAttachment row={editRow} onUpdated={async () => {
+                    await fetchRows(season, user!)
                     const { data } = await supabase.from('season_ledger').select('*').eq('id', editRow.id).single()
                     if (data) setEditRow(data as LedgerRow)
                   }} />
