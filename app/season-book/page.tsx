@@ -456,6 +456,7 @@ export default function SeasonBookPage() {
   // Map: ledger row id → module status string
   const [moduleStatusMap, setModuleStatusMap] = useState<Map<string, string>>(new Map())
   const [moduleAdjMap, setModuleAdjMap] = useState<Map<string, { qty: number | null; amount: number | null }>>(new Map())
+  const [modulePOMap, setModulePOMap] = useState<Map<string, string>>(new Map())
 
   // ── Cut-off date ──────────────────────────────────────────────────────────
   // Stored in app_settings: key = 'cutoff_SS' / 'cutoff_AW', value = 'YYYY-MM-DD|active' or 'YYYY-MM-DD|inactive'
@@ -529,6 +530,7 @@ export default function SeasonBookPage() {
       if (!data) return
       const statusMap = new Map<string, string>()
       const adjMap = new Map<string, { qty: number | null; amount: number | null }>()
+      const poMap = new Map<string, string>()
       for (const r of data as { season_book_id: string; status: string | null; adj_qty: number | null; adj_amount: number | null; po_no: string | null }[]) {
         if (!r.season_book_id) continue
         let st = r.status || (r.po_no ? 'Pending' : 'Not Created')
@@ -537,9 +539,11 @@ export default function SeasonBookPage() {
         if (r.adj_qty != null || r.adj_amount != null) {
           adjMap.set(r.season_book_id, { qty: r.adj_qty, amount: r.adj_amount })
         }
+        if (r.po_no) poMap.set(r.season_book_id, r.po_no)
       }
       setModuleStatusMap(statusMap)
       setModuleAdjMap(adjMap)
+      setModulePOMap(poMap)
     } catch { /* columns may not exist yet */ }
   }
 
@@ -2784,17 +2788,17 @@ export default function SeasonBookPage() {
                       if (data) setEditRow(data as LedgerRow)
                     }} />
 
-                    {/* PO Numbers */}
-                    {editRow.order_num && (
-                      <>
-                        <div style={sectionHead('#92400e', '#fcd34d')}>🔗 PO Numbers</div>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {editRow.order_num.split(/[,\s]+/).filter(Boolean).map((po, i) => (
-                            <span key={i} style={{ fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 4, padding: '2px 7px' }}>{po}</span>
-                          ))}
-                        </div>
-                      </>
-                    )}
+                    {/* PO # from active season module */}
+                    {(() => {
+                      const po = seasonActive ? modulePOMap.get(editRow.id) : null
+                      if (!po) return null
+                      return (
+                        <>
+                          <div style={sectionHead('#92400e', '#fcd34d')}>🔗 PO #</div>
+                          <span style={{ fontSize: 11, fontWeight: 700, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 4, padding: '3px 8px', display: 'inline-block' }}>{po}</span>
+                        </>
+                      )
+                    })()}
 
                     {/* Adjustments */}
                     {seasonActive && adj && (adj.qty != null || adj.amount != null) && (
