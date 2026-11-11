@@ -257,8 +257,20 @@ export default function SettingsPage() {
 
   async function toggleVendorActive(vid: string, brand: string, currentlyActive: boolean) {
     const newActive = !currentlyActive
+    // Optimistic update
     setVendors(prev => prev.map(v => v.vendor_id === vid && v.brand === brand ? { ...v, active: newActive } : v))
-    await supabase.from('vendors').update({ active: newActive }).eq('vendor_id', vid).eq('brand', brand)
+    const { error } = await supabase.from('vendors').update({ active: newActive }).eq('vendor_id', vid).eq('brand', brand)
+    if (error) {
+      // Roll back optimistic update
+      setVendors(prev => prev.map(v => v.vendor_id === vid && v.brand === brand ? { ...v, active: currentlyActive } : v))
+      if (error.message.includes('column') || error.code === '42703') {
+        showToast('❌ Run this SQL in Supabase first: ALTER TABLE vendors ADD COLUMN IF NOT EXISTS active boolean DEFAULT true;', 'err')
+      } else {
+        showToast('❌ ' + error.message, 'err')
+      }
+    } else {
+      showToast(newActive ? '✅ Brand activated' : '⏸ Brand deactivated')
+    }
   }
   async function saveVendorEdit(oldVid: string, oldBrand: string, newVid: string, newBrand: string) {
     setVendorsSaving(true)
