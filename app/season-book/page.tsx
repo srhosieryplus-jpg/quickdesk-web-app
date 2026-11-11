@@ -439,6 +439,9 @@ export default function SeasonBookPage() {
   const [formStores, setFormStores] = useState<StoreEntry[]>(STORES.map(blankEntry))
   const [formVendorId, setFormVendorId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [editDelMode, setEditDelMode] = useState(false)
+  const [editDelPw, setEditDelPw] = useState('')
+  const [editDelErr, setEditDelErr] = useState(false)
 
   // Filter/view
   const [viewFilter, setViewFilter] = useState('')
@@ -1143,6 +1146,22 @@ export default function SeasonBookPage() {
     setModal('none')
     fetchRows(season, user)
     setSaving(false)
+  }
+
+  // ── Delete row from edit modal ────────────────────────────────────────────
+  async function deleteEditRow() {
+    if (!editRow) return
+    if (editDelPw.toLowerCase() !== 'delete') { setEditDelErr(true); return }
+    setSaving(true)
+    const { error } = await supabase.from('season_ledger').delete().eq('id', editRow.id)
+    setSaving(false)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    setRows(prev => prev.filter(r => r.id !== editRow.id))
+    setModal('none')
+    setEditRow(null)
+    setEditDelMode(false)
+    setEditDelPw('')
+    showToast('🗑 Log deleted')
   }
 
   // ── Save edit ─────────────────────────────────────────────────────────────
@@ -2777,15 +2796,42 @@ export default function SeasonBookPage() {
                     </button>
                   </div>
                   {/* Right: dismiss / save */}
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => setModal('none')} disabled={saving}
-                      style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                      Dismiss
-                    </button>
-                    <button onClick={saveEdit} disabled={saving}
-                      style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                      {saving ? 'Saving…' : 'Save Changes'}
-                    </button>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Delete section */}
+                    {!editDelMode ? (
+                      <button onClick={() => { setEditDelMode(true); setEditDelPw(''); setEditDelErr(false) }} disabled={saving}
+                        style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        🗑 Delete
+                      </button>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <input
+                          type="password"
+                          placeholder="type 'delete'"
+                          value={editDelPw}
+                          onChange={e => { setEditDelPw(e.target.value); setEditDelErr(false) }}
+                          onKeyDown={e => { if (e.key === 'Enter') deleteEditRow(); if (e.key === 'Escape') { setEditDelMode(false); setEditDelPw('') } }}
+                          autoFocus
+                          style={{ border: `1.5px solid ${editDelErr ? '#ef4444' : '#fca5a5'}`, borderRadius: 7, padding: '7px 10px', fontSize: 13, width: 130, outline: 'none', background: '#fff5f5' }}
+                        />
+                        <button onClick={deleteEditRow} disabled={saving}
+                          style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 7, padding: '7px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                          Confirm
+                        </button>
+                        <button onClick={() => { setEditDelMode(false); setEditDelPw(''); setEditDelErr(false) }}
+                          style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: '#9ca3af', padding: '4px' }}>✕</button>
+                      </div>
+                    )}
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                      <button onClick={() => { setModal('none'); setEditDelMode(false); setEditDelPw('') }} disabled={saving}
+                        style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        Dismiss
+                      </button>
+                      <button onClick={saveEdit} disabled={saving}
+                        style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                        {saving ? 'Saving…' : 'Save Changes'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>{/* end left col */}
