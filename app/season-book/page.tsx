@@ -2239,7 +2239,7 @@ export default function SeasonBookPage() {
                     style={{ ...inp, fontSize: 13 }}
                     onKeyDown={e => {
                       const q = activeBrand.toLowerCase()
-                      const allB = Array.from(new Set([...liveVendors.map(v => v.brand), ...rows.map(r => r.brand)])).sort()
+                      const allB = Array.from(new Set(liveVendors.map(v => v.brand))).sort()
                       const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== activeBrand).slice(0, 8)
                       if (!showFormBrandDrop || suggs.length === 0) return
                       if (e.key === 'ArrowDown') { e.preventDefault(); setFormBrandHi(h => Math.min(h + 1, suggs.length - 1)) }
@@ -2252,7 +2252,7 @@ export default function SeasonBookPage() {
                   />
                   {showFormBrandDrop && (() => {
                     const q = activeBrand.toLowerCase()
-                    const allB = Array.from(new Set([...liveVendors.map(v => v.brand), ...rows.map(r => r.brand)])).sort()
+                    const allB = Array.from(new Set(liveVendors.map(v => v.brand))).sort()
                     const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== activeBrand).slice(0, 8)
                     return suggs.length > 0 ? (
                       <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
@@ -2625,7 +2625,7 @@ export default function SeasonBookPage() {
                         }}
                         onKeyDown={e => {
                           const q = editRow.brand.toLowerCase()
-                          const allB = Array.from(new Set([...liveVendors.map(v => v.brand), ...rows.map(r => r.brand)])).sort()
+                          const allB = Array.from(new Set(liveVendors.map(v => v.brand))).sort()
                           const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== editRow.brand).slice(0, 8)
                           if (!showEditBrandDrop || suggs.length === 0) return
                           if (e.key === 'ArrowDown') { e.preventDefault(); setEditBrandHi(h => Math.min(h + 1, suggs.length - 1)) }
@@ -2639,7 +2639,7 @@ export default function SeasonBookPage() {
                         style={inp} />
                       {showEditBrandDrop && (() => {
                         const q = editRow.brand.toLowerCase()
-                        const allB = Array.from(new Set([...liveVendors.map(v => v.brand), ...rows.map(r => r.brand)])).sort()
+                        const allB = Array.from(new Set(liveVendors.map(v => v.brand))).sort()
                         const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== editRow.brand).slice(0, 8)
                         return suggs.length > 0 ? (
                           <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
