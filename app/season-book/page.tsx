@@ -77,6 +77,8 @@ interface LedgerRow {
   created_at: string
   updated_at: string
   invoice_file_url: string | null
+  invoice_files: { url: string; name: string }[] | null
+  drop_label: string | null
 }
 
 // ── Seasons ───────────────────────────────────────────────────────────────────
@@ -141,10 +143,11 @@ interface StoreEntry {
   invoice_num: string
   order_num: string
   drop_name: string
+  drop_label: string
 }
 
 function blankEntry(store: string): StoreEntry {
-  return { store, units: '', initial_total: '', deposit: '', duties: '', shipping: '', cc_fee: '', payment_date: '', comment: '', currency: 'USD', invoice_num: '', order_num: '', drop_name: '' }
+  return { store, units: '', initial_total: '', deposit: '', duties: '', shipping: '', cc_fee: '', payment_date: '', comment: '', currency: 'USD', invoice_num: '', order_num: '', drop_name: '', drop_label: '' }
 }
 function today() {
   const d = new Date()
@@ -161,76 +164,89 @@ function safeDate(d: string) {
 function InvoiceAttachment({ row, onUpdated }: { row: LedgerRow; onUpdated: () => void }) {
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const gray = '#6b7280'
+  const [delTarget, setDelTarget] = useState<string | null>(null) // url of file being deleted
+  const [delPw, setDelPw] = useState('')
+  const [delErr, setDelErr] = useState(false)
   const border = '#e5e7eb'
+
+  // Merge legacy invoice_file_url into the files array for display
+  const files: { url: string; name: string }[] = [
+    ...(row.invoice_files ?? []),
+    ...(row.invoice_file_url && !(row.invoice_files ?? []).some(f => f.url === row.invoice_file_url)
+      ? [{ url: row.invoice_file_url, name: 'Invoice' }]
+      : []),
+  ]
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
     const ext = file.name.split('.').pop()
-    const path = `${row.id}.${ext}`
+    const path = `${row.id}_${Date.now()}.${ext}`
     const { error: upErr } = await supabase.storage.from('invoices').upload(path, file, { upsert: true })
     if (upErr) { setUploading(false); return }
     const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path)
-    // append cache-buster so browser doesn't serve a stale cached PDF for a different file
-    const urlWithBust = `${urlData.publicUrl}?v=${Date.now()}`
-    const { error: dbErr } = await supabase.from('season_ledger').update({ invoice_file_url: urlWithBust }).eq('id', row.id)
+    const url = `${urlData.publicUrl}?v=${Date.now()}`
+    const displayName = file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'Invoice'
+    const updated = [...files, { url, name: displayName }]
+    const { error: dbErr } = await supabase.from('season_ledger').update({ invoice_files: updated }).eq('id', row.id)
     if (dbErr) { setUploading(false); return }
     setUploading(false)
     onUpdated()
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const [showDelMenu, setShowDelMenu] = useState(false)
-  const [delPw, setDelPw] = useState('')
-  const [delErr, setDelErr] = useState(false)
-
-  async function handleRemove() {
-    if (!row.invoice_file_url) return
-    const path = row.invoice_file_url.split('/invoices/').pop()
-    if (path) await supabase.storage.from('invoices').remove([path])
-    await supabase.from('season_ledger').update({ invoice_file_url: null }).eq('id', row.id)
-    setShowDelMenu(false); setDelPw('')
+  async function handleRemove(url: string) {
+    const pathRaw = url.split('/invoices/').pop()?.split('?')[0]
+    if (pathRaw) await supabase.storage.from('invoices').remove([pathRaw])
+    const updated = files.filter(f => f.url !== url)
+    // also clear legacy field if it matched
+    const patch: Record<string, unknown> = { invoice_files: updated.length ? updated : null }
+    if (row.invoice_file_url === url) patch.invoice_file_url = null
+    await supabase.from('season_ledger').update(patch).eq('id', row.id)
+    setDelTarget(null); setDelPw('')
     onUpdated()
   }
 
   return (
-    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', position: 'relative' }}>
-      {row.invoice_file_url ? (
-        <>
-          <a href={row.invoice_file_url} target="_blank" rel="noopener noreferrer"
-            onContextMenu={e => { e.preventDefault(); setShowDelMenu(v => !v); setDelPw(''); setDelErr(false) }}
+    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {/* Existing files */}
+      {files.map((f, fi) => (
+        <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', flexWrap: 'wrap' }}>
+          <a href={f.url} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 11, fontWeight: 700, color: '#6d28d9', background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 5, padding: '2px 8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-            📄 View Invoice
+            {/\.(xlsx?|csv|ods)(\?|$)/i.test(f.url) ? '📊' : '📄'} {f.name || `File ${fi + 1}`}
           </a>
-          {showDelMenu && (
+          <button onClick={() => { setDelTarget(f.url); setDelPw(''); setDelErr(false) }}
+            title="Remove this file"
+            style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', lineHeight: 1 }}>✕</button>
+          {delTarget === f.url && (
             <div onMouseDown={e => e.stopPropagation()} style={{ position: 'absolute', top: '110%', left: 0, background: '#fff', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '10px 12px', zIndex: 999, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>🗑 Delete Invoice PDF</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>🗑 Delete "{f.name}"?</div>
               <input autoFocus type="password" placeholder="Type password"
                 value={delPw} onChange={e => { setDelPw(e.target.value); setDelErr(false) }}
-                onKeyDown={e => { if (e.key === 'Enter') { if (delPw.toLowerCase() === 'delete') handleRemove(); else setDelErr(true) } }}
+                onKeyDown={e => { if (e.key === 'Enter') { if (delPw.toLowerCase() === 'delete') handleRemove(f.url); else setDelErr(true) } }}
                 style={{ width: '100%', border: `1px solid ${delErr ? '#fca5a5' : border}`, borderRadius: 5, padding: '4px 7px', fontSize: 11, marginBottom: 6, outline: 'none', boxSizing: 'border-box' }} />
               {delErr && <div style={{ fontSize: 10, color: '#dc2626', marginBottom: 4 }}>Incorrect password</div>}
               <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => { if (delPw.toLowerCase() === 'delete') handleRemove(); else setDelErr(true) }}
+                <button onClick={() => { if (delPw.toLowerCase() === 'delete') handleRemove(f.url); else setDelErr(true) }}
                   style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}>Delete</button>
-                <button onClick={() => { setShowDelMenu(false); setDelPw('') }}
+                <button onClick={() => { setDelTarget(null); setDelPw('') }}
                   style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 5, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
               </div>
             </div>
           )}
-        </>
-      ) : (
-        <>
-          <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleUpload}
-            style={{ display: 'none' }} id={`inv-file-${row.id}`} />
-          <label htmlFor={`inv-file-${row.id}`}
-            style={{ fontSize: 11, fontWeight: 700, color: gray, background: '#f9fafb', border: `1px dashed ${border}`, borderRadius: 5, padding: '2px 8px', cursor: uploading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {uploading ? '⏳ Uploading…' : '📎 Attach Invoice'}
-          </label>
-        </>
-      )}
+        </div>
+      ))}
+      {/* Upload button — always visible */}
+      <div>
+        <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.ods" onChange={handleUpload}
+          style={{ display: 'none' }} id={`inv-file-${row.id}`} />
+        <label htmlFor={`inv-file-${row.id}`}
+          style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', background: '#f9fafb', border: `1px dashed ${border}`, borderRadius: 5, padding: '2px 8px', cursor: uploading ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {uploading ? '⏳ Uploading…' : files.length > 0 ? '📎 Add Another' : '📎 Attach Invoice'}
+        </label>
+      </div>
     </div>
   )
 }
@@ -927,6 +943,7 @@ export default function SeasonBookPage() {
       invoice_num: row.invoice_num ?? '',
       order_num: row.order_num ?? '',
       drop_name: row.drop_name ?? '',
+      drop_label: row.drop_label ?? '',
     }])
     setModal('edit-entry')
   }
@@ -979,6 +996,7 @@ export default function SeasonBookPage() {
           invoice_num: e.invoice_num || null,
           order_num: e.order_num || null,
           drop_name: (e.drop_name && e.drop_name !== '\0') ? e.drop_name : null,
+          drop_label: e.drop_label || null,
           vendor_id: formVendorId ?? null,
           logged_by: user.userid,
         }
@@ -989,7 +1007,7 @@ export default function SeasonBookPage() {
     const existing = rows.filter(r => r.brand === activeBrand && r.drop_num === formDrop)
     const existStores = existing.map(r => r.store)
     const dupe = inserts.find(i => existStores.includes(i.store))
-    if (dupe) { showToast(`❌ Drop ${formDrop} already has a ${dupe.store} entry`, 'err'); setSaving(false); return }
+    if (dupe) { showToast(`❌ Log #${formDrop} already has a ${dupe.store} entry`, 'err'); setSaving(false); return }
 
     const { data: inserted, error } = await supabase.from('season_ledger').insert(inserts).select()
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
@@ -1007,7 +1025,7 @@ export default function SeasonBookPage() {
     }
     // Auto-add to vendors if new brand/vendor combo
     await ensureVendorExists(activeBrand, formVendorId ?? null)
-    showToast(`✅ Drop ${formDrop} saved for ${activeBrand}${seasonActive ? ' · synced to module' : ''}`)
+    showToast(`✅ Log #${formDrop} saved for ${activeBrand}${seasonActive ? ' · synced to module' : ''}`)
     setModal('none')
     fetchRows(season, user)
     setSaving(false)
@@ -1033,6 +1051,7 @@ export default function SeasonBookPage() {
       invoice_num: e.invoice_num || null,
       order_num: e.order_num || null,
       drop_name: (e.drop_name && e.drop_name !== '\0') ? e.drop_name : null,
+      drop_label: e.drop_label || null,
       updated_at: new Date().toISOString(),
     }).eq('id', editRow.id)
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
@@ -1898,9 +1917,9 @@ export default function SeasonBookPage() {
                                     })()}
                                   </div>
                                 </div>
-                                {/* Drop # + name */}
+                                {/* Log # + Drop # + name */}
                                 <div style={{ fontSize: 11, color: gray, marginBottom: 6 }}>
-                                  Drop {dropNum}{dropName ? ` · ${dropName}` : ''}
+                                  Log #{dropNum}{dropRows[0]?.drop_label ? ` · Drop ${dropRows[0].drop_label}` : ''}{dropName ? ` · ${dropName}` : ''}
                                 </div>
                                 {/* Invoice + Order chips */}
                                 {(invoiceNums.length > 0 || poNums.length > 0) && (
@@ -2138,12 +2157,20 @@ export default function SeasonBookPage() {
                     ) : null
                   })()}
                 </div>
-                {/* Drop # */}
+                {/* Log # (auto-incrementing internal number) */}
                 <div>
-                  <label style={lbl}>Drop #</label>
+                  <label style={lbl}>Log #</label>
                   <input type="number" min={1} value={formDrop}
                     onChange={e => setFormDrop(parseInt(e.target.value) || 1)}
                     style={{ ...inp, width: 70 }} />
+                </div>
+                {/* Drop # (user-defined label e.g. "Drop 1", "RTW Drop 2") */}
+                <div>
+                  <label style={lbl}>Drop #</label>
+                  <input type="text" value={formStores[0]?.drop_label ?? ''}
+                    placeholder="e.g. Drop 1"
+                    onChange={e => setFormStores(prev => prev.map(p => ({ ...p, drop_label: e.target.value })))}
+                    style={{ ...inp, width: 110 }} />
                 </div>
               </div>
 
@@ -2164,8 +2191,8 @@ export default function SeasonBookPage() {
                       </select>
                     </div>
                     <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {/* Row 1: Invoice # + Order # + Drop Name */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                      {/* Row 1: Invoice # + Order # + Drop # + Drop Name */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
                         <div>
                           <label style={lbl}>Invoice #</label>
                           <input value={entry.invoice_num} placeholder="INV-001"
@@ -2175,6 +2202,11 @@ export default function SeasonBookPage() {
                           <label style={lbl}>Order #</label>
                           <input value={entry.order_num} placeholder="ORD-001"
                             onChange={e => upd({ order_num: e.target.value })} style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Drop #</label>
+                          <input value={entry.drop_label} placeholder="e.g. Drop 1"
+                            onChange={e => upd({ drop_label: e.target.value })} style={inp} />
                         </div>
                         <div>
                           <label style={lbl}>Drop Name</label>
@@ -2329,7 +2361,7 @@ export default function SeasonBookPage() {
                     )}
                   </div>
                   <div style={{ fontSize: 12, color: gray, marginTop: 2 }}>
-                    Drop {editRow.drop_num}{editRow.drop_name ? ` · ${editRow.drop_name}` : ''} · {season}
+                    Log #{editRow.drop_num}{editRow.drop_label ? ` · Drop ${editRow.drop_label}` : ''}{editRow.drop_name ? ` · ${editRow.drop_name}` : ''} · {season}
                   </div>
                 </div>
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
@@ -2729,7 +2761,7 @@ export default function SeasonBookPage() {
                                       {activeBrands.length > 1 && (
                                         <span style={{ fontSize: 10, fontWeight: 700, color: purpleD, background: '#ede9fe', borderRadius: 4, padding: '1px 6px' }}>{dRow.brand}</span>
                                       )}
-                                      <span style={{ fontWeight: 800, fontSize: 12, color: isRowCancelled ? gray : purpleD, textDecoration: isRowCancelled ? 'line-through' : undefined }}>Drop {dropNum}{dRow.drop_name ? ` · ${dRow.drop_name}` : ''}</span>
+                                      <span style={{ fontWeight: 800, fontSize: 12, color: isRowCancelled ? gray : purpleD, textDecoration: isRowCancelled ? 'line-through' : undefined }}>Log #{dropNum}{dRow.drop_label ? ` · Drop ${dRow.drop_label}` : ''}{dRow.drop_name ? ` · ${dRow.drop_name}` : ''}</span>
                                       {isRowCancelled && (
                                         <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 4, padding: '1px 5px' }}>Cancelled</span>
                                       )}
@@ -3016,7 +3048,7 @@ export default function SeasonBookPage() {
                                   style={{ accentColor: purpleD, width: 14, height: 14, flexShrink: 0 }} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <span style={{ fontWeight: 700, color: purpleD, fontSize: 13 }}>{r.store}</span>
-                                  <span style={{ fontSize: 11, color: gray, marginLeft: 6 }}>Drop {r.drop_num}</span>
+                                  <span style={{ fontSize: 11, color: gray, marginLeft: 6 }}>Log #{r.drop_num}{r.drop_label ? ` · Drop ${r.drop_label}` : ''}</span>
                                   {!quickPayBrand && <span style={{ fontSize: 11, color: gray, marginLeft: 6 }}>· {r.brand}</span>}
                                 </div>
                                 <span style={{ fontWeight: 800, color: '#dc2626', fontSize: 13, flexShrink: 0 }}>{fmt$(r.balance_due, r.currency)} due</span>
@@ -3085,7 +3117,7 @@ export default function SeasonBookPage() {
                             return (
                               <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, alignItems: 'center', padding: '7px 12px', borderBottom: isLast ? 'none' : `1px solid #f3f4f6`, background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
                                 <div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>{r.brand} · Drop {r.drop_num}</div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>{r.brand} · Log #{r.drop_num}{r.drop_label ? ` · Drop ${r.drop_label}` : ''}</div>
                                   <div style={{ fontSize: 10, color: gray }}>{r.store} · Balance: {fmt$(r.balance_due, r.currency)} · Total: {fmt$(r.initial_total, r.currency)}</div>
                                 </div>
                                 {usePerRow ? (
@@ -3250,7 +3282,7 @@ export default function SeasonBookPage() {
                               {/* Show brand/store context in global view */}
                               {!payHistRow && ledgerRow && (
                                 <span style={{ fontSize: 11, color: purpleD, fontWeight: 600, marginLeft: 8 }}>
-                                  {ledgerRow.brand} · {ledgerRow.store} · Drop {ledgerRow.drop_num}
+                                  {ledgerRow.brand} · {ledgerRow.store} · Log #{ledgerRow.drop_num}{ledgerRow.drop_label ? ` · Drop ${ledgerRow.drop_label}` : ''}
                                 </span>
                               )}
                               {p.note && <span style={{ fontSize: 11, color: '#374151', marginLeft: 8 }}>{p.note}</span>}
@@ -3613,7 +3645,7 @@ export default function SeasonBookPage() {
           {!rowCtxDelMode ? (
             <>
               <div style={{ padding: '4px 14px 6px', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>
-                {rowCtxMenu.rows[0]?.brand} · {rowCtxMenu.rows[0]?.store} · Drop {rowCtxMenu.rows[0]?.drop_num}
+                {rowCtxMenu.rows[0]?.brand} · {rowCtxMenu.rows[0]?.store} · Log #{rowCtxMenu.rows[0]?.drop_num}{rowCtxMenu.rows[0]?.drop_label ? ` · Drop ${rowCtxMenu.rows[0].drop_label}` : ''}
               </div>
               <div onMouseDown={e => e.stopPropagation()} onClick={() => setRowCtxDelMode(true)}
                 style={{ padding: '9px 16px', fontSize: 13, fontWeight: 700, color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
