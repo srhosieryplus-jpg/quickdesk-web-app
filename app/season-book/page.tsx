@@ -1153,9 +1153,10 @@ export default function SeasonBookPage() {
     if (!editRow) return
     if (editDelPw.toLowerCase() !== 'delete') { setEditDelErr(true); return }
     setSaving(true)
-    const { error } = await supabase.from('season_ledger').delete().eq('id', editRow.id)
+    const { error, count } = await supabase.from('season_ledger').delete({ count: 'exact' }).eq('id', editRow.id)
     setSaving(false)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
+    if (count === 0) { showToast('❌ Delete blocked — check Supabase RLS policy for season_ledger', 'err'); return }
     setRows(prev => prev.filter(r => r.id !== editRow.id))
     setModal('none')
     setEditRow(null)
