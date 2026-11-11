@@ -1314,7 +1314,8 @@ export default function SeasonBookPage() {
         .bal-green { color: #15803d; font-weight: 700; }
         .bal-red   { color: #dc2626; font-weight: 700; }
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
-        .modal-box { background: #fff; border-radius: 14px; width: 100%; max-width: 680px; box-shadow: 0 8px 48px rgba(0,0,0,0.22); }
+        .modal-box { background: #fff; border-radius: 14px; width: 100%; max-width: 680px; box-shadow: 0 8px 48px rgba(0,0,0,0.22); display: flex; flex-direction: column; max-height: 92vh; }
+        .modal-body { overflow-y: auto; flex: 1; }
         .modal-head { padding: 14px 18px; border-bottom: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between; }
         .modal-body { padding: 16px 18px 20px; }
         .store-block { border: 1.5px solid #e0e7ff; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
@@ -2753,87 +2754,6 @@ export default function SeasonBookPage() {
 
                 {/* Invoice PDF(s) only — packing slips moved to side panel */}
 
-                {/* Action bar */}
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                  {/* Left: quick-add + cancel-drop */}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {!siblingExists && siblingStore && (
-                      <button
-                        onClick={() => {
-                          if (cutoffInEffect && !isAdmin) { alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.'); return }
-                          setModal('none')
-                          setActiveBrand(editRow.brand)
-                          setFormDrop(editRow.drop_num)
-                          setFormStores([blankEntry(siblingStore)])
-                          setModal('new-entry')
-                        }}
-                        style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                        + Log {siblingStore}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (cutoffInEffect && !isAdmin) { alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.'); return }
-                        setModal('none')
-                        setActiveBrand(editRow.brand)
-                        setFormDrop(maxDrop + 1)
-                        setFormStores(STORES.map(blankEntry))
-                        setModal('new-entry')
-                      }}
-                      style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                      + Drop {maxDrop + 1}
-                    </button>
-                    {/* Cancel/uncancel toggle */}
-                    <button
-                      onClick={async () => { await toggleCancelled(editRow); setModal('none') }}
-                      style={{
-                        background: isCancelled ? '#f0fdf4' : '#fff5f5',
-                        color: isCancelled ? '#166534' : '#dc2626',
-                        border: `1.5px solid ${isCancelled ? '#86efac' : '#fca5a5'}`,
-                        borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                      }}>
-                      {isCancelled ? '✓ Uncancel' : '🚫 Cancel Drop'}
-                    </button>
-                  </div>
-                  {/* Right: dismiss / save */}
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {/* Delete section */}
-                    {!editDelMode ? (
-                      <button onClick={() => { setEditDelMode(true); setEditDelPw(''); setEditDelErr(false) }} disabled={saving}
-                        style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                        🗑 Delete
-                      </button>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <input
-                          type="password"
-                          placeholder="type 'delete'"
-                          value={editDelPw}
-                          onChange={e => { setEditDelPw(e.target.value); setEditDelErr(false) }}
-                          onKeyDown={e => { if (e.key === 'Enter') deleteEditRow(); if (e.key === 'Escape') { setEditDelMode(false); setEditDelPw('') } }}
-                          autoFocus
-                          style={{ border: `1.5px solid ${editDelErr ? '#ef4444' : '#fca5a5'}`, borderRadius: 7, padding: '7px 10px', fontSize: 13, width: 130, outline: 'none', background: '#fff5f5' }}
-                        />
-                        <button onClick={deleteEditRow} disabled={saving}
-                          style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 7, padding: '7px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                          Confirm
-                        </button>
-                        <button onClick={() => { setEditDelMode(false); setEditDelPw(''); setEditDelErr(false) }}
-                          style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: '#9ca3af', padding: '4px' }}>✕</button>
-                      </div>
-                    )}
-                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                      <button onClick={() => { setModal('none'); setEditDelMode(false); setEditDelPw('') }} disabled={saving}
-                        style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                        Dismiss
-                      </button>
-                      <button onClick={saveEdit} disabled={saving}
-                        style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                        {saving ? 'Saving…' : 'Save Changes'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
               </div>{/* end left col */}
 
               {/* ── RIGHT: side panel ── */}
@@ -2917,6 +2837,74 @@ export default function SeasonBookPage() {
                 )
               })()}
               </div>{/* end modal-body flex row */}
+
+              {/* ── Sticky footer ── */}
+              <div style={{ flexShrink: 0, borderTop: `1px solid #ede9fe`, padding: '10px 16px', background: '#fff', display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center', borderRadius: '0 0 12px 12px' }}>
+                {/* Left: quick-add + cancel */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {!siblingExists && siblingStore && (
+                    <button
+                      onClick={() => {
+                        if (cutoffInEffect && !isAdmin) { alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.'); return }
+                        setModal('none'); setActiveBrand(editRow.brand)
+                        setFormDrop(editRow.drop_num); setFormStores([blankEntry(siblingStore)]); setModal('new-entry')
+                      }}
+                      style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                      + Log {siblingStore}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (cutoffInEffect && !isAdmin) { alert('⚠️ Cut-Off is in effect.\n\nPlease reach out to Manager to approve logging this invoice.'); return }
+                      setModal('none'); setActiveBrand(editRow.brand)
+                      setFormDrop(maxDrop + 1); setFormStores(STORES.map(blankEntry)); setModal('new-entry')
+                    }}
+                    style={{ background: '#ede9fe', color: purpleD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    + Drop {maxDrop + 1}
+                  </button>
+                  <button
+                    onClick={async () => { await toggleCancelled(editRow); setModal('none') }}
+                    style={{ background: isCancelled ? '#f0fdf4' : '#fff5f5', color: isCancelled ? '#166534' : '#dc2626', border: `1.5px solid ${isCancelled ? '#86efac' : '#fca5a5'}`, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    {isCancelled ? '✓ Uncancel' : '🚫 Cancel Drop'}
+                  </button>
+                </div>
+                {/* Right: delete + dismiss + save */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {!editDelMode ? (
+                    <button onClick={() => { setEditDelMode(true); setEditDelPw(''); setEditDelErr(false) }} disabled={saving}
+                      style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      🗑 Delete
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        placeholder="type 'delete'"
+                        value={editDelPw}
+                        onChange={e => { setEditDelPw(e.target.value); setEditDelErr(false) }}
+                        onKeyDown={e => { if (e.key === 'Enter') deleteEditRow(); if (e.key === 'Escape') { setEditDelMode(false); setEditDelPw('') } }}
+                        autoFocus
+                        style={{ border: `1.5px solid ${editDelErr ? '#ef4444' : '#fca5a5'}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, width: 120, outline: 'none', background: '#fff5f5', color: '#b91c1c', fontWeight: 600 }}
+                      />
+                      <button onClick={deleteEditRow} disabled={saving}
+                        style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        Confirm
+                      </button>
+                      <button onClick={() => { setEditDelMode(false); setEditDelPw(''); setEditDelErr(false) }}
+                        style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: '#9ca3af', padding: '2px 4px' }}>✕</button>
+                    </div>
+                  )}
+                  <button onClick={() => { setModal('none'); setEditDelMode(false); setEditDelPw('') }} disabled={saving}
+                    style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    Dismiss
+                  </button>
+                  <button onClick={saveEdit} disabled={saving}
+                    style={{ background: purple, color: '#fff', border: 'none', borderRadius: 7, padding: '7px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    {saving ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         )
