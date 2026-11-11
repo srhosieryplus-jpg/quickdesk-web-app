@@ -574,12 +574,19 @@ export default function SeasonBookPage() {
       // Column doesn't exist — migration hasn't been run yet
       return `Column 'season_book_id' missing from ${half} — run the SQL migration in Supabase first`
     }
-    if (existing) return null // already synced
-    const status = row.invoice_num ? 'Pending' : 'Not Created'
+    if (existing) {
+      // Already linked — update order_num (invoice_no) and qty in case they changed
+      const { error: updErr } = await supabase.from(half).update({
+        invoice_no: row.order_num || null,
+        qty: row.units,
+      }).eq('id', existing.id)
+      return updErr ? updErr.message : null
+    }
+    const status = row.order_num ? 'Pending' : 'Not Created'
     const { error } = await supabase.from(half).insert({
       store: row.store,
       brand: row.brand,
-      invoice_no: row.invoice_num || null,
+      invoice_no: row.order_num || null,
       po_no: null,
       qty: row.units,
       logged: false,
@@ -1164,6 +1171,11 @@ export default function SeasonBookPage() {
     if (error) { showToast('❌ ' + error.message, 'err'); setSaving(false); return }
     // Auto-add to vendors if new brand/vendor combo
     await ensureVendorExists(editRow.brand, editRow.vendor_id ?? null)
+    // Sync order_num (and qty) to linked SS/AW row if season is active
+    if (seasonActive) {
+      const updatedRow: LedgerRow = { ...editRow, order_num: e.order_num || null, units: parseInt(e.units) || null }
+      await syncLedgerRowToModule(updatedRow)
+    }
     showToast('✅ Entry updated')
     setModal('none')
     fetchRows(season, user)
