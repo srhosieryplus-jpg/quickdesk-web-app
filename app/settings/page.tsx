@@ -286,10 +286,10 @@ export default function SettingsPage() {
     const vid = newVendorId.trim()
     const br = newBrand.trim()
     if (!vid || !br) { showToast('❌ Both fields required', 'err'); return }
-    setVendors(prev => [...prev, { vendor_id: vid, brand: br }])
+    setVendors(prev => [...prev, { vendor_id: vid, brand: br, active: true }])
     setNewVendorId(''); setNewBrand('')
     saveVendorAdd(vid, br)
-    showToast('✅ Row added')
+    showToast('✅ Brand added')
   }
 
   function saveEditVendor() {
@@ -513,32 +513,35 @@ export default function SettingsPage() {
 
       {/* ══ VENDORS / BRANDS TAB ═════════════════════════════════════════════ */}
       {tab === 'vendors' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {/* Toolbar */}
-          <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          {/* Toolbar — centered, max width */}
+          <div style={{ width: '100%', maxWidth: 680, padding: '10px 14px', borderBottom: `1px solid ${border}`, background: '#fff' }}>
+            {/* Search */}
             <input value={vendorSearch} onChange={e => setVendorSearch(e.target.value)}
-              placeholder="🔍 Search vendor or brand…" style={{ ...inlineInput, flex: 1, minWidth: 160 }} />
+              placeholder="🔍 Search vendor or brand…"
+              style={{ ...inlineInput, width: '100%', marginBottom: 8, boxSizing: 'border-box' }} />
+            {/* Add form */}
             <form onSubmit={addVendorRow} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input value={newVendorId} onChange={e => setNewVendorId(e.target.value)}
-                placeholder="Vendor ID" style={{ ...inlineInput, width: 110 }} />
+                placeholder="Vendor ID" style={{ ...inlineInput, flex: 1 }} />
               <input value={newBrand} onChange={e => setNewBrand(e.target.value)}
-                placeholder="Brand name" style={{ ...inlineInput, width: 140 }} />
+                placeholder="Brand name" style={{ ...inlineInput, flex: 2 }} />
               <button type="submit"
-                style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                + Add Brand
+                style={{ background: purple, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                + Save Brand
               </button>
             </form>
           </div>
 
-          {/* Table */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+          {/* Table — centered, max width */}
+          <div style={{ flex: 1, overflowY: 'auto', width: '100%', display: 'flex', justifyContent: 'center', padding: '12px 14px 40px' }}>
+            <table style={{ width: '100%', maxWidth: 680, borderCollapse: 'collapse', fontSize: 12, border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
+              <thead>
                 <tr style={{ background: '#f8f7ff', borderBottom: `2px solid ${border}` }}>
-                  <th style={{ padding: '7px 14px', textAlign: 'left', fontWeight: 700, color: '#6b7280', fontSize: 11, width: '28%' }}>Vendor ID</th>
-                  <th style={{ padding: '7px 14px', textAlign: 'left', fontWeight: 700, color: '#6b7280', fontSize: 11 }}>Brand</th>
-                  <th style={{ padding: '7px 14px', textAlign: 'center', fontWeight: 700, color: '#6b7280', fontSize: 11, width: 90 }}>Status</th>
-                  <th style={{ padding: '7px 14px', textAlign: 'center', fontWeight: 700, color: '#6b7280', fontSize: 11, width: 110 }}>Action</th>
+                  <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: '#6b7280', fontSize: 11, width: '30%' }}>Vendor ID</th>
+                  <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: '#6b7280', fontSize: 11 }}>Brand</th>
+                  <th style={{ padding: '8px 14px', textAlign: 'center', fontWeight: 700, color: '#6b7280', fontSize: 11, width: 86 }}>Status</th>
+                  <th style={{ padding: '8px 14px', textAlign: 'center', fontWeight: 700, color: '#6b7280', fontSize: 11, width: 100 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -546,11 +549,11 @@ export default function SettingsPage() {
                   <tr><td colSpan={4} style={{ padding: 32, textAlign: 'center', color: '#9b8ec4' }}>No matches.</td></tr>
                 )}
                 {filteredVendors.map((v, i) => {
-                  const isActive = v.active !== false // treat undefined/null as active
+                  const isActive = v.active !== false
                   const globalIdx = filteredVendors.indexOf(v)
                   return (
                     <tr key={i}
-                      style={{ background: isActive ? (i % 2 === 0 ? '#fff' : '#faf8ff') : '#fafafa', borderBottom: `1px solid #f3f4f6`, opacity: isActive ? 1 : 0.55 }}
+                      style={{ background: isActive ? (i % 2 === 0 ? '#fff' : '#faf8ff') : '#fafafa', borderBottom: `1px solid #f3f4f6`, opacity: isActive ? 1 : 0.5 }}
                       onContextMenu={e => { e.preventDefault(); setVCtxMenu({ x: e.clientX, y: e.clientY, kind: 'vendor', idx: globalIdx }); setCtxMenu(null) }}>
                       <td style={{ padding: '7px 14px', fontWeight: 700, color: purpleD, fontFamily: 'monospace', fontSize: 11 }}>{v.vendor_id}</td>
                       <td style={{ padding: '7px 14px', color: isActive ? '#1f2937' : '#9ca3af' }}>{v.brand}</td>
@@ -560,17 +563,20 @@ export default function SettingsPage() {
                           background: isActive ? '#dcfce7' : '#f3f4f6',
                           color: isActive ? '#15803d' : '#9ca3af',
                           border: `1px solid ${isActive ? '#86efac' : '#e5e7eb'}`,
+                          whiteSpace: 'nowrap',
                         }}>
-                          {isActive ? '● Active' : '○ Inactive'}
+                          {isActive ? '● Active' : '○ Off'}
                         </span>
                       </td>
                       <td style={{ padding: '7px 14px', textAlign: 'center' }}>
                         <button
                           onClick={() => toggleVendorActive(v.vendor_id, v.brand, isActive)}
                           style={{
-                            fontSize: 11, fontWeight: 700, borderRadius: 5, padding: '3px 10px', cursor: 'pointer', border: 'none',
+                            fontSize: 11, fontWeight: 700, borderRadius: 5, padding: '3px 9px', cursor: 'pointer',
+                            border: `1px solid ${isActive ? '#fecaca' : '#bbf7d0'}`,
                             background: isActive ? '#fef2f2' : '#f0fdf4',
                             color: isActive ? '#dc2626' : '#16a34a',
+                            whiteSpace: 'nowrap',
                           }}>
                           {isActive ? 'Deactivate' : 'Activate'}
                         </button>
@@ -582,8 +588,8 @@ export default function SettingsPage() {
             </table>
           </div>
 
-          <div style={{ padding: '5px 14px', background: purpleLight, borderTop: `1px solid ${border}`, fontSize: 11, color: '#9b8ec4', position: 'sticky', bottom: 0 }}>
-            {filteredVendors.filter(v => v.active !== false).length} active · {filteredVendors.filter(v => v.active === false).length} inactive · {filteredVendors.length} shown of {vendors.length} total · Right-click to edit or delete
+          <div style={{ padding: '5px 14px', background: purpleLight, borderTop: `1px solid ${border}`, fontSize: 11, color: '#9b8ec4', width: '100%', boxSizing: 'border-box' }}>
+            {filteredVendors.filter(v => v.active !== false).length} active · {filteredVendors.filter(v => v.active === false).length} inactive · {filteredVendors.length} shown of {vendors.length} total · Right-click a row to edit or delete
           </div>
         </div>
       )}
