@@ -1753,7 +1753,7 @@ export default function SeasonBookPage() {
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
                         <colgroup>
                           <col style={{ width: '16%' }} />{/* Brand */}
-                          <col style={{ width: '12%' }} />{/* Drop */}
+                          <col style={{ width: '12%' }} />{/* Log # */}
                           <col style={{ width: '7%' }} />{/* Store */}
                           <col style={{ width: '10%' }} />{/* Invoice # */}
                           <col style={{ width: '10%' }} />{/* Order # */}
@@ -1768,7 +1768,7 @@ export default function SeasonBookPage() {
                         <thead>
                           <tr style={{ background: '#f8f7ff' }}>
                             <th style={{ padding: '5px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Brand</th>
-                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Drop</th>
+                            <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Log #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Store</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Invoice #</th>
                             <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: gray, borderBottom: `1px solid ${border}` }}>Order #</th>
@@ -1817,7 +1817,7 @@ export default function SeasonBookPage() {
                                     {brand}
                                   </td>
                                   <td style={{ padding: '8px 10px', fontSize: 11, color: gray, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {`Drop ${dropNum}`}{dropName ? ` · ${dropName}` : ''}
+                                    {`Log #${dropNum}`}{dropRows[0]?.drop_label ? ` · Drop ${dropRows[0].drop_label}` : ''}{dropName ? ` · ${dropName}` : ''}
                                   </td>
                                   <td style={{ padding: '8px 10px', fontWeight: 800, color: purpleD, whiteSpace: 'nowrap' }}>
                                     {store}{hasCancelled && <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', marginLeft: 4 }}>🚫</span>}
