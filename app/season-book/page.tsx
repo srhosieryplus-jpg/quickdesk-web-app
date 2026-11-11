@@ -2442,7 +2442,7 @@ export default function SeasonBookPage() {
 
         return (
           <div className="modal-bg">
-            <div className="modal-box" style={{ maxWidth: 560 }}>
+            <div className="modal-box" style={{ maxWidth: 820 }}>
 
               {/* Header */}
               <div className="modal-head" style={{ background: isCancelled ? '#fef2f2' : '#fff' }}>
@@ -2463,7 +2463,9 @@ export default function SeasonBookPage() {
                 <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
               </div>
 
-              <div className="modal-body" style={{ opacity: isCancelled ? 0.7 : 1 }}>
+              <div className="modal-body" style={{ opacity: isCancelled ? 0.7 : 1, display: 'flex', gap: 0, padding: 0 }}>
+              {/* ── LEFT: edit form ── */}
+              <div style={{ flex: 1, minWidth: 0, padding: '16px 18px', borderRight: `2px solid #ede9fe` }}>
 
                 {/* Section 1: Reference fields */}
                 <div style={{ marginBottom: 14 }}>
@@ -2702,16 +2704,7 @@ export default function SeasonBookPage() {
                   }} />
                 </div>
 
-                {/* Packing Slips */}
-                <div style={{ marginBottom: 16, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '10px 12px' }}>
-                  <label style={{ ...lbl, color: '#0369a1' }}>📦 Packing Slips</label>
-                  <div style={{ fontSize: 10, color: '#0284c7', marginBottom: 6 }}>Each slip is timestamped when uploaded</div>
-                  <PackingSlipAttachment row={editRow} onUpdated={async () => {
-                    await fetchRows(season, user!)
-                    const { data } = await supabase.from('season_ledger').select('*').eq('id', editRow.id).single()
-                    if (data) setEditRow(data as LedgerRow)
-                  }} />
-                </div>
+                {/* Invoice PDF(s) only — packing slips moved to side panel */}
 
                 {/* Action bar */}
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
@@ -2767,7 +2760,89 @@ export default function SeasonBookPage() {
                     </button>
                   </div>
                 </div>
-              </div>
+              </div>{/* end left col */}
+
+              {/* ── RIGHT: side panel ── */}
+              {(() => {
+                const adj = moduleAdjMap.get(editRow.id) ?? null
+                const createdAt = editRow.created_at ? new Date(editRow.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null
+                const updatedAt = editRow.updated_at ? new Date(editRow.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null
+                const slips = editRow.packing_slips ?? []
+                const panelLbl: React.CSSProperties = { fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: gray, display: 'block', marginBottom: 2 }
+                const sectionHead = (color: string, borderColor: string): React.CSSProperties => ({
+                  fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em',
+                  color, borderBottom: `1.5px solid ${borderColor}`, paddingBottom: 4, marginBottom: 7, marginTop: 14,
+                })
+                return (
+                  <div style={{ width: 200, minWidth: 200, background: '#faf8ff', padding: '14px 12px', overflowY: 'auto', display: 'flex', flexDirection: 'column', borderRadius: '0 0 12px 0' }}>
+
+                    {/* Packing Slips */}
+                    <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#0369a1', borderBottom: '1.5px solid #bae6fd', paddingBottom: 4, marginBottom: 7 }}>📦 Packing Slips</div>
+                    <PackingSlipAttachment row={editRow} onUpdated={async () => {
+                      await fetchRows(season, user!)
+                      const { data } = await supabase.from('season_ledger').select('*').eq('id', editRow.id).single()
+                      if (data) setEditRow(data as LedgerRow)
+                    }} />
+
+                    {/* PO Numbers */}
+                    {editRow.order_num && (
+                      <>
+                        <div style={sectionHead('#92400e', '#fcd34d')}>🔗 PO Numbers</div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {editRow.order_num.split(/[,\s]+/).filter(Boolean).map((po, i) => (
+                            <span key={i} style={{ fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 4, padding: '2px 7px' }}>{po}</span>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Adjustments */}
+                    {seasonActive && adj && (adj.qty != null || adj.amount != null) && (
+                      <>
+                        <div style={sectionHead('#dc2626', '#fca5a5')}>⚠️ Adjustments</div>
+                        {adj.qty != null && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                            <span style={{ color: gray, fontSize: 10 }}>Qty Adj</span>
+                            <span style={{ fontWeight: 700, color: '#dc2626' }}>{adj.qty > 0 ? '+' : ''}{adj.qty} units</span>
+                          </div>
+                        )}
+                        {adj.amount != null && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                            <span style={{ color: gray, fontSize: 10 }}>Amt Adj</span>
+                            <span style={{ fontWeight: 700, color: '#dc2626' }}>{adj.amount > 0 ? '+' : ''}{fmt$(Math.abs(adj.amount), editRow.currency as Currency)}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Activity Log */}
+                    <div style={sectionHead(gray, border)}>📋 Activity</div>
+                    {createdAt && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: gray, padding: '3px 0', borderBottom: '1px solid #f3f4f6' }}>
+                        <span>Created</span><span>{createdAt}</span>
+                      </div>
+                    )}
+                    {editRow.deposit && (editRow.payment_date || editRow.deposit) && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: gray, padding: '3px 0', borderBottom: '1px solid #f3f4f6' }}>
+                        <span>Deposit saved</span><span>{editRow.payment_date ? new Date(editRow.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
+                      </div>
+                    )}
+                    {slips.map((s, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: gray, padding: '3px 0', borderBottom: '1px solid #f3f4f6' }}>
+                        <span>Slip added</span>
+                        <span>{new Date(s.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      </div>
+                    ))}
+                    {updatedAt && updatedAt !== createdAt && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: gray, padding: '3px 0' }}>
+                        <span>Last updated</span><span>{updatedAt}</span>
+                      </div>
+                    )}
+
+                  </div>
+                )
+              })()}
+              </div>{/* end modal-body flex row */}
             </div>
           </div>
         )
