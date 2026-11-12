@@ -79,7 +79,7 @@ function statusColor(s: string | null | undefined) {
 }
 function statusTextColor(s: string | null | undefined) {
   if (s === 'Edits Completed' || s === 'Items Created') return '#16a34a'
-  return '#d97706'
+  return '#ca8a04'
 }
 const pillSt = (s: string | null | undefined): React.CSSProperties => {
   const c = statusColor(s)
@@ -923,7 +923,7 @@ export default function EditSheetPage() {
                 <div style={{ background: accentL, border: `1.5px solid ${accentB}`, borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
                   <div style={{ fontSize: 11, fontWeight: 800, color: accentD, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>📐 Markup — applies to all orders</div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ width: 160 }}>
                       <select value={bmMarkup} onChange={e => setBmMarkup(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                         <option value="">— Select —</option>
                         {MARKUP_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
@@ -950,13 +950,13 @@ export default function EditSheetPage() {
 
                       {/* Read-only info row */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-                        {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, color: accent }}>{r.store}</span>}
-                        {r.order_num && <span style={{ fontSize: 10, fontWeight: 700, color: accent }}>Order # {r.order_num}</span>}
-                        {r.season_book_id && <span style={{ fontSize: 10, fontWeight: 700, color: accent, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '1px 7px' }}>🔗 Linked</span>}
+                        {isAdmin && <span style={{ fontSize: 14, fontWeight: 800, color: accent }}>{r.store}</span>}
+                        {r.order_num && <span style={{ fontSize: 14, fontWeight: 800, color: accent }}>Order # {r.order_num}</span>}
+                        {r.season_book_id && <span style={{ fontSize: 11, fontWeight: 700, color: accent, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '2px 9px' }}>🔗 Linked</span>}
                       </div>
 
                       {/* PO # + Entry Status */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 8, marginBottom: 10 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '160px 160px', gap: 8, marginBottom: 10 }}>
                         <div>
                           <label style={lbl}>PO # {r.season_book_id && <span style={{ color: accent, fontSize: 10, fontWeight: 400 }}>→ syncs to Season Book</span>}</label>
                           <input value={perRow.po_num}
