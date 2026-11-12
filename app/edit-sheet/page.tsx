@@ -72,59 +72,6 @@ function statusColor(s: string) {
   return { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
 }
 
-// ── EditRow sub-component (avoids IIFE in map) ────────────────────────────────
-function EditRow({ row, isAdmin, accent, accentD, accentL, accentB, gray, markupDisplay, fmtTs, onEdit, onHistory }: {
-  row: EditSheetRow; isAdmin: boolean
-  accent: string; accentD: string; accentL: string; accentB: string; gray: string; borderC?: string
-  markupDisplay: (r: EditSheetRow) => string
-  fmtTs: (ts: string | null) => string
-  onEdit: (r: EditSheetRow) => void
-  onHistory: (brand: string) => void
-}) {
-  const emptyMarkup = !row.markup || !row.markup.trim()
-  const sc = row.status === 'Edits Completed'
-    ? { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
-    : { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
-  return (
-    <tr className="es-row" onClick={() => onEdit(row)} style={emptyMarkup ? { background: '#fef2f2' } : undefined}>
-      {isAdmin && <td style={{ fontWeight: 700, color: accentD }}>{row.store}</td>}
-      <td>
-        <div style={{ fontWeight: 700 }}>{row.brand}</div>
-        {row.season_book_id && <div style={{ fontSize: 10, color: accent, fontWeight: 600 }}>🔗 Season Book</div>}
-      </td>
-      <td style={{ color: gray, fontSize: 12 }}>{row.order_num || '—'}</td>
-      <td>
-        {emptyMarkup
-          ? <span style={{ fontSize: 11, fontWeight: 800, color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 5, padding: '2px 8px' }}>⚠ Empty</span>
-          : <span style={{ fontWeight: 700, fontSize: 13, color: accentD }}>{markupDisplay(row)}</span>
-        }
-      </td>
-      <td>
-        <span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 20, fontSize: 10, fontWeight: 800, border: '1px solid', background: sc.bg, color: sc.color, borderColor: sc.border, whiteSpace: 'nowrap' }}>{row.status}</span>
-      </td>
-      <td onClick={e => e.stopPropagation()}>
-        {(row.pdf_files || []).length > 0 ? (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {(row.pdf_files || []).map((f, i) => (
-              <a key={i} href={f.url} target="_blank" rel="noreferrer"
-                style={{ fontSize: 11, color: accent, fontWeight: 600, textDecoration: 'none', background: accentL, border: `1px solid ${accentB}`, borderRadius: 5, padding: '2px 7px' }}>
-                📄 {f.name.length > 14 ? f.name.slice(0, 12) + '…' : f.name}
-              </a>
-            ))}
-          </div>
-        ) : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>}
-      </td>
-      <td style={{ fontSize: 12, color: gray, maxWidth: 160 }}>{row.note || '—'}</td>
-      <td style={{ fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>{fmtTs(row.created_at)}</td>
-      <td onClick={e => e.stopPropagation()}>
-        <button onClick={() => onHistory(row.brand)}
-          style={{ background: accentL, color: accentD, border: `1px solid ${accentB}`, borderRadius: 5, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          History
-        </button>
-      </td>
-    </tr>
-  )
-}
 
 export default function EditSheetPage() {
   const router = useRouter()
@@ -164,7 +111,7 @@ export default function EditSheetPage() {
   const newSuggRef  = useRef<HTMLDivElement>(null)
   const [newOrderNum, setNewOrderNum] = useState('')
   const [newSeason, setNewSeason] = useState('')
-  const [newMarkup, setNewMarkup] = useState('x2')
+  const [newMarkup, setNewMarkup] = useState('')
   const [newMarkupAdd, setNewMarkupAdd] = useState('')
   const [newMarkupCustom, setNewMarkupCustom] = useState('')
   const [newStatus, setNewStatus] = useState<EditSheetRow['status']>('Pending')
@@ -288,7 +235,7 @@ export default function EditSheetPage() {
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     showToast('✅ Entry added')
     setShowNew(false)
-    setNewBrand(''); setNewOrderNum(''); setNewSeason(''); setNewMarkup('x2')
+    setNewBrand(''); setNewOrderNum(''); setNewSeason(''); setNewMarkup('')
     setNewMarkupAdd(''); setNewMarkupCustom(''); setNewStatus('Pending'); setNewNote('')
     fetchRows()
   }
@@ -296,7 +243,7 @@ export default function EditSheetPage() {
   // ── Edit ──────────────────────────────────────────────────────────────────
   function openEdit(row: EditSheetRow) {
     setEditRow(row)
-    setEditMarkup(row.markup || 'x2')
+    setEditMarkup(row.markup || '')
     setEditMarkupAdd(row.markup_add?.toString() || '')
     setEditMarkupCustom('')
     setEditStatus(row.status)
@@ -572,36 +519,77 @@ export default function EditSheetPage() {
         </div>
       </div>
 
-      {/* ── Table card ────────────────────────────────────────────────────── */}
-      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', margin: '16px 16px 24px', overflowX: 'auto' }}>
+      {/* ── Brand cards ───────────────────────────────────────────────────── */}
+      <div style={{ padding: '0 16px 24px' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 48, color: gray }}>Loading…</div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 48, color: gray, fontSize: 13 }}>
             No entries for {season} — click <strong>+ New</strong> to add one.
           </div>
-        ) : (
-          <table className="es-table">
-            <thead>
-              <tr>
-                {isAdmin && <th>Store</th>}
-                <th>Brand</th>
-                <th>Order #</th>
-                <th>Markup</th>
-                <th>Status</th>
-                <th>PDFs</th>
-                <th>Note</th>
-                <th>Added</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(row => (
-                <EditRow key={row.id} row={row} isAdmin={isAdmin} accent={accent} accentD={accentD} accentL={accentL} accentB={accentB} gray={gray} borderC={borderC} markupDisplay={markupDisplay} fmtTs={fmtTs} onEdit={openEdit} onHistory={openHistory} />
-              ))}
-            </tbody>
-          </table>
-        )}
+        ) : filtered.map(row => {
+          const emptyMarkup = !row.markup || !row.markup.trim()
+          const sc = row.status === 'Edits Completed'
+            ? { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
+            : { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
+          return (
+            <div key={row.id}
+              style={{ background: '#fff', border: `2px solid ${emptyMarkup ? '#fca5a5' : accentB}`, borderRadius: 10, marginBottom: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+
+              {/* Card header row — click to open edit */}
+              <div onClick={() => openEdit(row)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: emptyMarkup ? '#fef2f2' : accentL, borderBottom: `1px solid ${emptyMarkup ? '#fecaca' : accentB}`, cursor: 'pointer', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: accentD, flex: 1, minWidth: 120 }}>{row.brand}</span>
+                {isAdmin && <span style={{ fontSize: 11, color: gray, background: '#fff', border: `1px solid ${borderC}`, borderRadius: 8, padding: '1px 8px', fontWeight: 600 }}>{row.store}</span>}
+                {row.season_book_id && <span style={{ fontSize: 11, color: accent, fontWeight: 700, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 8, padding: '1px 8px' }}>🔗 Linked</span>}
+                <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800, border: '1px solid', background: sc.bg, color: sc.color, borderColor: sc.border }}>{row.status}</span>
+                <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>click to edit →</span>
+              </div>
+
+              {/* Detail row */}
+              <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' }}>
+                {/* Markup */}
+                <div style={{ flex: '1 1 110px', padding: '10px 14px', borderRight: `1px solid ${borderC}` }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Markup</div>
+                  {emptyMarkup
+                    ? <span style={{ fontSize: 12, fontWeight: 800, color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 5, padding: '2px 8px' }}>⚠ Empty</span>
+                    : <span style={{ fontSize: 14, fontWeight: 800, color: accentD }}>{markupDisplay(row)}</span>
+                  }
+                </div>
+                {/* Order # */}
+                <div style={{ flex: '1 1 110px', padding: '10px 14px', borderRight: `1px solid ${borderC}` }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Order #</div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{row.order_num || '—'}</span>
+                </div>
+                {/* PDFs */}
+                <div style={{ flex: '2 1 180px', padding: '10px 14px', borderRight: `1px solid ${borderC}` }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>PDF Edits</div>
+                  {(row.pdf_files || []).length > 0 ? (
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {(row.pdf_files || []).map((f, i) => (
+                        <a key={i} href={f.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                          style={{ fontSize: 11, color: accent, fontWeight: 600, textDecoration: 'none', background: '#fff', border: `1px solid ${accentB}`, borderRadius: 5, padding: '2px 8px' }}>
+                          📄 {f.name.length > 16 ? f.name.slice(0, 14) + '…' : f.name}
+                        </a>
+                      ))}
+                    </div>
+                  ) : <span style={{ fontSize: 12, color: '#d1d5db' }}>—</span>}
+                </div>
+                {/* Note + History */}
+                <div style={{ flex: '2 1 160px', padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Note</div>
+                    <span style={{ fontSize: 12, color: gray, fontStyle: row.note ? 'normal' : 'italic' }}>{row.note || '—'}</span>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); openHistory(row.brand) }}
+                    style={{ marginTop: 8, alignSelf: 'flex-start', background: accentL, color: accentD, border: `1px solid ${accentB}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    History
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       {/* ── New Entry Modal ──────────────────────────────────────────────────── */}
@@ -656,6 +644,7 @@ export default function EditSheetPage() {
                   <label style={lbl}>Markup</label>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <select value={newMarkup} onChange={e => setNewMarkup(e.target.value)} style={{ ...inp, cursor: 'pointer', flex: 1 }}>
+                      <option value="">— Select —</option>
                       {MARKUP_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
                       <option value="__custom__">+ Custom…</option>
                     </select>
@@ -714,6 +703,7 @@ export default function EditSheetPage() {
                   <label style={lbl}>Markup</label>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <select value={editMarkup} onChange={e => setEditMarkup(e.target.value)} style={{ ...inp, cursor: 'pointer', flex: 1 }}>
+                      <option value="">— Select —</option>
                       {MARKUP_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
                       <option value="__custom__">+ Custom…</option>
                     </select>
