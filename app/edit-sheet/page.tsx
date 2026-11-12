@@ -137,6 +137,17 @@ export default function EditSheetPage() {
   const [historyRows, setHistoryRows] = useState<EditSheetRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  // Brand modal (bulk edit for a brand)
+  const [brandModal, setBrandModal] = useState<string | null>(null) // brand name
+  const [bmMarkup, setBmMarkup] = useState('')
+  const [bmMarkupCustom, setBmMarkupCustom] = useState('')
+  const [bmMarkupAdd, setBmMarkupAdd] = useState('')
+  // per-row edits: id → { order_num, status, note }
+  const [bmRows, setBmRows] = useState<Record<string, { order_num: string; status: EditSheetRow['status']; note: string }>>({})
+  const [bmSaving, setBmSaving] = useState(false)
+  const [bmUploading, setBmUploading] = useState(false)
+  const [bmUploadTarget, setBmUploadTarget] = useState<string | null>(null) // row id to attach PDF to
+
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     const u = getSession()
@@ -307,6 +318,74 @@ export default function EditSheetPage() {
     const { data } = await q
     setHistoryLoading(false)
     setHistoryRows((data || []) as EditSheetRow[])
+  }
+
+  // ── Brand modal ───────────────────────────────────────────────────────────
+  function openBrandModal(brand: string) {
+    const brandRows = rows.filter(r => r.brand === brand)
+    const firstMarkup = brandRows[0]?.markup || ''
+    setBmMarkup(MARKUP_OPTIONS.includes(firstMarkup) ? firstMarkup : firstMarkup ? '__custom__' : '')
+    setBmMarkupCustom(MARKUP_OPTIONS.includes(firstMarkup) || !firstMarkup ? '' : firstMarkup)
+    setBmMarkupAdd(brandRows[0]?.markup_add?.toString() || '')
+    const perRow: Record<string, { order_num: string; status: EditSheetRow['status']; note: string }> = {}
+    for (const r of brandRows) {
+      perRow[r.id] = { order_num: r.order_num || '', status: r.status, note: r.note || '' }
+    }
+    setBmRows(perRow)
+    setBrandModal(brand)
+  }
+
+  async function saveBrandModal() {
+    if (!brandModal) return
+    setBmSaving(true)
+    const markupVal = bmMarkup === '__custom__' ? bmMarkupCustom.trim() : bmMarkup
+    const brandRows = rows.filter(r => r.brand === brandModal)
+
+    // Save each row
+    for (const r of brandRows) {
+      const perRow = bmRows[r.id]
+      if (!perRow) continue
+      const { error } = await supabase.from('edit_sheet').update({
+        markup: markupVal || null,
+        markup_add: bmMarkupAdd ? parseFloat(bmMarkupAdd) : null,
+        order_num: perRow.order_num.trim() || null,
+        status: perRow.status,
+        note: perRow.note.trim() || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', r.id)
+      if (error) { showToast('❌ ' + error.message, 'err'); setBmSaving(false); return }
+
+      // Sync PO# back to season_ledger if linked
+      if (r.season_book_id && perRow.order_num.trim()) {
+        await supabase.from('season_ledger').update({
+          order_num: perRow.order_num.trim(),
+          updated_at: new Date().toISOString(),
+        }).eq('id', r.season_book_id)
+      }
+    }
+
+    setBmSaving(false)
+    showToast('✅ Saved')
+    setBrandModal(null)
+    fetchRows()
+  }
+
+  async function bmUploadPDF(rowId: string, file: File) {
+    setBmUploading(true)
+    setBmUploadTarget(rowId)
+    const ext = file.name.split('.').pop()
+    const path = `es_${rowId}_${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('invoices').upload(path, file)
+    if (upErr) { showToast('❌ Upload failed: ' + upErr.message, 'err'); setBmUploading(false); setBmUploadTarget(null); return }
+    const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path)
+    const newFile = { url: urlData.publicUrl, name: file.name, uploaded_at: new Date().toISOString() }
+    const targetRow = rows.find(r => r.id === rowId)
+    const updatedFiles = [...(targetRow?.pdf_files || []), newFile]
+    await supabase.from('edit_sheet').update({ pdf_files: updatedFiles }).eq('id', rowId)
+    setBmUploading(false)
+    setBmUploadTarget(null)
+    showToast('✅ PDF attached')
+    fetchRows()
   }
 
   // ── Filtered table ────────────────────────────────────────────────────────
@@ -546,14 +625,16 @@ export default function EditSheetPage() {
               <div key={brand}
                 style={{ background: '#fff', border: `2px solid ${anyEmpty ? '#fca5a5' : accentB}`, borderRadius: 10, marginBottom: 14, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
 
-                {/* Card header — brand name + markup badge */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: anyEmpty ? '#fef2f2' : accentL, borderBottom: `1px solid ${anyEmpty ? '#fecaca' : accentB}`, flexWrap: 'wrap' }}>
+                {/* Card header — click to open brand modal */}
+                <div onClick={() => openBrandModal(brand)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: anyEmpty ? '#fef2f2' : accentL, borderBottom: `1px solid ${anyEmpty ? '#fecaca' : accentB}`, flexWrap: 'wrap', cursor: 'pointer' }}>
                   <span style={{ fontSize: 14, fontWeight: 800, color: accentD, flex: 1 }}>{brand}</span>
                   {emptyMarkup
                     ? <span style={{ fontSize: 12, fontWeight: 800, color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '2px 10px' }}>⚠ Empty Markup</span>
                     : <span style={{ fontSize: 13, fontWeight: 800, color: accentD, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '2px 10px' }}>{markupDisplay(brandRows[0])}</span>
                   }
                   <span style={{ fontSize: 11, color: gray }}>{brandRows.length} order{brandRows.length !== 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: 10, color: gray, marginLeft: 'auto', opacity: 0.6 }}>click to edit →</span>
                 </div>
 
                 {/* Orders table */}
@@ -794,6 +875,114 @@ export default function EditSheetPage() {
           </div>
         </div>
       )}
+
+      {/* ── Brand Modal ─────────────────────────────────────────────────────── */}
+      {brandModal && (() => {
+        const bmBrandRows = rows.filter(r => r.brand === brandModal)
+        return (
+          <div className="modal-bg">
+            <div className="modal-box" style={{ maxWidth: 640 }}>
+              <div className="modal-head">
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: accentD }}>{brandModal}</div>
+                  <div style={{ fontSize: 11, color: gray }}>{season} · {bmBrandRows.length} order{bmBrandRows.length !== 1 ? 's' : ''}</div>
+                </div>
+                <button onClick={() => setBrandModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
+              </div>
+              <div className="modal-body">
+
+                {/* Markup — applies to all orders for this brand */}
+                <div style={{ background: accentL, border: `1.5px solid ${accentB}`, borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: accentD, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>📐 Markup — applies to all orders</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1 }}>
+                      <select value={bmMarkup} onChange={e => setBmMarkup(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                        <option value="">— Select —</option>
+                        {MARKUP_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+                        <option value="__custom__">+ Custom…</option>
+                      </select>
+                      {bmMarkup === '__custom__' && (
+                        <input value={bmMarkupCustom} onChange={e => setBmMarkupCustom(e.target.value)} placeholder="e.g. x2.7" style={{ ...inp, marginTop: 6 }} />
+                      )}
+                    </div>
+                    <div style={{ width: 110 }}>
+                      <input type="number" step="0.01" value={bmMarkupAdd} onChange={e => setBmMarkupAdd(e.target.value)}
+                        placeholder="+ Add" style={inp} />
+                      <div style={{ fontSize: 10, color: gray, marginTop: 3 }}>+ add to markup</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-order rows */}
+                <div style={{ fontSize: 11, fontWeight: 800, color: accentD, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>📋 Order Details</div>
+                {bmBrandRows.map(r => {
+                  const perRow = bmRows[r.id] || { order_num: '', status: 'Pending' as EditSheetRow['status'], note: '' }
+                  const sc = perRow.status === 'Edits Completed'
+                    ? { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
+                    : { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
+                  return (
+                    <div key={r.id} style={{ background: '#fff', border: `1px solid ${borderC}`, borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, color: gray, background: '#f3f4f6', borderRadius: 4, padding: '1px 6px' }}>{r.store}</span>}
+                        {r.season_book_id && <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>🔗 Linked to Season Book</span>}
+                        <span style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 20, fontSize: 10, fontWeight: 800, border: '1px solid', background: sc.bg, color: sc.color, borderColor: sc.border }}>{perRow.status}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                        <div>
+                          <label style={lbl}>PO # {r.season_book_id && <span style={{ color: accent, fontSize: 10 }}>→ syncs to Season Book</span>}</label>
+                          <input value={perRow.order_num}
+                            onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], order_num: e.target.value } }))}
+                            placeholder="PO / Order number" style={inp} />
+                        </div>
+                        <div>
+                          <label style={lbl}>Status</label>
+                          <select value={perRow.status}
+                            onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], status: e.target.value as EditSheetRow['status'] } }))}
+                            style={{ ...inp, cursor: 'pointer' }}>
+                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={lbl}>Note</label>
+                        <input value={perRow.note}
+                          onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], note: e.target.value } }))}
+                          placeholder="Optional note" style={inp} />
+                      </div>
+                      {/* PDFs for this order */}
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: gray, marginBottom: 5 }}>📎 PDF Edits</div>
+                        {(r.pdf_files || []).length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+                            {(r.pdf_files || []).map((f, i) => (
+                              <a key={i} href={f.url} target="_blank" rel="noreferrer"
+                                style={{ fontSize: 11, color: accent, fontWeight: 600, textDecoration: 'none', background: accentL, border: `1px solid ${accentB}`, borderRadius: 5, padding: '2px 8px' }}>
+                                📄 {f.name.length > 16 ? f.name.slice(0, 14) + '…' : f.name}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                        <label style={{ display: 'inline-block', background: accentL, color: accentD, border: `1px solid ${accentB}`, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                          {bmUploading && bmUploadTarget === r.id ? 'Uploading…' : '📎 Attach PDF'}
+                          <input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }}
+                            onChange={e => { if (e.target.files?.[0]) bmUploadPDF(r.id, e.target.files[0]) }} />
+                        </label>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="modal-foot">
+                <button onClick={() => setBrandModal(null)} style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={saveBrandModal} disabled={bmSaving}
+                  style={{ background: accent, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  {bmSaving ? 'Saving…' : '✓ Save All'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── History Side Panel ───────────────────────────────────────────────── */}
       {historyBrand && (
