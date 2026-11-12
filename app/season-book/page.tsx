@@ -2324,45 +2324,6 @@ export default function SeasonBookPage() {
                     ) : null
                   })()}
                 </div>
-                {/* Vendor ID with autocomplete */}
-                <div ref={formVendorRef} style={{ position: 'relative' }}>
-                  <label style={lbl}>Vendor ID</label>
-                  <input
-                    value={formVendorId ?? ''}
-                    onChange={e => { setFormVendorId(e.target.value || null); setShowFormVendorDrop(true); setFormVendorHi(-1) }}
-                    onFocus={() => { setShowFormVendorDrop(true); setFormVendorHi(-1) }}
-                    placeholder="e.g. 1984 by Ladida"
-                    style={{ ...inp, fontSize: 13 }}
-                    onKeyDown={e => {
-                      const q = (formVendorId ?? '').toLowerCase()
-                      const allV = Array.from(new Set(liveVendors.map(v => v.vendor_id).filter(Boolean))).sort() as string[]
-                      const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== formVendorId).slice(0, 8)
-                      if (!showFormVendorDrop || suggs.length === 0) return
-                      if (e.key === 'ArrowDown') { e.preventDefault(); setFormVendorHi(h => Math.min(h + 1, suggs.length - 1)) }
-                      else if (e.key === 'ArrowUp') { e.preventDefault(); setFormVendorHi(h => Math.max(h - 1, 0)) }
-                      else if (e.key === 'Enter' && formVendorHi >= 0) {
-                        e.preventDefault(); setFormVendorId(suggs[formVendorHi]); setShowFormVendorDrop(false); setFormVendorHi(-1)
-                      } else if (e.key === 'Escape') { setShowFormVendorDrop(false); setFormVendorHi(-1) }
-                    }}
-                  />
-                  {showFormVendorDrop && (() => {
-                    const q = (formVendorId ?? '').toLowerCase()
-                    const allV = Array.from(new Set(liveVendors.map(v => v.vendor_id).filter(Boolean))).sort() as string[]
-                    const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== formVendorId).slice(0, 8)
-                    return suggs.length > 0 ? (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
-                        {suggs.map((v, vi) => (
-                          <div key={v}
-                            onMouseDown={e => { e.preventDefault(); setFormVendorId(v); setShowFormVendorDrop(false); setFormVendorHi(-1) }}
-                            onMouseEnter={() => setFormVendorHi(vi)}
-                            style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', background: vi === formVendorHi ? '#ede9fe' : '#fff' }}>
-                            {v}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null
-                  })()}
-                </div>
                 {/* Log # (auto-incrementing internal number) */}
                 <div>
                   <label style={lbl}>Log #</label>
