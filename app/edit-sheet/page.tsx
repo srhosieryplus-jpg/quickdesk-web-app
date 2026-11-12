@@ -381,8 +381,6 @@ export default function EditSheetPage() {
 
   const brandsInUse = useMemo(() => Array.from(new Set(rows.map(r => r.brand))).sort(), [rows])
   const allSeasons  = buildSeasons(extraSeasons)
-  const pendingCount   = rows.filter(r => r.status === 'Pending').length
-  const completedCount = rows.filter(r => r.status === 'Edits Completed').length
 
   if (!user) return null
 
@@ -496,9 +494,9 @@ export default function EditSheetPage() {
 
         {/* Center: title */}
         <div className="es-header-title">
-          <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '0.05em' }}>✏️ EDIT SHEET</div>
-          <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
-            {season} · {pendingCount} pending · {completedCount} completed
+          <div style={{ fontSize: 19, fontWeight: 900, letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 10 }}>
+            ✏️ EDIT SHEET
+            <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.85, letterSpacing: '0.08em' }}>{season}</span>
           </div>
         </div>
 
