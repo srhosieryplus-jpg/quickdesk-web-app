@@ -72,6 +72,60 @@ function statusColor(s: string) {
   return { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
 }
 
+// ── EditRow sub-component (avoids IIFE in map) ────────────────────────────────
+function EditRow({ row, isAdmin, accent, accentD, accentL, accentB, gray, markupDisplay, fmtTs, onEdit, onHistory }: {
+  row: EditSheetRow; isAdmin: boolean
+  accent: string; accentD: string; accentL: string; accentB: string; gray: string; borderC?: string
+  markupDisplay: (r: EditSheetRow) => string
+  fmtTs: (ts: string | null) => string
+  onEdit: (r: EditSheetRow) => void
+  onHistory: (brand: string) => void
+}) {
+  const emptyMarkup = !row.markup || !row.markup.trim()
+  const sc = row.status === 'Edits Completed'
+    ? { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
+    : { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
+  return (
+    <tr className="es-row" onClick={() => onEdit(row)} style={emptyMarkup ? { background: '#fef2f2' } : undefined}>
+      {isAdmin && <td style={{ fontWeight: 700, color: accentD }}>{row.store}</td>}
+      <td>
+        <div style={{ fontWeight: 700 }}>{row.brand}</div>
+        {row.season_book_id && <div style={{ fontSize: 10, color: accent, fontWeight: 600 }}>🔗 Season Book</div>}
+      </td>
+      <td style={{ color: gray, fontSize: 12 }}>{row.order_num || '—'}</td>
+      <td>
+        {emptyMarkup
+          ? <span style={{ fontSize: 11, fontWeight: 800, color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 5, padding: '2px 8px' }}>⚠ Empty</span>
+          : <span style={{ fontWeight: 700, fontSize: 13, color: accentD }}>{markupDisplay(row)}</span>
+        }
+      </td>
+      <td>
+        <span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 20, fontSize: 10, fontWeight: 800, border: '1px solid', background: sc.bg, color: sc.color, borderColor: sc.border, whiteSpace: 'nowrap' }}>{row.status}</span>
+      </td>
+      <td onClick={e => e.stopPropagation()}>
+        {(row.pdf_files || []).length > 0 ? (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {(row.pdf_files || []).map((f, i) => (
+              <a key={i} href={f.url} target="_blank" rel="noreferrer"
+                style={{ fontSize: 11, color: accent, fontWeight: 600, textDecoration: 'none', background: accentL, border: `1px solid ${accentB}`, borderRadius: 5, padding: '2px 7px' }}>
+                📄 {f.name.length > 14 ? f.name.slice(0, 12) + '…' : f.name}
+              </a>
+            ))}
+          </div>
+        ) : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>}
+      </td>
+      <td style={{ fontSize: 12, color: gray, maxWidth: 160 }}>{row.note || '—'}</td>
+      <td style={{ fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>{fmtTs(row.created_at)}</td>
+      <td onClick={e => e.stopPropagation()}>
+        <button onClick={() => onHistory(row.brand)}
+          style={{ background: accentL, color: accentD, border: `1px solid ${accentB}`, borderRadius: 5, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          History
+        </button>
+      </td>
+    </tr>
+  )
+}
+
 export default function EditSheetPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
@@ -90,8 +144,8 @@ export default function EditSheetPage() {
 
   // Search / filters
   const [search, setSearch] = useState('')
-  const [storeFilter, setStoreFilter] = useState('ALL')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [markupFilter, setMarkupFilter] = useState('ALL')
 
   // Brand search popup
   const [brandQ, setBrandQ] = useState('')
@@ -310,8 +364,9 @@ export default function EditSheetPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return rows.filter(r => {
-      if (storeFilter !== 'ALL' && r.store !== storeFilter) return false
       if (statusFilter !== 'ALL' && r.status !== statusFilter) return false
+      if (markupFilter === '__empty__') { if (r.markup && r.markup.trim()) return false }
+      else if (markupFilter !== 'ALL' && r.markup !== markupFilter) return false
       if (!q) return true
       return (
         (r.brand || '').toLowerCase().includes(q) ||
@@ -320,7 +375,9 @@ export default function EditSheetPage() {
         (r.note || '').toLowerCase().includes(q)
       )
     })
-  }, [rows, search, storeFilter, statusFilter])
+  }, [rows, search, statusFilter, markupFilter])
+
+  const emptyMarkupCount = useMemo(() => rows.filter(r => !r.markup || !r.markup.trim()).length, [rows])
 
   const brandsInUse = useMemo(() => Array.from(new Set(rows.map(r => r.brand))).sort(), [rows])
   const allSeasons  = buildSeasons(extraSeasons)
@@ -463,13 +520,22 @@ export default function EditSheetPage() {
         <div className="es-filters">
           {/* Status filter */}
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            style={{ ...inpMd, width: 160, flex: '0 0 auto', fontWeight: 700, cursor: 'pointer' }}>
-            <option value="ALL">All Statuses</option>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            style={{ ...inpMd, width: 170, flex: '0 0 auto', fontWeight: 700, cursor: 'pointer' }}>
+            <option value="ALL">View All</option>
+            <option value="Pending">View Pending</option>
+            <option value="Edits Completed">View Edits Completed</option>
+          </select>
+
+          {/* Markup filter */}
+          <select value={markupFilter} onChange={e => setMarkupFilter(e.target.value)}
+            style={{ ...inpMd, width: 160, flex: '0 0 auto', cursor: 'pointer', fontWeight: markupFilter === '__empty__' ? 800 : undefined, color: markupFilter === '__empty__' ? '#dc2626' : undefined }}>
+            <option value="ALL">All Markups</option>
+            {MARKUP_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+            <option value="__empty__">⚠ Empty{emptyMarkupCount > 0 ? ` (${emptyMarkupCount})` : ''}</option>
           </select>
 
           {/* Search */}
-          <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 280 }}>
+          <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 260 }}>
             <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 13, pointerEvents: 'none' }}>🔍</span>
             <input ref={brandRef} value={search}
               onChange={e => {
@@ -504,15 +570,6 @@ export default function EditSheetPage() {
             {brandsInUse.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
 
-          {/* Store filter (admin only) */}
-          {isAdmin && (
-            <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)}
-              style={{ ...inpMd, width: 120, flex: '0 0 auto', cursor: 'pointer' }}>
-              <option value="ALL">All Stores</option>
-              {STORES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          )}
-
           <span style={{ fontSize: 12, color: gray }}>{filtered.length} row{filtered.length !== 1 ? 's' : ''}</span>
         </div>
       </div>
@@ -541,45 +598,9 @@ export default function EditSheetPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(row => {
-                const sc = statusColor(row.status)
-                return (
-                  <tr key={row.id} className="es-row" onClick={() => openEdit(row)}>
-                    {isAdmin && <td style={{ fontWeight: 700, color: accentD }}>{row.store}</td>}
-                    <td>
-                      <div style={{ fontWeight: 700 }}>{row.brand}</div>
-                      {row.season_book_id && <div style={{ fontSize: 10, color: accent, fontWeight: 600 }}>🔗 Season Book</div>}
-                    </td>
-                    <td style={{ color: gray, fontSize: 12 }}>{row.order_num || '—'}</td>
-                    <td>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: accentD }}>{markupDisplay(row)}</span>
-                    </td>
-                    <td>
-                      <span className="es-badge" style={{ background: sc.bg, color: sc.color, borderColor: sc.border }}>{row.status}</span>
-                    </td>
-                    <td onClick={e => e.stopPropagation()}>
-                      {(row.pdf_files || []).length > 0 ? (
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {(row.pdf_files || []).map((f, i) => (
-                            <a key={i} href={f.url} target="_blank" rel="noreferrer"
-                              style={{ fontSize: 11, color: accent, fontWeight: 600, textDecoration: 'none', background: accentL, border: `1px solid ${accentB}`, borderRadius: 5, padding: '2px 7px' }}>
-                              📄 {f.name.length > 14 ? f.name.slice(0, 12) + '…' : f.name}
-                            </a>
-                          ))}
-                        </div>
-                      ) : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>}
-                    </td>
-                    <td style={{ fontSize: 12, color: gray, maxWidth: 160 }}>{row.note || '—'}</td>
-                    <td style={{ fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>{fmtTs(row.created_at)}</td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <button onClick={() => openHistory(row.brand)}
-                        style={{ background: accentL, color: accentD, border: `1px solid ${accentB}`, borderRadius: 5, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        History
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
+              {filtered.map(row => (
+                <EditRow key={row.id} row={row} isAdmin={isAdmin} accent={accent} accentD={accentD} accentL={accentL} accentB={accentB} gray={gray} borderC={borderC} markupDisplay={markupDisplay} fmtTs={fmtTs} onEdit={openEdit} onHistory={openHistory} />
+              ))}
             </tbody>
           </table>
         )}
