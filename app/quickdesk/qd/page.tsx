@@ -958,11 +958,17 @@ export default function QDPage() {
                 </div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: 28 }} />
+                    <col style={{ width: session.extra_cols.length > 0 ? '50%' : 'auto' }} />
+                    <col style={{ width: 60 }} />
+                    {session.extra_cols.map(c => <col key={c} />)}
+                  </colgroup>
                   <thead>
                     <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={{ ...thSt, textAlign: 'center', width: 28 }}>#</th>
-                      <th style={{ ...thSt, width: 'auto' }}>UPC</th>
-                      <th style={{ ...thSt, textAlign: 'center', width: 52 }}>Qty</th>
+                      <th style={{ ...thSt, textAlign: 'center' }}>#</th>
+                      <th style={{ ...thSt }}>UPC</th>
+                      <th style={{ ...thSt, textAlign: 'center' }}>Qty</th>
                       {session.extra_cols.map(c => <th key={c} style={{ ...thSt, whiteSpace: 'nowrap' }}>{c}</th>)}
                     </tr>
                   </thead>
@@ -983,7 +989,7 @@ export default function QDPage() {
                         <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}
                           onContextMenu={e => { e.preventDefault(); setCtxMenu({ upc, x: e.clientX, y: e.clientY }) }}>
                           <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '5px 4px', whiteSpace: 'nowrap' }}>{ri + 1}</td>
-                          <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg, overflow: 'hidden', maxWidth: 0 }}
+                          <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg, overflow: 'hidden' }}
                             onClick={isPlaceholder ? () => setTargetedPlaceholder(upc) : undefined}>
                             {isPlaceholder ? (
                               <span style={{
