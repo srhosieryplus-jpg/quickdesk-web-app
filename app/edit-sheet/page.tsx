@@ -463,6 +463,7 @@ export default function EditSheetPage() {
           background: ${accentD}; color: #fff; padding: 10px 20px;
           display: flex; align-items: center; justify-content: space-between; gap: 12;
           box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative;
+          position: sticky; top: 0; z-index: 100;
         }
         .es-header-title {
           position: absolute; left: 50%; transform: translateX(-50%);
@@ -565,7 +566,7 @@ export default function EditSheetPage() {
       </div>
 
       {/* ── Filters bar ───────────────────────────────────────────────────── */}
-      <div style={{ background: '#fff', borderBottom: `1px solid ${borderC}`, padding: '10px 20px' }}>
+      <div style={{ background: '#fff', borderBottom: `1px solid ${borderC}`, padding: '10px 20px', position: 'sticky', top: 53, zIndex: 99, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
         <div className="es-filters">
           {/* Status filter */}
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
@@ -653,29 +654,28 @@ export default function EditSheetPage() {
                     : <span style={{ fontSize: 13, fontWeight: 800, color: accentD, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '2px 10px' }}>{markupDisplay(brandRows[0])}</span>
                   }
                   <span style={{ fontSize: 11, color: gray }}>{brandRows.length} order{brandRows.length !== 1 ? 's' : ''}</span>
-                  <span style={{ fontSize: 10, color: gray, marginLeft: 'auto', opacity: 0.6 }}>click to edit →</span>
                 </div>
 
                 {/* Orders table */}
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
                   <colgroup>
-                    <col style={{ width: '16%' }} />{/* Order # */}
+                    {isAdmin && <col style={{ width: '8%' }} />}{/* Store ID */}
+                    <col style={{ width: '14%' }} />{/* Order # */}
+                    <col style={{ width: '10%' }} />{/* PDF */}
+                    <col style={{ width: '14%' }} />{/* Edit */}
                     <col style={{ width: '14%' }} />{/* PO # */}
-                    {isAdmin && <col style={{ width: '7%' }} />}{/* Store */}
-                    <col style={{ width: '16%' }} />{/* Entry Status */}
-                    <col style={{ width: '16%' }} />{/* Edit Status */}
-                    <col />{/* PDFs */}
-                    <col style={{ width: '18%' }} />{/* Note */}
+                    <col style={{ width: '14%' }} />{/* Entry */}
+                    <col />{/* Notes */}
                   </colgroup>
                   <thead>
                     <tr style={{ background: '#f9f1f6', borderBottom: `1px solid ${accentB}` }}>
+                      {isAdmin && <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Store ID</th>}
                       <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Order #</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>PDF</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Edit</th>
                       <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>PO #</th>
-                      {isAdmin && <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Store</th>}
                       <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Entry</th>
-                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Edits</th>
-                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>PDFs</th>
-                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Note</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Notes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -686,25 +686,10 @@ export default function EditSheetPage() {
                           style={{ borderBottom: ri < brandRows.length - 1 ? `1px solid ${borderC}` : 'none', cursor: 'pointer', background: ri % 2 === 0 ? '#fff' : '#fdf8fb' }}
                           onMouseEnter={e => (e.currentTarget.style.background = accentL)}
                           onMouseLeave={e => (e.currentTarget.style.background = ri % 2 === 0 ? '#fff' : '#fdf8fb')}>
-                          <td style={{ padding: '8px 12px' }}>
-                            <span style={infoPill}>{row.order_num || '—'}</span>
+                          {isAdmin && <td style={{ padding: '8px 12px', color: accent, fontWeight: 700, fontSize: 12 }}>{row.store}</td>}
+                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 700, fontSize: 12 }}>
+                            {row.order_num || '—'}
                             {row.season_book_id && <span style={{ marginLeft: 4, fontSize: 10, color: accent, fontWeight: 700 }}>🔗</span>}
-                          </td>
-                          <td style={{ padding: '8px 12px' }}>
-                            {row.po_num
-                              ? <span style={infoPill}>{row.po_num}</span>
-                              : <span style={{ color: '#d1d5db' }}>—</span>}
-                          </td>
-                          {isAdmin && <td style={{ padding: '8px 12px' }}><span style={infoPill}>{row.store}</span></td>}
-                          <td style={{ padding: '8px 12px' }}>
-                            <span style={pillSt(row.entry_status || (row.po_num ? 'Items Created' : 'Pending'))}>
-                              {row.entry_status || (row.po_num ? 'Items Created' : 'Pending')}
-                            </span>
-                          </td>
-                          <td style={{ padding: '8px 12px' }}>
-                            <span style={pillSt(row.edit_status || 'Pending')}>
-                              {row.edit_status || 'Pending'}
-                            </span>
                           </td>
                           <td style={{ padding: '8px 12px' }}>
                             {(row.pdf_files || []).length > 0 ? (
@@ -716,9 +701,18 @@ export default function EditSheetPage() {
                                   </a>
                                 ))}
                               </div>
-                            ) : <span style={{ color: '#d1d5db' }}>—</span>}
+                            ) : <span style={{ color: accent, fontSize: 12 }}>—</span>}
                           </td>
-                          <td style={{ padding: '8px 12px', color: gray, fontStyle: row.note ? 'normal' : 'italic', fontSize: 11 }}>
+                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 600, fontSize: 12 }}>
+                            {row.edit_status || 'Pending'}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 600, fontSize: 12 }}>
+                            {row.po_num || <span style={{ color: accent, opacity: 0.4 }}>—</span>}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 600, fontSize: 12 }}>
+                            {row.entry_status || (row.po_num ? 'Items Created' : 'Pending')}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: accent, fontSize: 12, fontStyle: row.note ? 'normal' : 'italic' }}>
                             {row.note || '—'}
                           </td>
                         </tr>
