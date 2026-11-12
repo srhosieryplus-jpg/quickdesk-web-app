@@ -950,11 +950,11 @@ export default function EditSheetPage() {
                   return (
                     <div key={r.id} style={{ background: '#fff', border: `1px solid ${borderC}`, borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
 
-                      {/* Read-only info pills row */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-                        {isAdmin && <span style={infoPill}>{r.store}</span>}
-                        {r.order_num && <span style={infoPill}>Order # {r.order_num}</span>}
-                        {r.season_book_id && <span style={{ fontSize: 10, color: accent, fontWeight: 700, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '1px 7px' }}>🔗 Linked</span>}
+                      {/* Read-only info row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+                        {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, color: accent }}>{r.store}</span>}
+                        {r.order_num && <span style={{ fontSize: 10, fontWeight: 700, color: accent }}>Order # {r.order_num}</span>}
+                        {r.season_book_id && <span style={{ fontSize: 10, fontWeight: 700, color: accent, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '1px 7px' }}>🔗 Linked</span>}
                       </div>
 
                       {/* PO # + Entry Status */}
