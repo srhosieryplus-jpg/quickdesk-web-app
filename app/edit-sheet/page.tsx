@@ -300,9 +300,11 @@ export default function EditSheetPage() {
 
   // ── History panel ─────────────────────────────────────────────────────────
   async function openHistory(brand: string) {
-    setHistoryBrand(brand)
+    setHistoryBrand(brand || 'All Brands')
     setHistoryLoading(true)
-    const { data } = await supabase.from('edit_sheet').select('*').ilike('brand', brand).order('created_at', { ascending: false })
+    let q = supabase.from('edit_sheet').select('*').order('created_at', { ascending: false })
+    if (brand) q = q.ilike('brand', brand)
+    const { data } = await q
     setHistoryLoading(false)
     setHistoryRows((data || []) as EditSheetRow[])
   }
@@ -453,6 +455,10 @@ export default function EditSheetPage() {
             style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.05em' }}>
             {season}
           </button>
+          <button onClick={() => openHistory('')}
+            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            History
+          </button>
           <button onClick={() => setShowNew(true)}
             style={{ background: '#fff', color: accentD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             + New
@@ -520,76 +526,99 @@ export default function EditSheetPage() {
       </div>
 
       {/* ── Brand cards ───────────────────────────────────────────────────── */}
-      <div style={{ padding: '0 16px 24px' }}>
+      <div style={{ padding: '16px', maxWidth: 820, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 48, color: gray }}>Loading…</div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 48, color: gray, fontSize: 13 }}>
             No entries for {season} — click <strong>+ New</strong> to add one.
           </div>
-        ) : filtered.map(row => {
-          const emptyMarkup = !row.markup || !row.markup.trim()
-          const sc = row.status === 'Edits Completed'
-            ? { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
-            : { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
-          return (
-            <div key={row.id}
-              style={{ background: '#fff', border: `2px solid ${emptyMarkup ? '#fca5a5' : accentB}`, borderRadius: 10, marginBottom: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+        ) : (() => {
+          // Group rows by brand
+          const brandOrder = Array.from(new Set(filtered.map(r => r.brand))).sort()
+          return brandOrder.map(brand => {
+            const brandRows = filtered.filter(r => r.brand === brand)
+            const anyEmpty = brandRows.some(r => !r.markup || !r.markup.trim())
+            const markup = brandRows[0]?.markup  // markup is brand-wide, same for all rows
+            const emptyMarkup = !markup || !markup.trim()
 
-              {/* Card header row — click to open edit */}
-              <div onClick={() => openEdit(row)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: emptyMarkup ? '#fef2f2' : accentL, borderBottom: `1px solid ${emptyMarkup ? '#fecaca' : accentB}`, cursor: 'pointer', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: accentD, flex: 1, minWidth: 120 }}>{row.brand}</span>
-                {isAdmin && <span style={{ fontSize: 11, color: gray, background: '#fff', border: `1px solid ${borderC}`, borderRadius: 8, padding: '1px 8px', fontWeight: 600 }}>{row.store}</span>}
-                {row.season_book_id && <span style={{ fontSize: 11, color: accent, fontWeight: 700, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 8, padding: '1px 8px' }}>🔗 Linked</span>}
-                <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800, border: '1px solid', background: sc.bg, color: sc.color, borderColor: sc.border }}>{row.status}</span>
-                <span style={{ fontSize: 11, color: gray, marginLeft: 'auto' }}>click to edit →</span>
-              </div>
+            return (
+              <div key={brand}
+                style={{ background: '#fff', border: `2px solid ${anyEmpty ? '#fca5a5' : accentB}`, borderRadius: 10, marginBottom: 14, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
 
-              {/* Detail row */}
-              <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' }}>
-                {/* Markup */}
-                <div style={{ flex: '1 1 110px', padding: '10px 14px', borderRight: `1px solid ${borderC}` }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Markup</div>
+                {/* Card header — brand name + markup badge */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: anyEmpty ? '#fef2f2' : accentL, borderBottom: `1px solid ${anyEmpty ? '#fecaca' : accentB}`, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: accentD, flex: 1 }}>{brand}</span>
                   {emptyMarkup
-                    ? <span style={{ fontSize: 12, fontWeight: 800, color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 5, padding: '2px 8px' }}>⚠ Empty</span>
-                    : <span style={{ fontSize: 14, fontWeight: 800, color: accentD }}>{markupDisplay(row)}</span>
+                    ? <span style={{ fontSize: 12, fontWeight: 800, color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '2px 10px' }}>⚠ Empty Markup</span>
+                    : <span style={{ fontSize: 13, fontWeight: 800, color: accentD, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '2px 10px' }}>{markupDisplay(brandRows[0])}</span>
                   }
+                  <span style={{ fontSize: 11, color: gray }}>{brandRows.length} order{brandRows.length !== 1 ? 's' : ''}</span>
                 </div>
-                {/* Order # */}
-                <div style={{ flex: '1 1 110px', padding: '10px 14px', borderRight: `1px solid ${borderC}` }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Order #</div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{row.order_num || '—'}</span>
-                </div>
-                {/* PDFs */}
-                <div style={{ flex: '2 1 180px', padding: '10px 14px', borderRight: `1px solid ${borderC}` }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>PDF Edits</div>
-                  {(row.pdf_files || []).length > 0 ? (
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {(row.pdf_files || []).map((f, i) => (
-                        <a key={i} href={f.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                          style={{ fontSize: 11, color: accent, fontWeight: 600, textDecoration: 'none', background: '#fff', border: `1px solid ${accentB}`, borderRadius: 5, padding: '2px 8px' }}>
-                          📄 {f.name.length > 16 ? f.name.slice(0, 14) + '…' : f.name}
-                        </a>
-                      ))}
-                    </div>
-                  ) : <span style={{ fontSize: 12, color: '#d1d5db' }}>—</span>}
-                </div>
-                {/* Note + History */}
-                <div style={{ flex: '2 1 160px', padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Note</div>
-                    <span style={{ fontSize: 12, color: gray, fontStyle: row.note ? 'normal' : 'italic' }}>{row.note || '—'}</span>
-                  </div>
-                  <button onClick={e => { e.stopPropagation(); openHistory(row.brand) }}
-                    style={{ marginTop: 8, alignSelf: 'flex-start', background: accentL, color: accentD, border: `1px solid ${accentB}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                    History
-                  </button>
-                </div>
+
+                {/* Orders table */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '22%' }} />{/* Order # */}
+                    {isAdmin && <col style={{ width: '10%' }} />}{/* Store */}
+                    <col style={{ width: '18%' }} />{/* Status */}
+                    <col />{/* PDFs */}
+                    <col style={{ width: '28%' }} />{/* Note */}
+                  </colgroup>
+                  <thead>
+                    <tr style={{ background: '#f9f1f6', borderBottom: `1px solid ${accentB}` }}>
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Order #</th>
+                      {isAdmin && <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Store</th>}
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>PDF Edits</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {brandRows.map((row, ri) => {
+                      const sc = row.status === 'Edits Completed'
+                        ? { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
+                        : { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
+                      return (
+                        <tr key={row.id}
+                          onClick={() => openEdit(row)}
+                          style={{ borderBottom: ri < brandRows.length - 1 ? `1px solid ${borderC}` : 'none', cursor: 'pointer', background: ri % 2 === 0 ? '#fff' : '#fdf8fb' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = accentL)}
+                          onMouseLeave={e => (e.currentTarget.style.background = ri % 2 === 0 ? '#fff' : '#fdf8fb')}>
+                          <td style={{ padding: '8px 12px', fontWeight: 600, color: '#374151' }}>
+                            {row.order_num || <span style={{ color: '#d1d5db' }}>—</span>}
+                            {row.season_book_id && <span style={{ marginLeft: 6, fontSize: 10, color: accent, fontWeight: 700 }}>🔗</span>}
+                          </td>
+                          {isAdmin && <td style={{ padding: '8px 12px', color: gray }}>{row.store}</td>}
+                          <td style={{ padding: '8px 12px' }}>
+                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 800, border: '1px solid', background: sc.bg, color: sc.color, borderColor: sc.border, whiteSpace: 'nowrap' }}>
+                              {row.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px 12px' }}>
+                            {(row.pdf_files || []).length > 0 ? (
+                              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                                {(row.pdf_files || []).map((f, i) => (
+                                  <a key={i} href={f.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                                    style={{ fontSize: 10, color: accent, fontWeight: 600, textDecoration: 'none', background: '#fff', border: `1px solid ${accentB}`, borderRadius: 4, padding: '1px 6px' }}>
+                                    📄 {f.name.length > 12 ? f.name.slice(0, 10) + '…' : f.name}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : <span style={{ color: '#d1d5db' }}>—</span>}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: gray, fontStyle: row.note ? 'normal' : 'italic', fontSize: 11 }}>
+                            {row.note || '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </div>
-          )
-        })}
+            )
+          })
+        })()}
       </div>
 
       {/* ── New Entry Modal ──────────────────────────────────────────────────── */}
