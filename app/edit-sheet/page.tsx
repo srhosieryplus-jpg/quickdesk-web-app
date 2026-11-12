@@ -74,8 +74,12 @@ function fmtTs(ts: string | null) {
 
 function statusColor(s: string | null | undefined) {
   if (s === 'Edits Completed') return { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
-  if (s === 'Items Created')   return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' }
+  if (s === 'Items Created')   return { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
   return { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
+}
+function statusTextColor(s: string | null | undefined) {
+  if (s === 'Edits Completed' || s === 'Items Created') return '#16a34a'
+  return '#d97706'
 }
 const pillSt = (s: string | null | undefined): React.CSSProperties => {
   const c = statusColor(s)
@@ -411,7 +415,7 @@ export default function EditSheetPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return rows.filter(r => {
-      if (statusFilter !== 'ALL' && r.status !== statusFilter) return false
+      if (statusFilter !== 'ALL' && (r.edit_status || 'Pending') !== statusFilter) return false
       if (markupFilter === '__empty__') { if (r.markup && r.markup.trim()) return false }
       else if (markupFilter !== 'ALL' && r.markup !== markupFilter) return false
       if (!q) return true
@@ -686,8 +690,8 @@ export default function EditSheetPage() {
                           style={{ borderBottom: ri < brandRows.length - 1 ? `1px solid ${borderC}` : 'none', cursor: 'pointer', background: ri % 2 === 0 ? '#fff' : '#fdf8fb' }}
                           onMouseEnter={e => (e.currentTarget.style.background = accentL)}
                           onMouseLeave={e => (e.currentTarget.style.background = ri % 2 === 0 ? '#fff' : '#fdf8fb')}>
-                          {isAdmin && <td style={{ padding: '8px 12px', color: accent, fontWeight: 700, fontSize: 12 }}>{row.store}</td>}
-                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 700, fontSize: 12 }}>
+                          {isAdmin && <td style={{ padding: '8px 12px', color: accent, fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>{row.store}</td>}
+                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>
                             {row.order_num || '—'}
                             {row.season_book_id && <span style={{ marginLeft: 4, fontSize: 10, color: accent, fontWeight: 700 }}>🔗</span>}
                           </td>
@@ -703,13 +707,13 @@ export default function EditSheetPage() {
                               </div>
                             ) : <span style={{ color: accent, fontSize: 12 }}>—</span>}
                           </td>
-                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 600, fontSize: 12 }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', color: statusTextColor(row.edit_status || 'Pending') }}>
                             {row.edit_status || 'Pending'}
                           </td>
-                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 600, fontSize: 12 }}>
+                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' }}>
                             {row.po_num || <span style={{ color: accent, opacity: 0.4 }}>—</span>}
                           </td>
-                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 600, fontSize: 12 }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', color: statusTextColor(row.entry_status || (row.po_num ? 'Items Created' : 'Pending')) }}>
                             {row.entry_status || (row.po_num ? 'Items Created' : 'Pending')}
                           </td>
                           <td style={{ padding: '8px 12px', color: accent, fontSize: 12, fontStyle: row.note ? 'normal' : 'italic' }}>
