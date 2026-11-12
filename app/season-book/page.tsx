@@ -2240,8 +2240,47 @@ export default function SeasonBookPage() {
               {/* Only show form once brand is chosen */}
               {activeBrand && <>
 
-              {/* Brand + Vendor ID + Drop row */}
+              {/* Vendor ID + Brand + Log # row */}
               <div style={{ marginBottom: 14, display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                {/* Vendor ID with autocomplete */}
+                <div ref={formVendorRef} style={{ position: 'relative' }}>
+                  <label style={lbl}>Vendor ID</label>
+                  <input
+                    value={formVendorId ?? ''}
+                    onChange={e => { setFormVendorId(e.target.value || null); setShowFormVendorDrop(true); setFormVendorHi(-1) }}
+                    onFocus={() => { setShowFormVendorDrop(true); setFormVendorHi(-1) }}
+                    placeholder="e.g. 1984 by Ladida"
+                    style={{ ...inp, fontSize: 13 }}
+                    onKeyDown={e => {
+                      const q = (formVendorId ?? '').toLowerCase()
+                      const allV = Array.from(new Set(liveVendors.map(v => v.vendor_id).filter(Boolean))).sort() as string[]
+                      const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== formVendorId).slice(0, 8)
+                      if (!showFormVendorDrop || suggs.length === 0) return
+                      if (e.key === 'ArrowDown') { e.preventDefault(); setFormVendorHi(h => Math.min(h + 1, suggs.length - 1)) }
+                      else if (e.key === 'ArrowUp') { e.preventDefault(); setFormVendorHi(h => Math.max(h - 1, 0)) }
+                      else if (e.key === 'Enter' && formVendorHi >= 0) {
+                        e.preventDefault(); setFormVendorId(suggs[formVendorHi]); setShowFormVendorDrop(false); setFormVendorHi(-1)
+                      } else if (e.key === 'Escape') { setShowFormVendorDrop(false); setFormVendorHi(-1) }
+                    }}
+                  />
+                  {showFormVendorDrop && (() => {
+                    const q = (formVendorId ?? '').toLowerCase()
+                    const allV = Array.from(new Set(liveVendors.map(v => v.vendor_id).filter(Boolean))).sort() as string[]
+                    const suggs = allV.filter(v => v.toLowerCase().includes(q) && v !== formVendorId).slice(0, 8)
+                    return suggs.length > 0 ? (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+                        {suggs.map((v, vi) => (
+                          <div key={v}
+                            onMouseDown={e => { e.preventDefault(); setFormVendorId(v); setShowFormVendorDrop(false); setFormVendorHi(-1) }}
+                            onMouseEnter={() => setFormVendorHi(vi)}
+                            style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6', background: vi === formVendorHi ? '#ede9fe' : '#fff' }}>
+                            {v}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
+                </div>
                 {/* Brand with autocomplete */}
                 <div ref={formBrandRef} style={{ position: 'relative' }}>
                   <label style={lbl}>Brand</label>
@@ -2331,14 +2370,6 @@ export default function SeasonBookPage() {
                     onChange={e => setFormDrop(parseInt(e.target.value) || 1)}
                     style={{ ...inp, width: 70 }} />
                 </div>
-                {/* Drop # (user-defined label e.g. "Drop 1", "RTW Drop 2") */}
-                <div>
-                  <label style={lbl}>Drop #</label>
-                  <input type="text" value={formStores[0]?.drop_label ?? ''}
-                    placeholder="e.g. Drop 1"
-                    onChange={e => setFormStores(prev => prev.map(p => ({ ...p, drop_label: e.target.value })))}
-                    style={{ ...inp, width: 110 }} />
-                </div>
               </div>
 
               {/* Per-store blocks */}
@@ -2358,17 +2389,12 @@ export default function SeasonBookPage() {
                       </select>
                     </div>
                     <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {/* Row 1: Order # + Drop # + Drop Name */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                      {/* Row 1: Order # + Drop Name */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div>
                           <label style={lbl}>Order #</label>
                           <input value={entry.order_num} placeholder="ORD-001"
                             onChange={e => upd({ order_num: e.target.value })} style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>Drop #</label>
-                          <input value={entry.drop_label} placeholder="e.g. Drop 1"
-                            onChange={e => upd({ drop_label: e.target.value })} style={inp} />
                         </div>
                         <div>
                           <label style={lbl}>Drop Name</label>
@@ -2415,14 +2441,8 @@ export default function SeasonBookPage() {
                             onChange={e => upd({ initial_total: e.target.value })} style={inp} />
                         </div>
                       </div>
-                      {/* Row 3: Deposit + Duties + Shipping + Payment Date */}
-                      <div className="sb-financials" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
-                        <div>
-                          <label style={lbl}>Deposit ({sym})</label>
-                          <input type="number" value={entry.deposit} placeholder="0.00" step="0.01"
-                            onChange={e => upd({ deposit: e.target.value })} style={inp}
-                            disabled={!canPay} title={!canPay ? 'Payment access restricted' : undefined} />
-                        </div>
+                      {/* Row 3: Duties + Shipping + CC Fee */}
+                      <div className="sb-financials" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                         <div>
                           <label style={lbl}>Duties ({sym})</label>
                           <input type="number" value={entry.duties} placeholder="0.00" step="0.01"
@@ -2437,6 +2457,15 @@ export default function SeasonBookPage() {
                           <label style={lbl}>CC Fee ({sym})</label>
                           <input type="number" value={entry.cc_fee} placeholder="0.00" step="0.01"
                             onChange={e => upd({ cc_fee: e.target.value })} style={inp} />
+                        </div>
+                      </div>
+                      {/* Row 4: Deposit + Payment Date */}
+                      <div className="sb-financials" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={lbl}>Deposit ({sym})</label>
+                          <input type="number" value={entry.deposit} placeholder="0.00" step="0.01"
+                            onChange={e => upd({ deposit: e.target.value })} style={inp}
+                            disabled={!canPay} title={!canPay ? 'Payment access restricted' : undefined} />
                         </div>
                         <div>
                           <label style={lbl}>Payment Date</label>
