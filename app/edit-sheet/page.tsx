@@ -18,12 +18,14 @@ interface EditSheetRow {
   id: string
   store: string
   brand: string
-  order_num: string | null   // season book order # (read-only reference)
-  po_num: string | null      // PO # entered manually in Edit Sheet
+  order_num: string | null      // season book order # (read-only reference)
+  po_num: string | null         // PO # entered manually in Edit Sheet
   season: string | null
   markup: string | null
   markup_add: number | null
-  status: 'Pending' | 'Items Created' | 'Edits Completed'
+  status: 'Pending' | 'Items Created' | 'Edits Completed' // legacy — keep for reads
+  edit_status: 'Pending' | 'Edits Completed' | null        // PDF edit workflow
+  entry_status: 'Pending' | 'Items Created' | null         // PO entry workflow
   note: string | null
   pdf_files: { url: string; name: string; uploaded_at: string }[] | null
   season_book_id: string | null
@@ -46,7 +48,9 @@ const inpMd: React.CSSProperties = { ...inp, padding: '8px 12px', fontSize: 14 }
 
 const MARKUP_OPTIONS = ['x2', 'x2.1', 'x2.2', 'x2.3', 'x2.4', 'x2.5', 'MSRP']
 const STORES = ['TTC', 'TTP']
-const STATUS_OPTIONS: EditSheetRow['status'][] = ['Pending', 'Items Created', 'Edits Completed']
+const STATUS_OPTIONS: EditSheetRow['status'][] = ['Pending', 'Items Created', 'Edits Completed'] // legacy
+const EDIT_STATUS_OPTIONS = ['Pending', 'Edits Completed'] as const
+const ENTRY_STATUS_OPTIONS = ['Pending', 'Items Created'] as const
 
 // ── Seasons ───────────────────────────────────────────────────────────────────
 const BASE_SEASONS = ['SS24','SS25','SS26','SS27','SS28','AW24','AW25','AW26','AW27','AW28']
@@ -68,11 +72,17 @@ function fmtTs(ts: string | null) {
   } catch { return ts }
 }
 
-function statusColor(s: string) {
+function statusColor(s: string | null | undefined) {
   if (s === 'Edits Completed') return { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
   if (s === 'Items Created')   return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' }
   return { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
 }
+const pillSt = (s: string | null | undefined): React.CSSProperties => {
+  const c = statusColor(s)
+  return { display: 'inline-block', padding: '1px 8px', borderRadius: 20, fontSize: 10, fontWeight: 800, border: `1px solid ${c.border}`, background: c.bg, color: c.color, whiteSpace: 'nowrap' as const }
+}
+// Small read-only info pill (store, order#, etc)
+const infoPill: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: '#374151', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '1px 7px', whiteSpace: 'nowrap' as const }
 
 
 export default function EditSheetPage() {
@@ -144,8 +154,8 @@ export default function EditSheetPage() {
   const [bmMarkup, setBmMarkup] = useState('')
   const [bmMarkupCustom, setBmMarkupCustom] = useState('')
   const [bmMarkupAdd, setBmMarkupAdd] = useState('')
-  // per-row edits: id → { po_num, status, note }
-  const [bmRows, setBmRows] = useState<Record<string, { po_num: string; status: EditSheetRow['status']; note: string }>>({})
+  // per-row edits: id → { po_num, edit_status, entry_status, note }
+  const [bmRows, setBmRows] = useState<Record<string, { po_num: string; edit_status: 'Pending' | 'Edits Completed'; entry_status: 'Pending' | 'Items Created'; note: string }>>({})
   const [bmSaving, setBmSaving] = useState(false)
   const [bmUploading, setBmUploading] = useState(false)
   const [bmUploadTarget, setBmUploadTarget] = useState<string | null>(null) // row id to attach PDF to
@@ -329,9 +339,14 @@ export default function EditSheetPage() {
     setBmMarkup(MARKUP_OPTIONS.includes(firstMarkup) ? firstMarkup : firstMarkup ? '__custom__' : '')
     setBmMarkupCustom(MARKUP_OPTIONS.includes(firstMarkup) || !firstMarkup ? '' : firstMarkup)
     setBmMarkupAdd(brandRows[0]?.markup_add?.toString() || '')
-    const perRow: Record<string, { po_num: string; status: EditSheetRow['status']; note: string }> = {}
+    const perRow: Record<string, { po_num: string; edit_status: 'Pending' | 'Edits Completed'; entry_status: 'Pending' | 'Items Created'; note: string }> = {}
     for (const r of brandRows) {
-      perRow[r.id] = { po_num: r.po_num || '', status: r.status, note: r.note || '' }
+      perRow[r.id] = {
+        po_num: r.po_num || '',
+        edit_status: (r.edit_status as 'Pending' | 'Edits Completed') || 'Pending',
+        entry_status: (r.entry_status as 'Pending' | 'Items Created') || (r.po_num ? 'Items Created' : 'Pending'),
+        note: r.note || '',
+      }
     }
     setBmRows(perRow)
     setBrandModal(brand)
@@ -348,13 +363,12 @@ export default function EditSheetPage() {
       const perRow = bmRows[r.id]
       if (!perRow) continue
       const poVal = perRow.po_num.trim()
-      // Auto-status: if PO# entered and status is still Pending → bump to Items Created
-      const autoStatus = perRow.status === 'Pending' && poVal ? 'Items Created' : perRow.status
       const { error } = await supabase.from('edit_sheet').update({
         markup: markupVal || null,
         markup_add: bmMarkupAdd ? parseFloat(bmMarkupAdd) : null,
         po_num: poVal || null,
-        status: autoStatus,
+        edit_status: perRow.edit_status,
+        entry_status: perRow.entry_status,
         note: perRow.note.trim() || null,
         updated_at: new Date().toISOString(),
       }).eq('id', r.id)
@@ -645,43 +659,51 @@ export default function EditSheetPage() {
                 {/* Orders table */}
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
                   <colgroup>
-                    <col style={{ width: '18%' }} />{/* Order # */}
-                    <col style={{ width: '18%' }} />{/* PO # */}
-                    {isAdmin && <col style={{ width: '8%' }} />}{/* Store */}
-                    <col style={{ width: '20%' }} />{/* Status */}
+                    <col style={{ width: '16%' }} />{/* Order # */}
+                    <col style={{ width: '14%' }} />{/* PO # */}
+                    {isAdmin && <col style={{ width: '7%' }} />}{/* Store */}
+                    <col style={{ width: '16%' }} />{/* Entry Status */}
+                    <col style={{ width: '16%' }} />{/* Edit Status */}
                     <col />{/* PDFs */}
-                    <col style={{ width: '22%' }} />{/* Note */}
+                    <col style={{ width: '18%' }} />{/* Note */}
                   </colgroup>
                   <thead>
                     <tr style={{ background: '#f9f1f6', borderBottom: `1px solid ${accentB}` }}>
                       <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Order #</th>
                       <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>PO #</th>
                       {isAdmin && <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Store</th>}
-                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</th>
-                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>PDF Edits</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Entry</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Edits</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>PDFs</th>
                       <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Note</th>
                     </tr>
                   </thead>
                   <tbody>
                     {brandRows.map((row, ri) => {
-                      const sc = statusColor(row.status)
                       return (
                         <tr key={row.id}
                           onClick={() => openBrandModal(brand)}
                           style={{ borderBottom: ri < brandRows.length - 1 ? `1px solid ${borderC}` : 'none', cursor: 'pointer', background: ri % 2 === 0 ? '#fff' : '#fdf8fb' }}
                           onMouseEnter={e => (e.currentTarget.style.background = accentL)}
                           onMouseLeave={e => (e.currentTarget.style.background = ri % 2 === 0 ? '#fff' : '#fdf8fb')}>
-                          <td style={{ padding: '8px 12px', fontWeight: 600, color: '#374151' }}>
-                            {row.order_num || <span style={{ color: '#d1d5db' }}>—</span>}
-                            {row.season_book_id && <span style={{ marginLeft: 6, fontSize: 10, color: accent, fontWeight: 700 }}>🔗</span>}
-                          </td>
-                          <td style={{ padding: '8px 12px', fontWeight: 600, color: '#374151' }}>
-                            {row.po_num || <span style={{ color: '#d1d5db' }}>—</span>}
-                          </td>
-                          {isAdmin && <td style={{ padding: '8px 12px', color: gray }}>{row.store}</td>}
                           <td style={{ padding: '8px 12px' }}>
-                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 800, border: '1px solid', background: sc.bg, color: sc.color, borderColor: sc.border, whiteSpace: 'nowrap' }}>
-                              {row.status}
+                            <span style={infoPill}>{row.order_num || '—'}</span>
+                            {row.season_book_id && <span style={{ marginLeft: 4, fontSize: 10, color: accent, fontWeight: 700 }}>🔗</span>}
+                          </td>
+                          <td style={{ padding: '8px 12px' }}>
+                            {row.po_num
+                              ? <span style={infoPill}>{row.po_num}</span>
+                              : <span style={{ color: '#d1d5db' }}>—</span>}
+                          </td>
+                          {isAdmin && <td style={{ padding: '8px 12px' }}><span style={infoPill}>{row.store}</span></td>}
+                          <td style={{ padding: '8px 12px' }}>
+                            <span style={pillSt(row.entry_status || (row.po_num ? 'Items Created' : 'Pending'))}>
+                              {row.entry_status || (row.po_num ? 'Items Created' : 'Pending')}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px 12px' }}>
+                            <span style={pillSt(row.edit_status || 'Pending')}>
+                              {row.edit_status || 'Pending'}
                             </span>
                           </td>
                           <td style={{ padding: '8px 12px' }}>
@@ -924,27 +946,21 @@ export default function EditSheetPage() {
                 {/* Per-order rows */}
                 <div style={{ fontSize: 11, fontWeight: 800, color: accentD, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>📋 Order Details</div>
                 {bmBrandRows.map(r => {
-                  const perRow = bmRows[r.id] || { order_num: '', status: 'Pending' as EditSheetRow['status'], note: '' }
-                  const sc = perRow.status === 'Edits Completed'
-                    ? { bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
-                    : { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' }
+                  const perRow = bmRows[r.id] || { po_num: '', edit_status: 'Pending' as const, entry_status: 'Pending' as const, note: '' }
                   return (
                     <div key={r.id} style={{ background: '#fff', border: `1px solid ${borderC}`, borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                        {isAdmin && <span style={{ fontSize: 10, fontWeight: 700, color: gray, background: '#f3f4f6', borderRadius: 4, padding: '1px 6px' }}>{r.store}</span>}
-                        {r.season_book_id && <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>🔗 Linked to Season Book</span>}
-                        <span style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 20, fontSize: 10, fontWeight: 800, border: '1px solid', background: sc.bg, color: sc.color, borderColor: sc.border }}>{perRow.status}</span>
+
+                      {/* Read-only info pills row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                        {isAdmin && <span style={infoPill}>{r.store}</span>}
+                        {r.order_num && <span style={infoPill}>Order # {r.order_num}</span>}
+                        {r.season_book_id && <span style={{ fontSize: 10, color: accent, fontWeight: 700, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '1px 7px' }}>🔗 Linked</span>}
                       </div>
-                      {/* Order # from season book (read-only) + PO # (editable) */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+
+                      {/* PO # + Entry Status */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 8, marginBottom: 10 }}>
                         <div>
-                          <label style={lbl}>Order # <span style={{ color: gray, fontWeight: 400 }}>(from Season Book)</span></label>
-                          <div style={{ ...inp, background: '#f9fafb', color: gray, cursor: 'default', fontSize: 12 }}>
-                            {r.order_num || <span style={{ color: '#d1d5db', fontStyle: 'italic' }}>Not set</span>}
-                          </div>
-                        </div>
-                        <div>
-                          <label style={lbl}>PO # {r.season_book_id && <span style={{ color: accent, fontSize: 10 }}>→ syncs to Season Book</span>}</label>
+                          <label style={lbl}>PO # {r.season_book_id && <span style={{ color: accent, fontSize: 10, fontWeight: 400 }}>→ syncs to Season Book</span>}</label>
                           <input value={perRow.po_num}
                             onChange={e => {
                               const val = e.target.value
@@ -953,21 +969,31 @@ export default function EditSheetPage() {
                                 [r.id]: {
                                   ...prev[r.id],
                                   po_num: val,
-                                  // Auto-advance status when PO# is entered
-                                  status: val.trim() && prev[r.id]?.status === 'Pending' ? 'Items Created' : prev[r.id]?.status ?? 'Pending'
+                                  entry_status: val.trim() ? 'Items Created' : 'Pending'
                                 }
                               }))
                             }}
                             placeholder="Enter PO number" style={inp} />
                         </div>
+                        <div>
+                          <label style={lbl}>Entry Status</label>
+                          <select value={perRow.entry_status}
+                            onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], entry_status: e.target.value as 'Pending' | 'Items Created' } }))}
+                            style={{ ...inp, cursor: 'pointer', fontSize: 12 }}>
+                            {ENTRY_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
                       </div>
-                      <div style={{ marginBottom: 8 }}>
+
+                      {/* Note */}
+                      <div style={{ marginBottom: 10 }}>
                         <label style={lbl}>Note</label>
                         <input value={perRow.note}
                           onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], note: e.target.value } }))}
                           placeholder="Optional note" style={inp} />
                       </div>
-                      {/* PDFs + Status side by side */}
+
+                      {/* PDFs + Edit Status side by side */}
                       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: gray, marginBottom: 5 }}>📎 PDF Edits</div>
@@ -988,11 +1014,11 @@ export default function EditSheetPage() {
                           </label>
                         </div>
                         <div style={{ width: 160 }}>
-                          <label style={lbl}>Status</label>
-                          <select value={perRow.status}
-                            onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], status: e.target.value as EditSheetRow['status'] } }))}
+                          <label style={lbl}>Edit Status</label>
+                          <select value={perRow.edit_status}
+                            onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], edit_status: e.target.value as 'Pending' | 'Edits Completed' } }))}
                             style={{ ...inp, cursor: 'pointer', fontSize: 12 }}>
-                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                            {EDIT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
                         </div>
                       </div>
