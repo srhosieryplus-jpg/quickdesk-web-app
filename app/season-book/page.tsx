@@ -2151,7 +2151,7 @@ export default function SeasonBookPage() {
       {/* ── New Entry Modal ──────────────────────────────────────────────────── */}
       {modal === 'new-entry' && (
         <div className="modal-bg">
-          <div className="modal-box">
+          <div className="modal-box" style={{ maxWidth: 820 }}>
             <div className="modal-head">
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2253,7 +2253,7 @@ export default function SeasonBookPage() {
                     onKeyDown={e => {
                       const q = activeBrand.toLowerCase()
                       const allB = Array.from(new Set(liveVendors.map(v => v.brand))).sort()
-                      const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== activeBrand).slice(0, 8)
+                      const suggs = [...allB.filter(b => b.toLowerCase().startsWith(q) && b !== activeBrand), ...allB.filter(b => !b.toLowerCase().startsWith(q) && b.toLowerCase().includes(q) && b !== activeBrand)].slice(0, 8)
                       if (!showFormBrandDrop || suggs.length === 0) return
                       if (e.key === 'ArrowDown') { e.preventDefault(); setFormBrandHi(h => Math.min(h + 1, suggs.length - 1)) }
                       else if (e.key === 'ArrowUp') { e.preventDefault(); setFormBrandHi(h => Math.max(h - 1, 0)) }
@@ -2266,7 +2266,7 @@ export default function SeasonBookPage() {
                   {showFormBrandDrop && (() => {
                     const q = activeBrand.toLowerCase()
                     const allB = Array.from(new Set(liveVendors.map(v => v.brand))).sort()
-                    const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== activeBrand).slice(0, 8)
+                    const suggs = [...allB.filter(b => b.toLowerCase().startsWith(q) && b !== activeBrand), ...allB.filter(b => !b.toLowerCase().startsWith(q) && b.toLowerCase().includes(q) && b !== activeBrand)].slice(0, 8)
                     return suggs.length > 0 ? (
                       <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
                         {suggs.map((b, bi) => (
@@ -2639,7 +2639,7 @@ export default function SeasonBookPage() {
                         onKeyDown={e => {
                           const q = editRow.brand.toLowerCase()
                           const allB = Array.from(new Set(liveVendors.map(v => v.brand))).sort()
-                          const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== editRow.brand).slice(0, 8)
+                          const suggs = [...allB.filter(b => b.toLowerCase().startsWith(q) && b !== editRow.brand), ...allB.filter(b => !b.toLowerCase().startsWith(q) && b.toLowerCase().includes(q) && b !== editRow.brand)].slice(0, 8)
                           if (!showEditBrandDrop || suggs.length === 0) return
                           if (e.key === 'ArrowDown') { e.preventDefault(); setEditBrandHi(h => Math.min(h + 1, suggs.length - 1)) }
                           else if (e.key === 'ArrowUp') { e.preventDefault(); setEditBrandHi(h => Math.max(h - 1, 0)) }
@@ -2653,7 +2653,7 @@ export default function SeasonBookPage() {
                       {showEditBrandDrop && (() => {
                         const q = editRow.brand.toLowerCase()
                         const allB = Array.from(new Set(liveVendors.map(v => v.brand))).sort()
-                        const suggs = allB.filter(b => b.toLowerCase().includes(q) && b !== editRow.brand).slice(0, 8)
+                        const suggs = [...allB.filter(b => b.toLowerCase().startsWith(q) && b !== editRow.brand), ...allB.filter(b => !b.toLowerCase().startsWith(q) && b.toLowerCase().includes(q) && b !== editRow.brand)].slice(0, 8)
                         return suggs.length > 0 ? (
                           <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 60, maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
                             {suggs.map((b, bi) => (
