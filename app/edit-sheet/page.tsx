@@ -496,7 +496,7 @@ export default function EditSheetPage() {
         <div className="es-header-title">
           <div style={{ fontSize: 19, fontWeight: 900, letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 10 }}>
             ✏️ EDIT SHEET
-            <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.85, letterSpacing: '0.08em' }}>{season}</span>
+            <span style={{ fontSize: 19, fontWeight: 900, opacity: 0.85, letterSpacing: '0.05em', background: 'rgba(249,168,212,0.3)', border: '1.5px solid #f9a8d4', borderRadius: 7, padding: '0px 10px' }}>{season}</span>
           </div>
         </div>
 
