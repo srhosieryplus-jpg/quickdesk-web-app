@@ -32,10 +32,10 @@ interface EditSheetRow {
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
-const accent  = '#7c3aed'   // purple
-const accentD = '#4c1d95'
-const accentL = '#f5f3ff'
-const accentB = '#c4b5fd'
+const accent  = '#db2777'   // pink
+const accentD = '#831843'
+const accentL = '#fdf2f8'
+const accentB = '#f9a8d4'
 const gray    = '#6b7280'
 const borderC = '#e5e7eb'
 
@@ -392,7 +392,7 @@ export default function EditSheetPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f3f0ff', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#fdf2f8', fontFamily: 'Inter, sans-serif' }}>
       <style>{`
         * { box-sizing: border-box; }
         /* ── Season panel ── */
@@ -827,7 +827,7 @@ export default function EditSheetPage() {
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', bottom: 24, right: 24, background: toastType === 'err' ? '#7f1d1d' : '#3b0764', color: '#fff', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: toastType === 'err' ? '#7f1d1d' : '#831843', color: '#fff', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
           {toast}
         </div>
       )}
