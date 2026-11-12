@@ -583,24 +583,55 @@ export default function SeasonBookPage() {
         invoice_no: row.order_num || null,
         qty: row.units,
       }).eq('id', existing.id)
-      return updErr ? updErr.message : null
+      if (updErr) return updErr.message
+    } else {
+      const status = row.order_num ? 'Pending' : 'Not Created'
+      const { error } = await supabase.from(half).insert({
+        store: row.store,
+        brand: row.brand,
+        invoice_no: row.order_num || null,
+        po_no: null,
+        qty: row.units,
+        logged: false,
+        logged_by: null,
+        logged_at: null,
+        note: `Auto-linked from Season Book drop ${row.drop_num}${row.drop_name ? ` · ${row.drop_name}` : ''}`,
+        flagged: false,
+        season_book_id: row.id,
+        status,
+      })
+      if (error) return error.message
     }
-    const status = row.order_num ? 'Pending' : 'Not Created'
-    const { error } = await supabase.from(half).insert({
-      store: row.store,
-      brand: row.brand,
-      invoice_no: row.order_num || null,
-      po_no: null,
-      qty: row.units,
-      logged: false,
-      logged_by: null,
-      logged_at: null,
-      note: `Auto-linked from Season Book drop ${row.drop_num}${row.drop_name ? ` · ${row.drop_name}` : ''}`,
-      flagged: false,
-      season_book_id: row.id,
-      status,
-    })
-    return error ? error.message : null
+
+    // Also sync to Edit Sheet
+    const { data: esExisting, error: esChkErr } = await supabase.from('edit_sheet').select('id').eq('season_book_id', row.id).maybeSingle()
+    if (!esChkErr) {
+      if (esExisting) {
+        // Update order_num and season in existing edit sheet row
+        await supabase.from('edit_sheet').update({
+          order_num: row.order_num || null,
+          season: row.season || null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', esExisting.id)
+      } else {
+        // Create new edit sheet row linked to this season book entry
+        await supabase.from('edit_sheet').insert({
+          store: row.store,
+          brand: row.brand,
+          order_num: row.order_num || null,
+          season: row.season || null,
+          markup: 'x2',
+          markup_add: null,
+          status: 'Pending',
+          note: null,
+          pdf_files: [],
+          season_book_id: row.id,
+          created_by: row.logged_by || null,
+        })
+      }
+    }
+
+    return null
   }
 
   async function activateSeason(s: string) {

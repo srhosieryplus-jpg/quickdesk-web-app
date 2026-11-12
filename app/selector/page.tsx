@@ -22,6 +22,7 @@ const ALL_MODULES = [
   { id:'season_book',  label:'Season Book',        icon:'📒', path:'/season-book',         bg:'#ddd6fe', iconColor:'#5b21b6' },
   { id:'hair_acc',      label:'Hair Acc',            icon:'✂',  path:'/hair-acc',            bg:'#fce7f3', iconColor:'#9d174d' },
   { id:'error_forms',  label:'Error Forms',         icon:'⚠',  path:'/error-forms',         bg:'#fecaca', iconColor:'#991b1b' },
+  { id:'edit_sheet',    label:'Edit Sheet',          icon:'✏️', path:'/edit-sheet',           bg:'#ccfbf1', iconColor:'#0f5a52' },
   { id:'settings',     label:'Settings',           icon:'✿',  path:'/settings',            bg:'#e2e8f0', iconColor:'#334155' },
 ]
 
