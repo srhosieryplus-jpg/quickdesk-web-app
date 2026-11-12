@@ -13,12 +13,13 @@ import { User } from '@/lib/types'
 import { VENDOR_DATA, VendorRow } from '@/lib/vendors'
 
 const ALL_MODULES = [
-  { id: 'autocsv',    label: 'Auto CSV' },
-  { id: 'qd',         label: 'UPC Scanner' },
-  { id: 'reports',    label: 'Reports' },
+  { id: 'autocsv',     label: 'Auto CSV' },
+  { id: 'qd',          label: 'UPC Scanner' },
+  { id: 'reports',     label: 'Reports' },
   { id: 'season_ss',   label: 'SS Season' },
   { id: 'season_aw',   label: 'AW Season' },
   { id: 'season_book', label: 'Season Book' },
+  { id: 'edit_sheet',  label: 'Edit Sheet' },
   { id: 'ic',          label: 'Infinity Classics' },
   { id: 'po_tracker',  label: 'PO Tracker' },
   { id: 'tasks',       label: 'Tasks' },
