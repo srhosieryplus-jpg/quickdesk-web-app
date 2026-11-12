@@ -31,19 +31,33 @@ interface EditSheetRow {
   created_by: string | null
 }
 
-// ── Theme (teal/green) ────────────────────────────────────────────────────────
-const teal    = '#0d9488'
-const tealD   = '#0f5a52'
-const tealL   = '#f0fdfa'
-const border  = '#99f6e4'
+// ── Theme ─────────────────────────────────────────────────────────────────────
+const accent  = '#7c3aed'   // purple
+const accentD = '#4c1d95'
+const accentL = '#f5f3ff'
+const accentB = '#c4b5fd'
 const gray    = '#6b7280'
+const borderC = '#e5e7eb'
 
-const lbl: React.CSSProperties = { fontSize: 10, fontWeight: 800, color: tealD, letterSpacing: '0.07em', textTransform: 'uppercase', display: 'block', marginBottom: 3 }
-const inp: React.CSSProperties = { background: '#fff', border: '1.5px solid #d1d5db', borderRadius: 6, padding: '7px 10px', fontSize: 13, color: '#111', outline: 'none', width: '100%', fontFamily: 'Inter, sans-serif', boxSizing: 'border-box' }
+const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 3, display: 'block' }
+const inp: React.CSSProperties = { background: '#fff', border: `1px solid #d1d5db`, borderRadius: 6, padding: '7px 10px', fontSize: 13, color: '#111', outline: 'none', width: '100%', fontFamily: 'Inter, sans-serif', boxSizing: 'border-box' }
+const inpMd: React.CSSProperties = { ...inp, padding: '8px 12px', fontSize: 14 }
 
 const MARKUP_OPTIONS = ['x2', 'x2.1', 'x2.2', 'x2.3', 'x2.4', 'x2.5', 'MSRP']
 const STORES = ['TTC', 'TTP']
 const STATUS_OPTIONS: EditSheetRow['status'][] = ['Pending', 'Edits Completed']
+
+// ── Seasons ───────────────────────────────────────────────────────────────────
+const BASE_SEASONS = ['SS24','SS25','SS26','SS27','SS28','AW24','AW25','AW26','AW27','AW28']
+function buildSeasons(extra: string[]): string[] {
+  const all = [...BASE_SEASONS, ...extra.filter(s => !BASE_SEASONS.includes(s))]
+  return all.sort((a, b) => {
+    const yr = (s: string) => parseInt(s.slice(2))
+    const half = (s: string) => s.startsWith('SS') ? 0 : 1
+    if (yr(a) !== yr(b)) return yr(a) - yr(b)
+    return half(a) - half(b)
+  })
+}
 
 function fmtTs(ts: string | null) {
   if (!ts) return '—'
@@ -69,30 +83,31 @@ export default function EditSheetPage() {
   const [toast, setToast] = useState('')
   const [toastType, setToastType] = useState<'ok'|'err'>('ok')
 
-  // Search
+  // Season panel
+  const [showSeasonPanel, setShowSeasonPanel] = useState(false)
+  const [season, setSeason] = useState('SS27')
+  const [extraSeasons, setExtraSeasons] = useState<string[]>([])
+
+  // Search / filters
+  const [search, setSearch] = useState('')
+  const [storeFilter, setStoreFilter] = useState('ALL')
+  const [statusFilter, setStatusFilter] = useState('ALL')
+
+  // Brand search popup
   const [brandQ, setBrandQ] = useState('')
   const [brandSuggs, setBrandSuggs] = useState<string[]>([])
   const [showSugg, setShowSugg] = useState(false)
   const brandRef = useRef<HTMLInputElement>(null)
   const suggRef  = useRef<HTMLDivElement>(null)
-  const [searching, setSearching] = useState(false)
-
-  type SearchState =
-    | { phase: 'idle' }
-    | { phase: 'found'; rows: EditSheetRow[] }
-    | { phase: 'notfound'; term: string }
-
-  const [state, setState] = useState<SearchState>({ phase: 'idle' })
-
-  // Table
-  const [tableFilter, setTableFilter] = useState('')
-  const [storeFilter, setStoreFilter] = useState('ALL')
-  const [statusFilter, setStatusFilter] = useState('ALL')
 
   // New entry
   const [showNew, setShowNew] = useState(false)
   const [newStore, setNewStore] = useState('TTC')
   const [newBrand, setNewBrand] = useState('')
+  const [newBrandSuggs, setNewBrandSuggs] = useState<string[]>([])
+  const [showNewSugg, setShowNewSugg] = useState(false)
+  const newBrandRef = useRef<HTMLInputElement>(null)
+  const newSuggRef  = useRef<HTMLDivElement>(null)
   const [newOrderNum, setNewOrderNum] = useState('')
   const [newSeason, setNewSeason] = useState('')
   const [newMarkup, setNewMarkup] = useState('x2')
@@ -130,7 +145,7 @@ export default function EditSheetPage() {
 
   useEffect(() => {
     if (user) fetchRows()
-  }, [user])
+  }, [user, season])
 
   // Idle redirect
   useEffect(() => {
@@ -152,6 +167,8 @@ export default function EditSheetPage() {
     function onClick(e: MouseEvent) {
       if (suggRef.current && !suggRef.current.contains(e.target as Node) &&
           brandRef.current && !brandRef.current.contains(e.target as Node)) setShowSugg(false)
+      if (newSuggRef.current && !newSuggRef.current.contains(e.target as Node) &&
+          newBrandRef.current && !newBrandRef.current.contains(e.target as Node)) setShowNewSugg(false)
     }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
@@ -166,7 +183,9 @@ export default function EditSheetPage() {
   const fetchRows = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    let q = supabase.from('edit_sheet').select('*').order('created_at', { ascending: false })
+    let q = supabase.from('edit_sheet').select('*')
+      .eq('season', season)
+      .order('created_at', { ascending: false })
     if (!isAdmin) {
       const viewStores = [user.store, ...(user.admin_stores ?? [])].filter(Boolean)
       q = viewStores.length === 1 ? q.eq('store', viewStores[0]) : q.in('store', viewStores)
@@ -174,42 +193,24 @@ export default function EditSheetPage() {
     const { data } = await q
     setLoading(false)
     setRows((data || []) as EditSheetRow[])
-  }, [user, isAdmin])
+    // Collect any extra seasons used in this table so season panel is complete
+    const { data: seasons } = await supabase.from('edit_sheet').select('season')
+    if (seasons) {
+      const all = Array.from(new Set(seasons.map((r: { season: string | null }) => r.season).filter(Boolean))) as string[]
+      setExtraSeasons(all.filter(s => !BASE_SEASONS.includes(s)))
+    }
+  }, [user, isAdmin, season])
 
   // ── Brand autocomplete ────────────────────────────────────────────────────
-  function onBrandInput(val: string) {
-    setBrandQ(val)
+  function brandInput(val: string, setter: (v: string) => void, suggSetter: (v: string[]) => void, showSetter: (v: boolean) => void) {
+    setter(val)
     if (val.trim().length >= 1) {
       const q = val.toLowerCase()
       const starts = BRAND_LIST.filter(b => b.toLowerCase().startsWith(q)).slice(0, 8)
       const contains = BRAND_LIST.filter(b => !b.toLowerCase().startsWith(q) && b.toLowerCase().includes(q)).slice(0, 4)
-      setBrandSuggs([...starts, ...contains])
-      setShowSugg(true)
-    } else { setBrandSuggs([]); setShowSugg(false) }
-  }
-
-  // ── Search ────────────────────────────────────────────────────────────────
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault()
-    if (!brandQ.trim()) return
-    setShowSugg(false)
-    setSearching(true)
-    const q = brandQ.trim()
-    let query = supabase.from('edit_sheet').select('*').ilike('brand', `%${q}%`).order('created_at', { ascending: false })
-    if (!isAdmin) {
-      const viewStores = [user!.store, ...(user!.admin_stores ?? [])].filter(Boolean)
-      query = viewStores.length === 1 ? query.eq('store', viewStores[0]) : query.in('store', viewStores)
-    }
-    const { data } = await query
-    setSearching(false)
-    if (!data || data.length === 0) setState({ phase: 'notfound', term: q })
-    else setState({ phase: 'found', rows: data as EditSheetRow[] })
-  }
-
-  function resetSearch() {
-    setState({ phase: 'idle' })
-    setBrandQ('')
-    fetchRows()
+      suggSetter([...starts, ...contains])
+      showSetter(true)
+    } else { suggSetter([]); showSetter(false) }
   }
 
   // ── Create ────────────────────────────────────────────────────────────────
@@ -218,12 +219,14 @@ export default function EditSheetPage() {
     setSaving(true)
     const markupVal = newMarkup === '__custom__' ? newMarkupCustom.trim() : newMarkup
     const { error } = await supabase.from('edit_sheet').insert({
-      store: newStore, brand: newBrand.trim(),
+      store: isAdmin ? newStore : user.store,
+      brand: newBrand.trim(),
       order_num: newOrderNum.trim() || null,
-      season: newSeason.trim() || null,
+      season: newSeason.trim() || season,
       markup: markupVal || null,
       markup_add: newMarkupAdd ? parseFloat(newMarkupAdd) : null,
-      status: newStatus, note: newNote.trim() || null,
+      status: newStatus,
+      note: newNote.trim() || null,
       created_by: user.userid,
       pdf_files: [],
     })
@@ -305,7 +308,7 @@ export default function EditSheetPage() {
 
   // ── Filtered table ────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    const q = tableFilter.toLowerCase()
+    const q = search.toLowerCase()
     return rows.filter(r => {
       if (storeFilter !== 'ALL' && r.store !== storeFilter) return false
       if (statusFilter !== 'ALL' && r.status !== statusFilter) return false
@@ -313,12 +316,16 @@ export default function EditSheetPage() {
       return (
         (r.brand || '').toLowerCase().includes(q) ||
         (r.order_num || '').toLowerCase().includes(q) ||
-        (r.season || '').toLowerCase().includes(q) ||
         (r.markup || '').toLowerCase().includes(q) ||
         (r.note || '').toLowerCase().includes(q)
       )
     })
-  }, [rows, tableFilter, storeFilter, statusFilter])
+  }, [rows, search, storeFilter, statusFilter])
+
+  const brandsInUse = useMemo(() => Array.from(new Set(rows.map(r => r.brand))).sort(), [rows])
+  const allSeasons  = buildSeasons(extraSeasons)
+  const pendingCount   = rows.filter(r => r.status === 'Pending').length
+  const completedCount = rows.filter(r => r.status === 'Edits Completed').length
 
   if (!user) return null
 
@@ -328,58 +335,160 @@ export default function EditSheetPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#edfcfa', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#f3f0ff', fontFamily: 'Inter, sans-serif' }}>
       <style>{`
         * { box-sizing: border-box; }
-        .es-header { background: linear-gradient(135deg, ${tealD} 0%, ${teal} 100%); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-        .es-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); padding: 18px; margin: 0 16px 16px; }
+        /* ── Season panel ── */
+        .season-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 2000; }
+        .season-panel {
+          position: fixed; top: 0; left: 0; height: 100vh; width: 220px;
+          background: #fff; color: #1f2937; display: flex; flex-direction: column;
+          box-shadow: 4px 0 24px rgba(0,0,0,0.18); z-index: 2001;
+          animation: slideInLeft 0.2s ease;
+        }
+        @keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+        .sp-head {
+          padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
+          border-bottom: 1px solid #f3f4f6; background: ${accentD}; color: #fff;
+        }
+        .sp-row {
+          padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+          font-size: 13px; transition: background 0.1s; border-bottom: 1px solid #f3f4f6; color: #374151;
+        }
+        .sp-row:hover { background: ${accentL} !important; }
+        /* ── Header ── */
+        .es-header {
+          background: ${accentD}; color: #fff; padding: 10px 20px;
+          display: flex; align-items: center; justify-content: space-between; gap: 12;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative;
+        }
+        .es-header-title {
+          position: absolute; left: 50%; transform: translateX(-50%);
+          text-align: center; pointer-events: none;
+        }
+        .es-header-right { display: flex; gap: 8px; align-items: center; }
+        /* ── Filters ── */
+        .es-filters {
+          display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+          max-width: 960px; margin: 0 auto; justify-content: center;
+        }
+        /* ── Table ── */
         .es-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .es-table th { background: ${tealL}; color: ${tealD}; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; padding: 8px 10px; text-align: left; border-bottom: 2px solid ${border}; }
+        .es-table th { background: ${accentL}; color: ${accentD}; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; padding: 9px 10px; text-align: left; border-bottom: 2px solid ${accentB}; }
         .es-table td { padding: 9px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
-        .es-table tr:hover td { background: #f0fdfa; }
-        .es-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 800; border: 1px solid; }
+        .es-row { cursor: pointer; transition: background 0.1s; }
+        .es-row:hover td { background: ${accentL} !important; }
+        .es-badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 10px; font-weight: 800; border: 1px solid; white-space: nowrap; }
+        /* ── Modal ── */
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
         .modal-box { background: #fff; border-radius: 14px; width: 100%; max-width: 680px; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 8px 48px rgba(0,0,0,0.22); }
         .modal-head { padding: 14px 18px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
         .modal-body { overflow-y: auto; flex: 1; padding: 18px; }
         .modal-foot { padding: 12px 18px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
-        .hist-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 320px; background: #fff; box-shadow: -4px 0 24px rgba(0,0,0,0.12); z-index: 900; display: flex; flex-direction: column; }
+        /* ── History panel (right side) ── */
+        .hist-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 320px; background: #fff; box-shadow: -4px 0 24px rgba(0,0,0,0.12); z-index: 900; display: flex; flex-direction: column; animation: slideInRight 0.2s ease; }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        /* ── Mobile ── */
         @media (max-width: 600px) {
           .modal-bg { padding: 0; align-items: flex-end; }
           .modal-box { border-radius: 18px 18px 0 0 !important; max-width: 100% !important; }
-          .es-card { margin: 0 8px 12px; padding: 12px; }
+          .es-header { flex-wrap: nowrap !important; }
+          .es-header-title { position: static !important; transform: none !important; flex: 1; pointer-events: auto !important; }
+          .es-header-right { display: none !important; }
+          .es-filters { flex-direction: column !important; align-items: stretch !important; padding: 8px 12px !important; }
+          .es-filters > * { width: 100% !important; max-width: none !important; flex: none !important; }
         }
       `}</style>
 
-      {/* Header */}
+      {/* ── Season panel overlay ───────────────────────────────────────────── */}
+      {showSeasonPanel && (
+        <>
+          <div className="season-overlay" onClick={() => setShowSeasonPanel(false)} />
+          <div className="season-panel" onClick={e => e.stopPropagation()}>
+            <div className="sp-head">
+              <span style={{ fontWeight: 800, fontSize: 14 }}>Season</span>
+              <button onClick={() => setShowSeasonPanel(false)}
+                style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {allSeasons.map(s => (
+                <div key={s} className="sp-row"
+                  style={{ background: s === season ? accentL : '#fff', fontWeight: s === season ? 800 : 500, color: s === season ? accentD : '#374151' }}
+                  onClick={() => { setSeason(s); setShowSeasonPanel(false) }}>
+                  <span>{s}</span>
+                  {s === season && <span style={{ fontSize: 11, color: accent }}>✓</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="es-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => router.push('/selector')} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, padding: '6px 12px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>← Back</button>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: '#fff', letterSpacing: '-0.01em' }}>✏️ Edit Sheet</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)' }}>{isAdmin ? 'All Stores' : user.store}</div>
+        {/* Left: hamburger + back */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => setShowSeasonPanel(true)}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 16, cursor: 'pointer' }}
+            title="Switch season">☰</button>
+          <button onClick={() => router.push('/selector')}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ← Home
+          </button>
+        </div>
+
+        {/* Center: title */}
+        <div className="es-header-title">
+          <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '0.05em' }}>✏️ EDIT SHEET</div>
+          <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
+            {season} · {pendingCount} pending · {completedCount} completed
           </div>
         </div>
-        <button onClick={() => setShowNew(true)}
-          style={{ background: '#fff', color: tealD, border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
-          + New Entry
-        </button>
+
+        {/* Right: season badge + new */}
+        <div className="es-header-right">
+          <button onClick={() => setShowSeasonPanel(true)}
+            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.05em' }}>
+            {season}
+          </button>
+          <button onClick={() => setShowNew(true)}
+            style={{ background: '#fff', color: accentD, border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+            + New
+          </button>
+        </div>
       </div>
 
-      {/* Search bar */}
-      <div style={{ padding: '14px 16px 0' }}>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 8, maxWidth: 480 }}>
-          <div style={{ position: 'relative', flex: 1 }}>
-            <input ref={brandRef} value={brandQ} onChange={e => onBrandInput(e.target.value)}
-              onFocus={() => brandQ.trim() && setShowSugg(true)}
-              placeholder="Search by brand…"
-              style={{ ...inp, paddingRight: 32 }} />
+      {/* ── Filters bar ───────────────────────────────────────────────────── */}
+      <div style={{ background: '#fff', borderBottom: `1px solid ${borderC}`, padding: '10px 20px' }}>
+        <div className="es-filters">
+          {/* Status filter */}
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            style={{ ...inpMd, width: 160, flex: '0 0 auto', fontWeight: 700, cursor: 'pointer' }}>
+            <option value="ALL">All Statuses</option>
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+
+          {/* Search */}
+          <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 280 }}>
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 13, pointerEvents: 'none' }}>🔍</span>
+            <input ref={brandRef} value={search}
+              onChange={e => {
+                setSearch(e.target.value)
+                brandInput(e.target.value, setSearch, setBrandSuggs, setShowSugg)
+              }}
+              onFocus={() => search.trim() && setShowSugg(true)}
+              placeholder="Search brand, order #, note…"
+              style={{ ...inpMd, paddingLeft: 32, width: '100%' }} />
+            {search && (
+              <button onClick={() => { setSearch(''); setShowSugg(false) }}
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: gray, cursor: 'pointer', fontSize: 15 }}>✕</button>
+            )}
             {showSugg && brandSuggs.length > 0 && (
-              <div ref={suggRef} style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${border}`, borderRadius: 7, zIndex: 50, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: 200, overflowY: 'auto' }}>
+              <div ref={suggRef} style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${accentB}`, borderRadius: 7, zIndex: 50, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: 200, overflowY: 'auto' }}>
                 {brandSuggs.map(b => (
-                  <div key={b} onMouseDown={e => { e.preventDefault(); setBrandQ(b); setShowSugg(false) }}
+                  <div key={b} onMouseDown={e => { e.preventDefault(); setSearch(b); setShowSugg(false) }}
                     style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = tealL)}
+                    onMouseEnter={e => (e.currentTarget.style.background = accentL)}
                     onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                     {b}
                   </div>
@@ -387,43 +496,35 @@ export default function EditSheetPage() {
               </div>
             )}
           </div>
-          <button type="submit" style={{ background: teal, color: '#fff', border: 'none', borderRadius: 7, padding: '0 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-            {searching ? '…' : 'Search'}
-          </button>
-          {state.phase !== 'idle' && (
-            <button type="button" onClick={resetSearch} style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '0 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Clear</button>
-          )}
-        </form>
-        {state.phase === 'notfound' && (
-          <div style={{ marginTop: 8, fontSize: 13, color: '#dc2626', fontWeight: 600 }}>No results for "{state.term}"</div>
-        )}
-      </div>
 
-      {/* Main table card */}
-      <div className="es-card" style={{ marginTop: 14, overflowX: 'auto' }}>
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input value={tableFilter} onChange={e => setTableFilter(e.target.value)} placeholder="Filter…"
-            style={{ ...inp, width: 180, fontSize: 12 }} />
+          {/* Brand dropdown */}
+          <select value={search} onChange={e => setSearch(e.target.value)}
+            style={{ ...inpMd, width: 160, flex: '0 0 auto', cursor: 'pointer' }}>
+            <option value="">All Brands</option>
+            {brandsInUse.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+
+          {/* Store filter (admin only) */}
           {isAdmin && (
             <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)}
-              style={{ ...inp, width: 100, fontSize: 12, cursor: 'pointer' }}>
+              style={{ ...inpMd, width: 120, flex: '0 0 auto', cursor: 'pointer' }}>
               <option value="ALL">All Stores</option>
               {STORES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            style={{ ...inp, width: 160, fontSize: 12, cursor: 'pointer' }}>
-            <option value="ALL">All Statuses</option>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <span style={{ fontSize: 12, color: gray, marginLeft: 'auto' }}>{filtered.length} row{filtered.length !== 1 ? 's' : ''}</span>
-        </div>
 
+          <span style={{ fontSize: 12, color: gray }}>{filtered.length} row{filtered.length !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+
+      {/* ── Table card ────────────────────────────────────────────────────── */}
+      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', margin: '16px 16px 24px', overflowX: 'auto' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 40, color: gray }}>Loading…</div>
+          <div style={{ textAlign: 'center', padding: 48, color: gray }}>Loading…</div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40, color: gray, fontSize: 13 }}>No entries yet — click + New Entry to add one.</div>
+          <div style={{ textAlign: 'center', padding: 48, color: gray, fontSize: 13 }}>
+            No entries for {season} — click <strong>+ New</strong> to add one.
+          </div>
         ) : (
           <table className="es-table">
             <thead>
@@ -431,7 +532,6 @@ export default function EditSheetPage() {
                 {isAdmin && <th>Store</th>}
                 <th>Brand</th>
                 <th>Order #</th>
-                <th>Season</th>
                 <th>Markup</th>
                 <th>Status</th>
                 <th>PDFs</th>
@@ -441,29 +541,28 @@ export default function EditSheetPage() {
               </tr>
             </thead>
             <tbody>
-              {(state.phase === 'found' ? state.rows : filtered).map(row => {
+              {filtered.map(row => {
                 const sc = statusColor(row.status)
                 return (
-                  <tr key={row.id}>
-                    {isAdmin && <td style={{ fontWeight: 700, color: tealD }}>{row.store}</td>}
+                  <tr key={row.id} className="es-row" onClick={() => openEdit(row)}>
+                    {isAdmin && <td style={{ fontWeight: 700, color: accentD }}>{row.store}</td>}
                     <td>
                       <div style={{ fontWeight: 700 }}>{row.brand}</div>
-                      {row.season_book_id && <div style={{ fontSize: 10, color: teal, fontWeight: 600 }}>🔗 Season Book</div>}
+                      {row.season_book_id && <div style={{ fontSize: 10, color: accent, fontWeight: 600 }}>🔗 Season Book</div>}
                     </td>
                     <td style={{ color: gray, fontSize: 12 }}>{row.order_num || '—'}</td>
-                    <td style={{ fontSize: 12 }}>{row.season || '—'}</td>
                     <td>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: tealD }}>{markupDisplay(row)}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: accentD }}>{markupDisplay(row)}</span>
                     </td>
                     <td>
                       <span className="es-badge" style={{ background: sc.bg, color: sc.color, borderColor: sc.border }}>{row.status}</span>
                     </td>
-                    <td>
+                    <td onClick={e => e.stopPropagation()}>
                       {(row.pdf_files || []).length > 0 ? (
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {(row.pdf_files || []).map((f, i) => (
                             <a key={i} href={f.url} target="_blank" rel="noreferrer"
-                              style={{ fontSize: 11, color: teal, fontWeight: 600, textDecoration: 'none', background: tealL, border: `1px solid ${border}`, borderRadius: 5, padding: '2px 7px' }}>
+                              style={{ fontSize: 11, color: accent, fontWeight: 600, textDecoration: 'none', background: accentL, border: `1px solid ${accentB}`, borderRadius: 5, padding: '2px 7px' }}>
                               📄 {f.name.length > 14 ? f.name.slice(0, 12) + '…' : f.name}
                             </a>
                           ))}
@@ -472,17 +571,11 @@ export default function EditSheetPage() {
                     </td>
                     <td style={{ fontSize: 12, color: gray, maxWidth: 160 }}>{row.note || '—'}</td>
                     <td style={{ fontSize: 11, color: gray, whiteSpace: 'nowrap' }}>{fmtTs(row.created_at)}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button onClick={() => openEdit(row)}
-                          style={{ background: tealL, color: tealD, border: `1px solid ${border}`, borderRadius: 5, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                          Edit
-                        </button>
-                        <button onClick={() => openHistory(row.brand)}
-                          style={{ background: '#f5f3ff', color: '#5b21b6', border: '1px solid #c4b5fd', borderRadius: 5, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                          History
-                        </button>
-                      </div>
+                    <td onClick={e => e.stopPropagation()}>
+                      <button onClick={() => openHistory(row.brand)}
+                        style={{ background: accentL, color: accentD, border: `1px solid ${accentB}`, borderRadius: 5, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        History
+                      </button>
                     </td>
                   </tr>
                 )
@@ -497,7 +590,7 @@ export default function EditSheetPage() {
         <div className="modal-bg">
           <div className="modal-box">
             <div className="modal-head">
-              <span style={{ fontSize: 15, fontWeight: 800, color: tealD }}>+ New Edit Sheet Entry</span>
+              <span style={{ fontSize: 15, fontWeight: 800, color: accentD }}>+ New Edit Sheet Entry</span>
               <button onClick={() => setShowNew(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
             </div>
             <div className="modal-body">
@@ -510,9 +603,25 @@ export default function EditSheetPage() {
                     </select>
                   </div>
                 )}
-                <div>
+                {/* Brand with autocomplete */}
+                <div style={{ position: 'relative' }}>
                   <label style={lbl}>Brand</label>
-                  <input value={newBrand} onChange={e => setNewBrand(e.target.value)} placeholder="Brand name" style={inp} />
+                  <input ref={newBrandRef} value={newBrand}
+                    onChange={e => brandInput(e.target.value, setNewBrand, setNewBrandSuggs, setShowNewSugg)}
+                    onFocus={() => newBrand.trim() && setShowNewSugg(true)}
+                    placeholder="Brand name" style={inp} />
+                  {showNewSugg && newBrandSuggs.length > 0 && (
+                    <div ref={newSuggRef} style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1.5px solid ${accentB}`, borderRadius: 7, zIndex: 50, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: 200, overflowY: 'auto' }}>
+                      {newBrandSuggs.map(b => (
+                        <div key={b} onMouseDown={e => { e.preventDefault(); setNewBrand(b); setShowNewSugg(false) }}
+                          style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = accentL)}
+                          onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                          {b}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={lbl}>Order #</label>
@@ -520,7 +629,7 @@ export default function EditSheetPage() {
                 </div>
                 <div>
                   <label style={lbl}>Season</label>
-                  <input value={newSeason} onChange={e => setNewSeason(e.target.value)} placeholder="e.g. SS27" style={inp} />
+                  <input value={newSeason} onChange={e => setNewSeason(e.target.value)} placeholder={season} style={inp} />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
@@ -556,7 +665,8 @@ export default function EditSheetPage() {
             </div>
             <div className="modal-foot">
               <button onClick={() => setShowNew(false)} style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={createRow} disabled={saving} style={{ background: teal, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              <button onClick={createRow} disabled={saving}
+                style={{ background: accent, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                 {saving ? 'Saving…' : '+ Add Entry'}
               </button>
             </div>
@@ -570,18 +680,16 @@ export default function EditSheetPage() {
           <div className="modal-box">
             <div className="modal-head">
               <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: tealD }}>{editRow.brand}</div>
-                <div style={{ fontSize: 11, color: gray }}>{editRow.store} · {editRow.season || '—'}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: accentD }}>{editRow.brand}</div>
+                <div style={{ fontSize: 11, color: gray }}>{editRow.store} · {editRow.season || season}</div>
               </div>
               <button onClick={() => setEditRow(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
             </div>
             <div className="modal-body">
-              {/* Order # */}
               <div style={{ marginBottom: 12 }}>
                 <label style={lbl}>Order #</label>
                 <input value={editOrderNum} onChange={e => setEditOrderNum(e.target.value)} placeholder="Order number" style={inp} />
               </div>
-              {/* Markup row */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                 <div>
                   <label style={lbl}>Markup</label>
@@ -600,14 +708,12 @@ export default function EditSheetPage() {
                   <input type="number" step="0.01" value={editMarkupAdd} onChange={e => setEditMarkupAdd(e.target.value)} placeholder="e.g. 8" style={inp} />
                 </div>
               </div>
-              {/* Status */}
               <div style={{ marginBottom: 12 }}>
                 <label style={lbl}>Status</label>
                 <select value={editStatus} onChange={e => setEditStatus(e.target.value as EditSheetRow['status'])} style={{ ...inp, cursor: 'pointer' }}>
                   {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              {/* Note */}
               <div style={{ marginBottom: 16 }}>
                 <label style={lbl}>Note</label>
                 <input value={editNote} onChange={e => setEditNote(e.target.value)} placeholder="Optional note" style={inp} />
@@ -615,37 +721,35 @@ export default function EditSheetPage() {
 
               {/* PDF attachments */}
               <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: gray, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 8, borderBottom: `1.5px solid ${border}`, paddingBottom: 4 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: gray, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 8, borderBottom: `1.5px solid ${accentB}`, paddingBottom: 4 }}>
                   📎 PDF Edits
                 </div>
                 {(editRow.pdf_files || []).map((f, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: tealL, border: `1px solid ${border}`, borderRadius: 6, padding: '6px 10px' }}>
-                    <a href={f.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: tealD, textDecoration: 'none', flex: 1 }}>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: accentL, border: `1px solid ${accentB}`, borderRadius: 6, padding: '6px 10px' }}>
+                    <a href={f.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: accentD, textDecoration: 'none', flex: 1 }}>
                       📄 {f.name}
                     </a>
                     <span style={{ fontSize: 10, color: gray }}>{fmtTs(f.uploaded_at)}</span>
-                    {isAdmin && (
-                      <button onClick={() => removePDF(f.url)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}>✕</button>
-                    )}
+                    <button onClick={() => removePDF(f.url)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}>✕</button>
                   </div>
                 ))}
                 <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={handlePDFUpload} />
                 <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                  style={{ background: tealL, color: tealD, border: `1.5px solid ${border}`, borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                  style={{ background: accentL, color: accentD, border: `1.5px solid ${accentB}`, borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
                   {uploading ? 'Uploading…' : '📎 Attach PDF Edit'}
                 </button>
               </div>
 
-              {/* Linked season book info */}
               {editRow.season_book_id && (
-                <div style={{ marginTop: 12, padding: '8px 12px', background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 7, fontSize: 11, color: '#5b21b6', fontWeight: 600 }}>
+                <div style={{ marginTop: 12, padding: '8px 12px', background: accentL, border: `1px solid ${accentB}`, borderRadius: 7, fontSize: 11, color: accentD, fontWeight: 600 }}>
                   🔗 Linked to Season Book
                 </div>
               )}
             </div>
             <div className="modal-foot">
               <button onClick={() => setEditRow(null)} style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Dismiss</button>
-              <button onClick={saveEdit} disabled={editSaving} style={{ background: teal, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              <button onClick={saveEdit} disabled={editSaving}
+                style={{ background: accent, color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                 {editSaving ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
@@ -658,12 +762,12 @@ export default function EditSheetPage() {
         <>
           <div onClick={() => setHistoryBrand(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 899 }} />
           <div className="hist-panel">
-            <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: tealL }}>
+            <div style={{ padding: '14px 16px 12px', borderBottom: `1px solid ${borderC}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: accentD, color: '#fff' }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: tealD }}>History</div>
-                <div style={{ fontSize: 12, color: gray }}>{historyBrand}</div>
+                <div style={{ fontSize: 14, fontWeight: 800 }}>History</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>{historyBrand}</div>
               </div>
-              <button onClick={() => setHistoryBrand(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: gray, cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setHistoryBrand(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: '#fff', cursor: 'pointer' }}>✕</button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
               {historyLoading ? (
@@ -673,21 +777,20 @@ export default function EditSheetPage() {
               ) : historyRows.map(r => {
                 const sc = statusColor(r.status)
                 return (
-                  <div key={r.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
+                  <div key={r.id} style={{ background: '#fff', border: `1px solid ${borderC}`, borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: tealD }}>{r.store}</span>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: accentD }}>{r.store} · {r.season || '—'}</span>
                       <span style={{ fontSize: 10, color: gray }}>{fmtTs(r.created_at)}</span>
                     </div>
-                    {r.season && <div style={{ fontSize: 11, color: gray, marginBottom: 4 }}>Season: {r.season}</div>}
                     {r.order_num && <div style={{ fontSize: 11, color: gray, marginBottom: 4 }}>Order #: {r.order_num}</div>}
-                    <div style={{ fontSize: 12, fontWeight: 700, color: tealD, marginBottom: 4 }}>{markupDisplay(r)}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: accentD, marginBottom: 4 }}>{markupDisplay(r)}</div>
                     <span className="es-badge" style={{ background: sc.bg, color: sc.color, borderColor: sc.border }}>{r.status}</span>
                     {r.note && <div style={{ fontSize: 11, color: gray, marginTop: 6, fontStyle: 'italic' }}>{r.note}</div>}
                     {(r.pdf_files || []).length > 0 && (
                       <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {(r.pdf_files || []).map((f, i) => (
                           <a key={i} href={f.url} target="_blank" rel="noreferrer"
-                            style={{ fontSize: 10, color: teal, fontWeight: 600, background: tealL, border: `1px solid ${border}`, borderRadius: 4, padding: '1px 6px', textDecoration: 'none' }}>
+                            style={{ fontSize: 10, color: accent, fontWeight: 600, background: accentL, border: `1px solid ${accentB}`, borderRadius: 4, padding: '1px 6px', textDecoration: 'none' }}>
                             📄 {f.name.length > 16 ? f.name.slice(0, 14) + '…' : f.name}
                           </a>
                         ))}
@@ -703,7 +806,7 @@ export default function EditSheetPage() {
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', bottom: 24, right: 24, background: toastType === 'err' ? '#7f1d1d' : '#134e4a', color: '#fff', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: toastType === 'err' ? '#7f1d1d' : '#3b0764', color: '#fff', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
           {toast}
         </div>
       )}
