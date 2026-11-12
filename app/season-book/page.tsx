@@ -885,10 +885,11 @@ export default function SeasonBookPage() {
   useEffect(() => {
     if (!modalBrandQ.trim()) { setModalBrandSuggs([]); return }
     const q = modalBrandQ.toLowerCase()
-    const inSeason = Array.from(new Set(rows.map(r => r.brand)))
-    const all = Array.from(new Set([...BRAND_LIST, ...inSeason]))
-    setModalBrandSuggs(all.filter(b => b.toLowerCase().includes(q)).slice(0, 10))
-  }, [modalBrandQ, rows])
+    const all = Array.from(new Set(liveVendors.map(v => v.brand))).sort()
+    const startsWith = all.filter(b => b.toLowerCase().startsWith(q))
+    const contains = all.filter(b => !b.toLowerCase().startsWith(q) && b.toLowerCase().includes(q))
+    setModalBrandSuggs([...startsWith, ...contains].slice(0, 10))
+  }, [modalBrandQ, liveVendors])
 
   // Load payment records when invoice modal opens
   useEffect(() => {
@@ -2172,7 +2173,7 @@ export default function SeasonBookPage() {
 
               {/* Brand picker — shown when no brand selected yet */}
               {!activeBrand && (
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 16, minHeight: 300 }}>
                   <label style={lbl}>Brand</label>
                   <div ref={modalBrandRef} style={{ position: 'relative' }}>
                     <input
