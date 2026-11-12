@@ -939,10 +939,10 @@ export default function QDPage() {
               <div style={{ flex: 1 }} />
               {isAdmin(currentUser) && session && session.order_list.length > 0 && (
                 <button onClick={() => {
-                  const headers = ['#', 'UPC', 'Qty', ...session.extra_cols]
-                  const dataRows = session.order_list.map((k, i) => {
+                  const headers = ['UPC', 'Qty', ...session.extra_cols]
+                  const dataRows = session.order_list.map((k) => {
                     const d = session.data[k]
-                    return [i + 1, d._isPlaceholder === 1 ? '' : k, d.qty, ...session.extra_cols.map(c => d[c] || '')]
+                    return [d._isPlaceholder === 1 ? '' : k, d.qty, ...session.extra_cols.map(c => d[c] || '')]
                   })
                   const text = [headers, ...dataRows].map(r => r.join('\t')).join('\n')
                   navigator.clipboard.writeText(text).then(() => showToast('✓ Table copied!'))
@@ -951,95 +951,121 @@ export default function QDPage() {
               <button onClick={() => setSortAsc(a => !a)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>⇅ Sort</button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            {/* Split layout: left = #/UPC/Qty, right = extra columns */}
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', alignItems: 'flex-start' }}>
               {!session || session.order_list.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#6b7280', padding: '50px 20px', fontSize: 13 }}>
+                <div style={{ textAlign: 'center', color: '#6b7280', padding: '50px 20px', fontSize: 13, flex: 1 }}>
                   {session ? 'Start scanning barcodes.' : 'Start a session and scan barcodes to begin.'}
                 </div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <colgroup>
-                    <col style={{ width: '8%' }} />
-                    <col />
-                    <col style={{ width: '12%' }} />
-                    {session.extra_cols.map(c => <col key={c} style={{ width: '15%' }} />)}
-                  </colgroup>
-                  <thead>
-                    <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={{ ...thSt, textAlign: 'center' }}>#</th>
-                      <th style={{ ...thSt }}>UPC</th>
-                      <th style={{ ...thSt, textAlign: 'center' }}>Qty</th>
-                      {session.extra_cols.map(c => <th key={c} style={{ ...thSt, whiteSpace: 'nowrap' }}>{c}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((upc, ri) => {
-                      const row = session.data[upc]
-                      if (!row) return null
-                      const isPlaceholder = row._isPlaceholder === 1
-                      const isNextTarget = upc === nextPlaceholderKey
-                      const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
-                      const cellSt: React.CSSProperties = {
-                        display: 'block', width: '100%', padding: '5px 7px',
-                        border: 'none', outline: 'none', fontSize: 12,
-                        background: 'transparent', fontFamily: 'Inter, sans-serif',
-                        boxSizing: 'border-box',
-                      }
-                      return (
-                        <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}
-                          onContextMenu={e => { e.preventDefault(); setCtxMenu({ upc, x: e.clientX, y: e.clientY }) }}>
-                          <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '5px 4px', whiteSpace: 'nowrap' }}>{ri + 1}</td>
-                          <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg, overflow: 'hidden' }}
-                            onClick={isPlaceholder ? () => setTargetedPlaceholder(upc) : undefined}>
-                            {isPlaceholder ? (
-                              <span style={{
-                                display: 'block', padding: '5px 7px', fontSize: 11,
-                                color: isNextTarget ? '#15803d' : '#9ca3af',
-                                fontStyle: isNextTarget ? 'italic' : 'normal',
-                                cursor: 'pointer', minHeight: 26,
-                              }}>
-                                {isNextTarget ? '← next scan' : ''}
-                              </span>
-                            ) : (
-                              <input
-                                type="text"
-                                defaultValue={upc}
-                                key={upc}
-                                style={{ ...cellSt, fontWeight: 600, fontFamily: 'Courier New, monospace', letterSpacing: '0.4px' }}
-                                onBlur={e => {
-                                  const newUpc = e.target.value.trim()
-                                  if (!newUpc || newUpc === upc) return
-                                  setSession(prev => {
-                                    if (!prev) return prev
-                                    const d = { ...prev.data }
-                                    const order = [...prev.order_list]
-                                    if (!d[upc]) return prev // already renamed
-                                    d[newUpc] = { ...d[upc], _isPlaceholder: 0 }
-                                    delete d[upc]
-                                    order[order.indexOf(upc)] = newUpc
-                                    return { ...prev, order_list: order, data: d }
-                                  })
-                                }}
-                              />
-                            )}
-                          </td>
-                          <td style={tdSt}>
-                            <input type="number" min="0" value={row.qty}
-                              style={{ ...cellSt, fontWeight: 700, color: isPlaceholder ? '#d1d5db' : purple, textAlign: 'center' }}
-                              onChange={e => updateQty(upc, e.target.value)} />
-                          </td>
-                          {session.extra_cols.map(col => (
-                            <td key={col} style={tdSt}>
-                              <input type="text" value={row[col] as string || ''}
-                                style={{ ...cellSt }}
-                                onChange={e => updateExtra(upc, col, e.target.value)} />
-                            </td>
-                          ))}
+                <>
+                  {/* Left panel — # / UPC / Qty */}
+                  <div style={{ flexShrink: 0, width: session.extra_cols.length > 0 ? 270 : '100%' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                      <colgroup>
+                        <col style={{ width: 32 }} />
+                        <col />
+                        <col style={{ width: 58 }} />
+                      </colgroup>
+                      <thead>
+                        <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
+                          <th style={{ ...thSt, textAlign: 'center', width: 32 }}>#</th>
+                          <th style={{ ...thSt }}>UPC</th>
+                          <th style={{ ...thSt, textAlign: 'center', width: 58 }}>Qty</th>
                         </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {rows.map((upc, ri) => {
+                          const row = session.data[upc]
+                          if (!row) return null
+                          const isPlaceholder = row._isPlaceholder === 1
+                          const isNextTarget = upc === nextPlaceholderKey
+                          const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
+                          const cellSt: React.CSSProperties = {
+                            display: 'block', width: '100%', padding: '5px 7px',
+                            border: 'none', outline: 'none', fontSize: 12,
+                            background: 'transparent', fontFamily: 'Inter, sans-serif',
+                            boxSizing: 'border-box',
+                          }
+                          return (
+                            <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}
+                              onContextMenu={e => { e.preventDefault(); setCtxMenu({ upc, x: e.clientX, y: e.clientY }) }}>
+                              <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '5px 4px', whiteSpace: 'nowrap' }}>{ri + 1}</td>
+                              <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg }}
+                                onClick={isPlaceholder ? () => setTargetedPlaceholder(upc) : undefined}>
+                                {isPlaceholder ? (
+                                  <span style={{ display: 'block', padding: '5px 7px', fontSize: 11, color: isNextTarget ? '#15803d' : '#9ca3af', fontStyle: isNextTarget ? 'italic' : 'normal', cursor: 'pointer', minHeight: 26 }}>
+                                    {isNextTarget ? '← next scan' : ''}
+                                  </span>
+                                ) : (
+                                  <input type="text" defaultValue={upc} key={upc}
+                                    style={{ ...cellSt, fontWeight: 600, fontFamily: 'Courier New, monospace', letterSpacing: '0.4px' }}
+                                    onBlur={e => {
+                                      const newUpc = e.target.value.trim()
+                                      if (!newUpc || newUpc === upc) return
+                                      setSession(prev => {
+                                        if (!prev) return prev
+                                        const d = { ...prev.data }
+                                        const order = [...prev.order_list]
+                                        if (!d[upc]) return prev
+                                        d[newUpc] = { ...d[upc], _isPlaceholder: 0 }
+                                        delete d[upc]
+                                        order[order.indexOf(upc)] = newUpc
+                                        return { ...prev, order_list: order, data: d }
+                                      })
+                                    }}
+                                  />
+                                )}
+                              </td>
+                              <td style={tdSt}>
+                                <input type="number" min="0" value={row.qty}
+                                  style={{ ...cellSt, fontWeight: 700, color: isPlaceholder ? '#d1d5db' : purple, textAlign: 'center' }}
+                                  onChange={e => updateQty(upc, e.target.value)} />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Right panel — extra columns (only shown when columns exist) */}
+                  {session.extra_cols.length > 0 && (
+                    <div style={{ flex: 1, borderLeft: '2px solid #CFC5ED' }}>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                        <thead>
+                          <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
+                            {session.extra_cols.map(c => <th key={c} style={{ ...thSt, whiteSpace: 'nowrap' }}>{c}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((upc, ri) => {
+                            const row = session.data[upc]
+                            if (!row) return null
+                            const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
+                            const cellSt: React.CSSProperties = {
+                              display: 'block', width: '100%', padding: '5px 7px',
+                              border: 'none', outline: 'none', fontSize: 12,
+                              background: 'transparent', fontFamily: 'Inter, sans-serif',
+                              boxSizing: 'border-box',
+                            }
+                            return (
+                              <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}>
+                                {session.extra_cols.map(col => (
+                                  <td key={col} style={tdSt}>
+                                    <input type="text" value={row[col] as string || ''}
+                                      style={{ ...cellSt }}
+                                      onChange={e => updateExtra(upc, col, e.target.value)} />
+                                  </td>
+                                ))}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
