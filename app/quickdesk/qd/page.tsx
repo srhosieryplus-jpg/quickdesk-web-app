@@ -961,10 +961,10 @@ export default function QDPage() {
                 <>
                   {/* Left panel — # / UPC / Qty */}
                   <div style={{ flexShrink: 0, width: session.extra_cols.length > 0 ? 270 : '100%' }}>
-                    <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', tableLayout: 'fixed' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed', width: session.extra_cols.length > 0 ? 270 : undefined }}>
                       <colgroup>
-                        <col style={{ width: 32 }} />
-                        <col />
+                        <col style={{ width: 36 }} />
+                        <col style={{ width: 200 }} />
                         <col style={{ width: 64 }} />
                       </colgroup>
                       <thead>
