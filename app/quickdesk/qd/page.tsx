@@ -957,12 +957,12 @@ export default function QDPage() {
                   {session ? 'Start scanning barcodes.' : 'Start a session and scan barcodes to begin.'}
                 </div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <colgroup>
-                    <col style={{ width: 28 }} />
-                    <col style={{ width: session.extra_cols.length > 0 ? '50%' : 'auto' }} />
-                    <col style={{ width: 60 }} />
-                    {session.extra_cols.map(c => <col key={c} />)}
+                    <col style={{ width: '8%' }} />
+                    <col />
+                    <col style={{ width: '12%' }} />
+                    {session.extra_cols.map(c => <col key={c} style={{ width: '15%' }} />)}
                   </colgroup>
                   <thead>
                     <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
