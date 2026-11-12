@@ -2672,54 +2672,53 @@ export default function SeasonBookPage() {
                 {/* Section 2: Financials — 2 column layout */}
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: gray, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Financials</div>
-                  <div className="sb-financials-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    {/* Left column */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 6 }}>
-                        <div>
-                          <label style={lbl}>Cur</label>
-                          <select value={entry.currency} onChange={e => upd({ currency: e.target.value as Currency })}
-                            style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 6, padding: '5px 4px', background: '#f5f3ff', color: purpleD, cursor: 'pointer', width: '100%' }}>
-                            <option value="USD">USD</option>
-                            <option value="EUR">EUR</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={lbl}>Units</label>
-                          <input type="number" value={entry.units} placeholder="0"
-                            onChange={e => upd({ units: e.target.value })} style={inp} />
-                        </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* Row 1: Cur | Units | Initial Total */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 1fr', gap: 8 }}>
+                      <div>
+                        <label style={lbl}>Cur</label>
+                        <select value={entry.currency} onChange={e => upd({ currency: e.target.value as Currency })}
+                          style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #d1d5db', borderRadius: 6, padding: '5px 4px', background: '#f5f3ff', color: purpleD, cursor: 'pointer', width: '100%' }}>
+                          <option value="USD">USD</option>
+                          <option value="EUR">EUR</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={lbl}>Units</label>
+                        <input type="number" value={entry.units} placeholder="0"
+                          onChange={e => upd({ units: e.target.value })} style={inp} />
                       </div>
                       <div>
                         <label style={lbl}>Initial Total ({sym})</label>
                         <input type="number" value={entry.initial_total} step="0.01" placeholder="0.00"
                           onChange={e => upd({ initial_total: e.target.value })} style={inp} />
                       </div>
+                    </div>
+                    {/* Row 2: Duties | Shipping | CC Fee */}
+                    <div className="sb-edit-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                      <div>
+                        <label style={lbl}>Duties ({sym})</label>
+                        <input type="number" value={entry.duties} step="0.01" placeholder="0.00"
+                          onChange={e => upd({ duties: e.target.value })} style={inp} />
+                      </div>
+                      <div>
+                        <label style={lbl}>Shipping ({sym})</label>
+                        <input type="number" value={entry.shipping} step="0.01" placeholder="0.00"
+                          onChange={e => upd({ shipping: e.target.value })} style={inp} />
+                      </div>
+                      <div>
+                        <label style={lbl}>CC Fee ({sym})</label>
+                        <input type="number" value={entry.cc_fee} step="0.01" placeholder="0.00"
+                          onChange={e => upd({ cc_fee: e.target.value })} style={inp} />
+                      </div>
+                    </div>
+                    {/* Row 3: Deposit | Payment Date */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                       <div>
                         <label style={lbl}>Deposit ({sym})</label>
                         <input type="number" value={entry.deposit} step="0.01" placeholder="0.00"
                           onChange={e => upd({ deposit: e.target.value })} style={inp}
                           disabled={!canPay} title={!canPay ? 'Payment access restricted' : undefined} />
-                      </div>
-                    </div>
-                    {/* Right column */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <div>
-                          <label style={lbl}>Duties ({sym})</label>
-                          <input type="number" value={entry.duties} step="0.01" placeholder="0.00"
-                            onChange={e => upd({ duties: e.target.value })} style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>Shipping ({sym})</label>
-                          <input type="number" value={entry.shipping} step="0.01" placeholder="0.00"
-                            onChange={e => upd({ shipping: e.target.value })} style={inp} />
-                        </div>
-                        <div>
-                          <label style={lbl}>CC Fee ({sym})</label>
-                          <input type="number" value={entry.cc_fee} step="0.01" placeholder="0.00"
-                            onChange={e => upd({ cc_fee: e.target.value })} style={inp} />
-                        </div>
                       </div>
                       <div>
                         <label style={lbl}>Payment Date</label>
@@ -2727,12 +2726,12 @@ export default function SeasonBookPage() {
                           onChange={e => upd({ payment_date: e.target.value })} style={inp}
                           disabled={!canPay} title={!canPay ? 'Payment access restricted' : undefined} />
                       </div>
-                      {/* Live balance — right column bottom */}
-                      <div style={{ marginTop: 'auto', paddingTop: 4 }}>
-                        <label style={{ ...lbl, color: liveBal > 0.001 ? '#dc2626' : '#166534' }}>Balance Due</label>
-                        <div style={{ fontSize: 15, fontWeight: 900, color: liveBal > 0.001 ? '#dc2626' : '#166534', padding: '7px 0' }}>
-                          {sym}{liveBal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
+                    </div>
+                    {/* Balance Due */}
+                    <div>
+                      <label style={{ ...lbl, color: liveBal > 0.001 ? '#dc2626' : '#166534' }}>Balance Due</label>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: liveBal > 0.001 ? '#dc2626' : '#166534', padding: '4px 0' }}>
+                        {sym}{liveBal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </div>
                   </div>
