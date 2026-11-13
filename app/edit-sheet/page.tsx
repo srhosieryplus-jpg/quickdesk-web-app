@@ -907,9 +907,13 @@ export default function EditSheetPage() {
       {/* ── Brand Modal ─────────────────────────────────────────────────────── */}
       {brandModal && (() => {
         const bmBrandRows = rows.filter(r => r.brand === brandModal)
+        const ttcRows = bmBrandRows.filter(r => r.store === 'TTC')
+        const ttpRows = bmBrandRows.filter(r => r.store === 'TTP')
+        const otherRows = bmBrandRows.filter(r => r.store !== 'TTC' && r.store !== 'TTP')
+        const hasSplit = ttcRows.length > 0 || ttpRows.length > 0
         return (
           <div className="modal-bg">
-            <div className="modal-box" style={{ maxWidth: 640 }}>
+            <div className="modal-box" style={{ maxWidth: hasSplit ? 860 : 640 }}>
               <div className="modal-head">
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: accentD }}>{brandModal}</div>
@@ -941,40 +945,114 @@ export default function EditSheetPage() {
                   </div>
                 </div>
 
-                {/* Per-order rows */}
+                {/* Per-order rows — TTC | TTP split, or stacked for other stores */}
                 <div style={{ fontSize: 11, fontWeight: 800, color: accentD, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>📋 Order Details</div>
-                {bmBrandRows.map(r => {
+
+                {hasSplit ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {(['TTC', 'TTP'] as const).map(store => {
+                      const storeRows = store === 'TTC' ? ttcRows : ttpRows
+                      return (
+                        <div key={store}>
+                          {/* Store column header */}
+                          <div style={{ background: accentD, color: '#fff', borderRadius: '8px 8px 0 0', padding: '6px 12px', fontWeight: 800, fontSize: 13 }}>
+                            {store} <span style={{ fontWeight: 400, fontSize: 11, opacity: 0.8 }}>· {storeRows.length} order{storeRows.length !== 1 ? 's' : ''}</span>
+                          </div>
+                          <div style={{ border: `1px solid ${borderC}`, borderTop: 'none', borderRadius: '0 0 8px 8px', padding: storeRows.length === 0 ? '20px 12px' : '10px 10px' }}>
+                            {storeRows.length === 0
+                              ? <div style={{ textAlign: 'center', color: gray, fontSize: 12 }}>No orders for {store}</div>
+                              : storeRows.map(r => {
+                                  const perRow = bmRows[r.id] || { po_num: '', edit_status: 'Pending' as const, entry_status: 'Pending' as const, note: '' }
+                                  return (
+                                    <div key={r.id} style={{ background: '#fff', border: `1px solid ${borderC}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+                                      {/* Read-only info row */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                                        {r.order_num && <span style={{ fontSize: 13, fontWeight: 800, color: accent }}>Order # {r.order_num}</span>}
+                                        {r.season_book_id && <span style={{ fontSize: 10, fontWeight: 700, color: accent, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '1px 7px' }}>🔗 Linked</span>}
+                                      </div>
+                                      {/* PO # + Entry Status */}
+                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+                                        <div>
+                                          <label style={lbl}>PO #{r.season_book_id && <span style={{ color: accent, fontSize: 9, fontWeight: 400 }}> → SB</span>}</label>
+                                          <input value={perRow.po_num}
+                                            onChange={e => { const val = e.target.value; setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], po_num: val, entry_status: val.trim() ? 'Items Created' : 'Pending' } })) }}
+                                            placeholder="PO number" style={inp} />
+                                        </div>
+                                        <div>
+                                          <label style={lbl}>Entry</label>
+                                          <select value={perRow.entry_status}
+                                            onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], entry_status: e.target.value as 'Pending' | 'Items Created' } }))}
+                                            style={{ ...inp, cursor: 'pointer', fontSize: 12 }}>
+                                            {ENTRY_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                                          </select>
+                                        </div>
+                                      </div>
+                                      {/* Note */}
+                                      <div style={{ marginBottom: 8 }}>
+                                        <label style={lbl}>Note</label>
+                                        <input value={perRow.note}
+                                          onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], note: e.target.value } }))}
+                                          placeholder="Optional note" style={inp} />
+                                      </div>
+                                      {/* PDFs + Edit Status */}
+                                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                        <div style={{ flex: 1 }}>
+                                          <div style={{ fontSize: 10, fontWeight: 700, color: gray, marginBottom: 4 }}>📎 PDF Edits</div>
+                                          {(r.pdf_files || []).length > 0 && (
+                                            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 4 }}>
+                                              {(r.pdf_files || []).map((f, i) => (
+                                                <a key={i} href={f.url} target="_blank" rel="noreferrer"
+                                                  style={{ fontSize: 10, color: accent, fontWeight: 600, textDecoration: 'none', background: accentL, border: `1px solid ${accentB}`, borderRadius: 4, padding: '1px 5px' }}>
+                                                  📄 {f.name.length > 12 ? f.name.slice(0, 10) + '…' : f.name}
+                                                </a>
+                                              ))}
+                                            </div>
+                                          )}
+                                          <label style={{ display: 'inline-block', background: accentL, color: accentD, border: `1px solid ${accentB}`, borderRadius: 5, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                                            {bmUploading && bmUploadTarget === r.id ? 'Uploading…' : '📎 Attach'}
+                                            <input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }}
+                                              onChange={e => { if (e.target.files?.[0]) bmUploadPDF(r.id, e.target.files[0]) }} />
+                                          </label>
+                                        </div>
+                                        <div style={{ width: 130 }}>
+                                          <label style={lbl}>Edit Status</label>
+                                          <select value={perRow.edit_status}
+                                            onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], edit_status: e.target.value as 'Pending' | 'Edits Completed' } }))}
+                                            style={{ ...inp, cursor: 'pointer', fontSize: 11 }}>
+                                            {EDIT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                                          </select>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )
+                                })
+                            }
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : null}
+
+                {/* Other stores (not TTC/TTP) stacked normally */}
+                {otherRows.map(r => {
                   const perRow = bmRows[r.id] || { po_num: '', edit_status: 'Pending' as const, entry_status: 'Pending' as const, note: '' }
                   return (
                     <div key={r.id} style={{ background: '#fff', border: `1px solid ${borderC}`, borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
-
-                      {/* Read-only info row */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-                        {isAdmin && <span style={{ fontSize: 14, fontWeight: 800, color: accent }}>{r.store}</span>}
-                        {r.order_num && <span style={{ fontSize: 14, fontWeight: 800, color: accent }}>Order # {r.order_num}</span>}
-                        {r.season_book_id && <span style={{ fontSize: 11, fontWeight: 700, color: accent, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '2px 9px' }}>🔗 Linked</span>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: accent }}>{r.store}</span>
+                        {r.order_num && <span style={{ fontSize: 13, fontWeight: 800, color: accent }}>Order # {r.order_num}</span>}
+                        {r.season_book_id && <span style={{ fontSize: 10, fontWeight: 700, color: accent, background: '#fff', border: `1px solid ${accentB}`, borderRadius: 6, padding: '1px 7px' }}>🔗 Linked</span>}
                       </div>
-
-                      {/* PO # + Entry Status */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '160px 160px', gap: 8, marginBottom: 10 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '160px 160px', gap: 8, marginBottom: 8 }}>
                         <div>
-                          <label style={lbl}>PO # {r.season_book_id && <span style={{ color: accent, fontSize: 10, fontWeight: 400 }}>→ syncs to Season Book</span>}</label>
+                          <label style={lbl}>PO #{r.season_book_id && <span style={{ color: accent, fontSize: 9, fontWeight: 400 }}> → SB</span>}</label>
                           <input value={perRow.po_num}
-                            onChange={e => {
-                              const val = e.target.value
-                              setBmRows(prev => ({
-                                ...prev,
-                                [r.id]: {
-                                  ...prev[r.id],
-                                  po_num: val,
-                                  entry_status: val.trim() ? 'Items Created' : 'Pending'
-                                }
-                              }))
-                            }}
-                            placeholder="Enter PO number" style={inp} />
+                            onChange={e => { const val = e.target.value; setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], po_num: val, entry_status: val.trim() ? 'Items Created' : 'Pending' } })) }}
+                            placeholder="PO number" style={inp} />
                         </div>
                         <div>
-                          <label style={lbl}>Entry Status</label>
+                          <label style={lbl}>Entry</label>
                           <select value={perRow.entry_status}
                             onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], entry_status: e.target.value as 'Pending' | 'Items Created' } }))}
                             style={{ ...inp, cursor: 'pointer', fontSize: 12 }}>
@@ -982,25 +1060,21 @@ export default function EditSheetPage() {
                           </select>
                         </div>
                       </div>
-
-                      {/* Note */}
-                      <div style={{ marginBottom: 10 }}>
+                      <div style={{ marginBottom: 8 }}>
                         <label style={lbl}>Note</label>
                         <input value={perRow.note}
                           onChange={e => setBmRows(prev => ({ ...prev, [r.id]: { ...prev[r.id], note: e.target.value } }))}
                           placeholder="Optional note" style={inp} />
                       </div>
-
-                      {/* PDFs + Edit Status side by side */}
                       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: gray, marginBottom: 5 }}>📎 PDF Edits</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: gray, marginBottom: 4 }}>📎 PDF Edits</div>
                           {(r.pdf_files || []).length > 0 && (
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 5 }}>
                               {(r.pdf_files || []).map((f, i) => (
                                 <a key={i} href={f.url} target="_blank" rel="noreferrer"
-                                  style={{ fontSize: 11, color: accent, fontWeight: 600, textDecoration: 'none', background: accentL, border: `1px solid ${accentB}`, borderRadius: 5, padding: '2px 8px' }}>
-                                  📄 {f.name.length > 16 ? f.name.slice(0, 14) + '…' : f.name}
+                                  style={{ fontSize: 10, color: accent, fontWeight: 600, textDecoration: 'none', background: accentL, border: `1px solid ${accentB}`, borderRadius: 4, padding: '1px 6px' }}>
+                                  📄 {f.name.length > 14 ? f.name.slice(0, 12) + '…' : f.name}
                                 </a>
                               ))}
                             </div>
