@@ -1054,17 +1054,34 @@ export default function EditSheetPage() {
               ) : historyRows.length === 0 ? (
                 <div style={{ textAlign: 'center', color: gray, padding: 24, fontSize: 13 }}>No history found</div>
               ) : historyRows.map(r => {
-                const sc = statusColor(r.status)
+                const editSc = statusColor(r.edit_status || 'Pending')
+                const entrySc = statusColor(r.entry_status || 'Pending')
                 return (
                   <div key={r.id} style={{ background: '#fff', border: `1px solid ${borderC}`, borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: accentD }}>{r.store} · {r.season || '—'}</span>
-                      <span style={{ fontSize: 10, color: gray }}>{fmtTs(r.created_at)}</span>
+                    {/* Brand + timestamp row */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 900, color: accentD }}>{r.brand}</div>
+                        <div style={{ fontSize: 11, color: accent, fontWeight: 700, marginTop: 1 }}>{r.store}{r.season ? ` · ${r.season}` : ''}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 10, color: gray }}>{fmtTs(r.created_at)}</div>
+                        {r.created_by && <div style={{ fontSize: 10, fontWeight: 700, color: accent, marginTop: 1 }}>👤 {r.created_by}</div>}
+                      </div>
                     </div>
-                    {r.order_num && <div style={{ fontSize: 11, color: gray, marginBottom: 4 }}>Order #: {r.order_num}</div>}
-                    <div style={{ fontSize: 12, fontWeight: 700, color: accentD, marginBottom: 4 }}>{markupDisplay(r)}</div>
-                    <span className="es-badge" style={{ background: sc.bg, color: sc.color, borderColor: sc.border }}>{r.status}</span>
-                    {r.note && <div style={{ fontSize: 11, color: gray, marginTop: 6, fontStyle: 'italic' }}>{r.note}</div>}
+                    {/* Order # + PO # */}
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                      {r.order_num && <span style={{ fontSize: 11, color: gray }}>Order #: <strong style={{ color: accentD }}>{r.order_num}</strong></span>}
+                      {r.po_num && <span style={{ fontSize: 11, color: gray }}>PO #: <strong style={{ color: accentD }}>{r.po_num}</strong></span>}
+                    </div>
+                    {/* Markup */}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: accentD, marginBottom: 6 }}>{markupDisplay(r)}</div>
+                    {/* Statuses */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: r.note || (r.pdf_files || []).length > 0 ? 6 : 0 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20, border: `1px solid ${editSc.border}`, background: editSc.bg, color: editSc.color }}>Edit: {r.edit_status || 'Pending'}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20, border: `1px solid ${entrySc.border}`, background: entrySc.bg, color: entrySc.color }}>Entry: {r.entry_status || 'Pending'}</span>
+                    </div>
+                    {r.note && <div style={{ fontSize: 11, color: gray, fontStyle: 'italic' }}>{r.note}</div>}
                     {(r.pdf_files || []).length > 0 && (
                       <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {(r.pdf_files || []).map((f, i) => (
