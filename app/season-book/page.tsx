@@ -620,7 +620,7 @@ export default function SeasonBookPage() {
           brand: row.brand,
           order_num: row.order_num || null,
           season: row.season || null,
-          markup: 'x2',
+          markup: null,
           markup_add: null,
           status: 'Pending',
           note: null,
