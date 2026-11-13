@@ -378,12 +378,16 @@ export default function EditSheetPage() {
       }).eq('id', r.id)
       if (error) { showToast('❌ ' + error.message, 'err'); setBmSaving(false); return }
 
-      // Sync PO# back to season_ledger order_num if linked
+      // Sync PO# to season_ledger and season_ss if linked
       if (r.season_book_id && poVal) {
+        // Update season_ledger order_num
         await supabase.from('season_ledger').update({
           order_num: poVal,
           updated_at: new Date().toISOString(),
         }).eq('id', r.season_book_id)
+        // Update season_ss and season_aw po_no (find rows linked to same season_book_id)
+        await supabase.from('season_ss').update({ po_no: poVal }).eq('season_book_id', r.season_book_id)
+        await supabase.from('season_aw').update({ po_no: poVal }).eq('season_book_id', r.season_book_id)
       }
     }
 
