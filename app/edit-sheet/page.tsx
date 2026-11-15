@@ -153,6 +153,10 @@ export default function EditSheetPage() {
   const [historyRows, setHistoryRows] = useState<EditSheetRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  // Context menu (right-click delete)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; rowId: string; label: string } | null>(null)
+  const ctxRef = useRef<HTMLDivElement>(null)
+
   // Brand modal (bulk edit for a brand)
   const [brandModal, setBrandModal] = useState<string | null>(null) // brand name
   const [bmMarkup, setBmMarkup] = useState('')
@@ -201,6 +205,25 @@ export default function EditSheetPage() {
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) setCtxMenu(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [])
+
+  async function deleteRow(rowId: string) {
+    setCtxMenu(null)
+    const pw = prompt('Enter password to delete this entry:')
+    if (pw === null) return
+    if (pw.toLowerCase() !== 'star') { showToast('❌ Incorrect password', 'err'); return }
+    const { error } = await supabase.from('edit_sheet').delete().eq('id', rowId)
+    if (error) { showToast('❌ ' + error.message, 'err'); return }
+    setRows(prev => prev.filter(r => r.id !== rowId))
+    showToast('🗑 Entry deleted')
+  }
 
   function showToast(msg: string, type: 'ok'|'err' = 'ok') {
     setToast(msg); setToastType(type)
@@ -498,6 +521,11 @@ export default function EditSheetPage() {
         .modal-foot { padding: 12px 18px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
         /* ── History panel (right side) ── */
         .hist-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 320px; background: #fff; box-shadow: -4px 0 24px rgba(0,0,0,0.12); z-index: 900; display: flex; flex-direction: column; animation: slideInRight 0.2s ease; }
+        .es-ctx { position: fixed; background: #fff; border: 1px solid #f9a8d4; border-radius: 8px; box-shadow: 0 4px 18px rgba(219,39,119,0.15); z-index: 9999; min-width: 150px; overflow: hidden; }
+        .es-ctx-item { padding: 9px 14px; font-size: 12px; font-weight: 600; cursor: pointer; color: #333; }
+        .es-ctx-item:hover { background: #fdf2f8; }
+        .es-ctx-item.danger { color: #dc2626; }
+        .es-ctx-item.danger:hover { background: #fef2f2; }
         @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
         /* ── Mobile ── */
         @media (max-width: 600px) {
@@ -691,6 +719,7 @@ export default function EditSheetPage() {
                       return (
                         <tr key={row.id}
                           onClick={() => openBrandModal(brand)}
+                          onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, rowId: row.id, label: `${row.store} · ${row.order_num || row.brand}` }) }}
                           style={{ borderBottom: ri < brandRows.length - 1 ? `1px solid ${borderC}` : 'none', cursor: 'pointer', background: ri % 2 === 0 ? '#fff' : '#fdf8fb' }}
                           onMouseEnter={e => (e.currentTarget.style.background = accentL)}
                           onMouseLeave={e => (e.currentTarget.style.background = ri % 2 === 0 ? '#fff' : '#fdf8fb')}>
@@ -1176,6 +1205,19 @@ export default function EditSheetPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── Context Menu ── */}
+      {ctxMenu && (
+        <div ref={ctxRef} className="es-ctx" style={{ left: ctxMenu.x, top: ctxMenu.y }}>
+          <div className="es-ctx-item" style={{ fontSize: 10, color: '#9ca3af', cursor: 'default', paddingBottom: 4 }}>
+            {ctxMenu.label}
+          </div>
+          <div style={{ height: 1, background: '#f3f4f6', margin: '0 10px' }} />
+          <div className="es-ctx-item danger" onClick={() => deleteRow(ctxMenu.rowId)}>
+            🗑 Delete Entry
+          </div>
+        </div>
       )}
 
       {/* Toast */}
