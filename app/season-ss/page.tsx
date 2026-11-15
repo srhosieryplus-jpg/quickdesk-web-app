@@ -752,6 +752,15 @@ export default function SeasonSSPage() {
                   </div>
                 )}
 
+                {!state.row.po_no && !state.row.logged && (
+                  <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '8px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 16 }}>⚠️</span>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>
+                      Items have not been created yet — no PO # on file.
+                    </div>
+                  </div>
+                )}
+
                 <div className="result-grid">
                   <InfoRow label="Order #" value={linkedOrderNum ?? state.row.invoice_no} />
                   <InfoRow label="PO #"      value={state.row.po_no} />
@@ -942,7 +951,7 @@ export default function SeasonSSPage() {
                       {hasMultiStore && <td style={{ fontWeight: 700, color: logged ? '#15803d' : greenD, fontSize: 11 }}>{r.store}</td>}
                       <td style={{ fontWeight: 600, color: txt }}>{r.brand}</td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: logged ? '#14532d' : greenD, fontWeight: 700 }}>{r.invoice_no}</td>
-                      <td className="ss-col-hide" style={{ fontFamily: 'monospace', fontSize: 11, color: txt }}>{r.po_no || <span style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: 10 }}>Not Created</span>}</td>
+                      <td className="ss-col-hide" style={{ fontFamily: 'monospace', fontSize: 11, color: txt }}>{r.po_no || ''}</td>
                       <td className="ss-col-hide" style={{ textAlign: 'right', color: txt }}>{r.qty ?? '—'}</td>
                       <td>
                         {(() => {
@@ -950,22 +959,24 @@ export default function SeasonSSPage() {
                             : r.flagged ? 'Flagged'
                             : r.logged ? 'Logged'
                             : r.po_no ? 'Pending'
-                            : 'Not Created'
+                            : null
+                          if (!st) return null
                           const stMap: Record<string, { bg: string; color: string; border?: string }> = {
-                            'Not Created': { bg: '#f3f4f6', color: '#6b7280' },
-                            'Pending':     { bg: '#fef3c7', color: '#92400e' },
-                            'Logged':      { bg: '#bbf7d0', color: '#14532d', border: '1px solid #86efac' },
-                            'Flagged':     { bg: '#fef3c7', color: '#92400e' },
-                            'Adjusted':    { bg: '#fef08a', color: '#713f12', border: '1px solid #ca8a04' },
+                            'Pending':  { bg: '#fef3c7', color: '#92400e' },
+                            'Logged':   { bg: '#bbf7d0', color: '#14532d', border: '1px solid #86efac' },
+                            'Flagged':  { bg: '#fef3c7', color: '#92400e' },
+                            'Adjusted': { bg: '#fef08a', color: '#713f12', border: '1px solid #ca8a04' },
                           }
-                          const c = stMap[st] ?? stMap['Not Created']
+                          const c = stMap[st]
                           return <span style={{ background: c.bg, color: c.color, border: c.border, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>{st === 'Logged' ? '✓ ' : st === 'Flagged' ? '⚑ ' : ''}{st}</span>
                         })()}
                       </td>
-                      <td className="ss-col-hide" style={{ fontSize: 10, color: dim }}>{r.logged_by ? displayUser(r.logged_by) : '—'}</td>
+                      <td className="ss-col-hide" style={{ fontSize: 10, color: dim, whiteSpace: 'nowrap' }}>
+                        {r.logged_by ? <>{displayUser(r.logged_by)}{r.logged_at ? <span style={{ color: '#9ca3af', marginLeft: 4 }}>{fmtDate(r.logged_at)}</span> : null}</> : '—'}
+                      </td>
                       <td className="ss-col-hide" style={{ fontSize: 10, color: dim, maxWidth: 140 }}>{r.adj_qty != null ? `⚠️ Adj qty: ${r.adj_qty}` : r.note || ''}</td>
                       <td style={{ textAlign: 'center', width: 28 }}>
-                        {isSeasonLinked && <span title="Linked to Season Book" style={{ fontSize: 11, color: '#db2777', fontWeight: 700, cursor: 'default' }}>🔗</span>}
+                        {isSeasonLinked && isAdmin && <span title="Linked to Season Book" style={{ fontSize: 11, color: '#db2777', fontWeight: 700, cursor: 'default' }}>🔗</span>}
                       </td>
                     </tr>
                   )
@@ -1051,11 +1062,6 @@ export default function SeasonSSPage() {
               <textarea value={adjNote} onChange={e => setAdjNote(e.target.value)} placeholder="e.g. 5 units missing from shipment"
                 rows={3} style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #fcd34d', borderRadius: 5, padding: '5px 8px', fontSize: 12, background: '#fffbeb', resize: 'vertical' }} />
             </div>
-            {adjustRow.season_book_id && (
-              <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 6, padding: '7px 10px', fontSize: 11, color: '#1e40af', marginBottom: 14 }}>
-                📗 Linked to Season Book — a note will be written back to that drop automatically.
-              </div>
-            )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setAdjustRow(null)} style={{ flex: 1, background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 6, padding: '8px 0', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
               <button onClick={saveAdjust} disabled={adjSaving || (!adjQty && !adjAmount)}

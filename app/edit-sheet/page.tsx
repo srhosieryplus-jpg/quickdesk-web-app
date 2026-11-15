@@ -218,7 +218,7 @@ export default function EditSheetPage() {
     setCtxMenu(null)
     const pw = prompt('Enter password to delete this entry:')
     if (pw === null) return
-    if (pw.toLowerCase() !== 'star') { showToast('❌ Incorrect password', 'err'); return }
+    if (pw.toLowerCase() !== 'delete') { showToast('❌ Incorrect password', 'err'); return }
     const { error } = await supabase.from('edit_sheet').delete().eq('id', rowId)
     if (error) { showToast('❌ ' + error.message, 'err'); return }
     setRows(prev => prev.filter(r => r.id !== rowId))
