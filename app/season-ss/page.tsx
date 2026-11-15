@@ -917,6 +917,7 @@ export default function SeasonSSPage() {
                   <th>Status</th>
                   <th className="ss-col-hide">Logged By</th>
                   <th className="ss-col-hide">Note</th>
+                  <th style={{ width: 28 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -963,6 +964,9 @@ export default function SeasonSSPage() {
                       </td>
                       <td className="ss-col-hide" style={{ fontSize: 10, color: dim }}>{r.logged_by ? displayUser(r.logged_by) : '—'}</td>
                       <td className="ss-col-hide" style={{ fontSize: 10, color: dim, maxWidth: 140 }}>{r.adj_qty != null ? `⚠️ Adj qty: ${r.adj_qty}` : r.note || ''}</td>
+                      <td style={{ textAlign: 'center', width: 28 }}>
+                        {isSeasonLinked && <span title="Linked to Season Book" style={{ fontSize: 11, color: '#db2777', fontWeight: 700, cursor: 'default' }}>🔗</span>}
+                      </td>
                     </tr>
                   )
                 })}

@@ -957,10 +957,13 @@ export default function SeasonAWPage() {
                       <td className="aw-col-hide" style={{ fontSize: 10, color: dim, maxWidth: 140 }}>{r.adj_qty != null ? `⚠️ Adj qty: ${r.adj_qty}` : r.note || ''}</td>
                       <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                         {r.season_book_id && (
-                          <button onClick={() => { setAdjustRow(r); setAdjQty(r.adj_qty?.toString() ?? ''); setAdjAmount(r.adj_amount?.toString() ?? ''); setAdjNote(r.adj_note ?? '') }}
-                            style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, border: '1px solid #93c5fd', background: '#eff6ff', color: blueD, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                            Adjust
-                          </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                            <span title="Linked to Season Book" style={{ fontSize: 11, color: '#db2777', fontWeight: 700, cursor: 'default' }}>🔗</span>
+                            <button onClick={() => { setAdjustRow(r); setAdjQty(r.adj_qty?.toString() ?? ''); setAdjAmount(r.adj_amount?.toString() ?? ''); setAdjNote(r.adj_note ?? '') }}
+                              style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, border: '1px solid #93c5fd', background: '#eff6ff', color: blueD, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              Adjust
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
