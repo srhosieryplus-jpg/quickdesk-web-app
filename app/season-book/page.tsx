@@ -1467,7 +1467,7 @@ export default function SeasonBookPage() {
 
         {/* Center: title + season badge */}
         <div className="sb-header-title" style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
-          <span style={{ fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>📒 SEASON BOOK</span>
+          <span style={{ fontSize: 19, fontWeight: 900, color: '#fff', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>📒 SEASON BOOK</span>
           <span style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', fontSize: 12, fontWeight: 800, borderRadius: 12, padding: '3px 10px', border: '1.5px solid rgba(255,255,255,0.4)', cursor: 'pointer', whiteSpace: 'nowrap' }}
             onClick={() => setShowSeasonPanel(true)}>
             {season}

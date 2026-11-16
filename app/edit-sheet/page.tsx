@@ -579,7 +579,7 @@ export default function EditSheetPage() {
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 16, cursor: 'pointer' }}
             title="Switch season">☰</button>
           <button onClick={() => router.push('/selector')}
-            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
             ← Home
           </button>
         </div>
