@@ -779,27 +779,32 @@ export default function EditSheetPage() {
                       onClick={() => openBrandModal(brand)}
                       onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, rowId: row.id, label: `${row.store} · ${row.order_num || row.brand}` }) }}
                       style={{ background: ri % 2 === 0 ? '#fff' : '#fdf8fb', border: `1px solid ${accentB}`, borderRadius: 8, padding: '8px 12px', marginBottom: 6, cursor: 'pointer' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {row.order_num || '—'}
-                            {row.season_book_id && <span style={{ marginLeft: 4, fontSize: 10 }}>🔗</span>}
-                          </div>
-                          {isAdmin && <div style={{ fontSize: 11, color: gray, marginTop: 1 }}>{row.store}</div>}
-                          {row.note && <div style={{ fontSize: 11, color: gray, marginTop: 2, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.note}</div>}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: statusTextColor(row.edit_status || 'Pending'), background: '#f9f1f6', border: `1px solid ${accentB}`, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>
-                            Edit: {row.edit_status || 'Pending'}
-                          </span>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: statusTextColor(row.entry_status || (row.po_num ? 'Items Created' : 'Pending')), background: '#f9f1f6', border: `1px solid ${accentB}`, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>
-                            Entry: {row.entry_status || (row.po_num ? 'Items Created' : 'Pending')}
-                          </span>
-                        </div>
+
+                      {/* Top row: Store ID · Order # · PO# */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                        {isAdmin && (
+                          <span style={{ fontSize: 12, fontWeight: 800, color: accent, whiteSpace: 'nowrap' }}>{row.store}</span>
+                        )}
+                        {isAdmin && <span style={{ color: accentB, fontSize: 11 }}>–</span>}
+                        <span style={{ fontSize: 12, fontWeight: 700, color: accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {row.order_num || '—'}
+                          {row.season_book_id && <span style={{ marginLeft: 4, fontSize: 10 }}>🔗</span>}
+                        </span>
+                        <span style={{ color: accentB, fontSize: 11 }}>–</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: row.po_num ? accent : gray, whiteSpace: 'nowrap' }}>
+                          {row.po_num || '—'}
+                        </span>
                       </div>
-                      {row.po_num && (
-                        <div style={{ fontSize: 11, color: accent, marginTop: 4 }}>PO: <strong>{row.po_num}</strong></div>
-                      )}
+
+                      {/* Bottom row: Edit status · Entry status */}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'nowrap' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: statusTextColor(row.edit_status || 'Pending'), background: '#f9f1f6', border: `1px solid ${accentB}`, borderRadius: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                          Edit: {row.edit_status || 'Pending'}
+                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: statusTextColor(row.entry_status || (row.po_num ? 'Items Created' : 'Pending')), background: '#f9f1f6', border: `1px solid ${accentB}`, borderRadius: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                          Entry: {row.entry_status || (row.po_num ? 'Items Created' : 'Pending')}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
