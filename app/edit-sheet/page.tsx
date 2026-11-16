@@ -642,7 +642,7 @@ export default function EditSheetPage() {
         <div className="es-search-row">
           {/* Search */}
           <div style={{ position: 'relative', flex: '1 1 180px', width: '100%' }}>
-            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 13, pointerEvents: 'none' }}>🔍</span>
+            <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 14, pointerEvents: 'none', lineHeight: 1 }}>🔍</span>
             <input ref={brandRef} value={search}
               onChange={e => {
                 setSearch(e.target.value)
@@ -650,7 +650,7 @@ export default function EditSheetPage() {
               }}
               onFocus={() => search.trim() && setShowSugg(true)}
               placeholder="Search brand, order #, note…"
-              style={{ ...inpMd, paddingLeft: 32, width: '100%' }} />
+              style={{ ...inpMd, paddingLeft: 36, width: '100%', boxSizing: 'border-box' }} />
             {search && (
               <button onClick={() => { setSearch(''); setShowSugg(false) }}
                 style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: gray, cursor: 'pointer', fontSize: 15 }}>✕</button>
