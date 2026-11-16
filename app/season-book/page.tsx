@@ -1651,14 +1651,14 @@ export default function SeasonBookPage() {
       </div>
 
       {/* Combined sub-bar: Drop | search | active filters */}
-      <div className="sb-subbar" style={isMobile ? { padding: '6px 8px', justifyContent: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, width: '100%', boxSizing: 'border-box' } : { paddingLeft: 0 }}>
+      <div className="sb-subbar" style={isMobile ? { padding: '6px 8px', justifyContent: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, width: '100%', boxSizing: 'border-box', overflow: 'hidden' } : { paddingLeft: 0 }}>
         {/* Drop dropdown — left edge, no sidebar spacer needed here */}
         <div className="sb-subbar-drop" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 0 }}>
           {!isMobile && <span className="sb-drop-label" style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>}
           <select className="sb-drop-select"
             value={activeDropName ?? ''}
             onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
-            style={{ fontSize: isMobile ? 14 : 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: isMobile ? '0 8px' : '4px 8px', height: isMobile ? 34 : undefined, background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none', boxSizing: 'border-box' }}>
+            style={{ fontSize: isMobile ? 14 : 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: isMobile ? '0 8px' : '4px 8px', height: isMobile ? 34 : undefined, background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none', boxSizing: 'border-box', ...(isMobile ? { maxWidth: 120, flexShrink: 0 } : {}) }}>
             <option value="">All</option>
             {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
           </select>
