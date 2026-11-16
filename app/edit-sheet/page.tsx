@@ -491,7 +491,7 @@ export default function EditSheetPage() {
         .sp-row:hover { background: ${accentL} !important; }
         /* ── Header ── */
         .es-header {
-          background: ${accentD}; color: #fff; padding: 10px 20px;
+          background: ${accentD}; color: #fff; padding: 10px 20px; padding-top: max(10px, env(safe-area-inset-top));
           display: flex; align-items: center; justify-content: space-between; gap: 12;
           box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative;
           position: sticky; top: 0; z-index: 100;

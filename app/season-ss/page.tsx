@@ -209,6 +209,14 @@ export default function SeasonSSPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
+  // Match status bar colour to header on mobile
+  useEffect(() => {
+    const el = document.querySelector('meta[name="theme-color"]')
+    const prev = el?.getAttribute('content')
+    el?.setAttribute('content', '#d97706')
+    return () => { el?.setAttribute('content', prev || '#7c3aed') }
+  }, [])
+
   useEffect(() => {
     let hiddenAt: number | null = null
     const IDLE_MS = 5 * 60 * 1000
@@ -564,7 +572,7 @@ export default function SeasonSSPage() {
         .modal-tab { padding: 7px 18px; border: none; background: none; font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 8px 8px 0 0; color: #64748b; }
         .modal-tab.active { background: ${green}; color: #fff; }
         .modal-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
-        .qs-header { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid ${greenD}; background: ${green}; }
+        .qs-header { padding: 14px 20px; padding-top: max(14px, env(safe-area-inset-top)); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid ${greenD}; background: ${green}; }
         @keyframes cutoff-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(202,138,4,0.5); } 50% { box-shadow: 0 0 0 5px rgba(202,138,4,0); } }
         .qs-logo { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; }
         @media (max-width: 600px) { .qs-logo { order: 3; width: 100%; justify-content: center; } }
