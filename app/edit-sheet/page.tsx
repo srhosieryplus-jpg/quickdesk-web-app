@@ -534,9 +534,9 @@ export default function EditSheetPage() {
           .es-header { flex-wrap: nowrap !important; }
           .es-header-title { position: static !important; transform: none !important; flex: 1; pointer-events: auto !important; }
           .es-header-right { display: none !important; }
-          .es-filters { flex-direction: row !important; flex-wrap: wrap !important; align-items: center !important; padding: 6px 10px !important; gap: 6px !important; }
-          .es-filters > * { width: auto !important; min-width: 0 !important; flex: 1 1 auto !important; max-width: none !important; font-size: 13px !important; }
-          .es-filters select, .es-filters input { font-size: 13px !important; padding: 5px 7px !important; }
+          .es-filters { flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; padding: 6px 10px !important; gap: 5px !important; overflow-x: auto !important; }
+          .es-filters select { font-size: 12px !important; padding: 5px 4px !important; min-width: 0 !important; flex-shrink: 1 !important; }
+          .es-filters > div { flex: 1 1 100px !important; min-width: 80px !important; }
         }
       `}</style>
 
@@ -607,15 +607,15 @@ export default function EditSheetPage() {
         <div className="es-filters">
           {/* Status filter */}
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            style={{ ...inpMd, width: 170, flex: '0 0 auto', fontWeight: 700, cursor: 'pointer' }}>
-            <option value="ALL">View All</option>
-            <option value="Pending">View Pending</option>
-            <option value="Edits Completed">View Edits Completed</option>
+            style={{ ...inpMd, width: 'auto', minWidth: 90, flex: '0 1 auto', fontWeight: 700, cursor: 'pointer' }}>
+            <option value="ALL">All</option>
+            <option value="Pending">Pending</option>
+            <option value="Edits Completed">Completed</option>
           </select>
 
           {/* Markup filter */}
           <select value={markupFilter} onChange={e => setMarkupFilter(e.target.value)}
-            style={{ ...inpMd, width: 160, flex: '0 0 auto', cursor: 'pointer', fontWeight: markupFilter === '__empty__' ? 800 : undefined, color: markupFilter === '__empty__' ? '#dc2626' : undefined }}>
+            style={{ ...inpMd, width: 'auto', minWidth: 90, flex: '0 1 auto', cursor: 'pointer', fontWeight: markupFilter === '__empty__' ? 800 : undefined, color: markupFilter === '__empty__' ? '#dc2626' : undefined }}>
             <option value="ALL">All Markups</option>
             {MARKUP_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
             <option value="__empty__">⚠ Empty{emptyMarkupCount > 0 ? ` (${emptyMarkupCount})` : ''}</option>
