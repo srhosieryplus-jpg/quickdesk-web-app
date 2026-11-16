@@ -501,6 +501,7 @@ export default function EditSheetPage() {
           text-align: center; pointer-events: none;
         }
         .es-header-right { display: flex; gap: 8px; align-items: center; }
+        .es-home-btn { background: rgba(255,255,255,0.15) !important; border: none !important; color: #e9d5ff !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; border-radius: 6px !important; padding: 4px 10px !important; font-family: inherit !important; }
         /* ── Filters ── */
         .es-filters {
           display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
@@ -582,7 +583,7 @@ export default function EditSheetPage() {
             <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
           </button>
           <button onClick={() => router.push('/selector')}
-            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
+            className="es-home-btn">
             ← Home
           </button>
         </div>

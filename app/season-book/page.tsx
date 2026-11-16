@@ -1390,7 +1390,8 @@ export default function SeasonBookPage() {
           .sb-header-title { position: static !important; transform: none !important; flex: 1; justify-content: flex-end; }
           .sb-header-left { flex: 0 !important; }
           .sb-header-right { display: none !important; }
-          .sb-subbar { gap: 6px; padding: 6px 8px 6px 8px !important; width: 100%; box-sizing: border-box; }
+          .sb-subbar { gap: 6px; padding: 6px 8px 6px 0 !important; width: 100%; box-sizing: border-box; }
+          .sb-drop-select { height: 34px !important; font-size: 13px !important; padding: 0 8px !important; box-sizing: border-box; }
           .sb-subbar-drop { order: 1; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
           .sb-subbar-search { order: 2; flex: 1; min-width: 0; max-width: none !important; }
           .sb-drop-label { display: none !important; }
@@ -1676,7 +1677,7 @@ export default function SeasonBookPage() {
 
         {/* Search — aligns with grand total box */}
         <div className="sb-subbar-search" ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 500 }}>
-          <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden', height: 34 }}>
             <span style={{ padding: '0 8px', color: gray, fontSize: 14 }}>🔍</span>
             <input
               value={headerSearch}
