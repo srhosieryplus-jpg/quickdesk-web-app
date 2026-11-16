@@ -796,8 +796,8 @@ export default function EditSheetPage() {
                         </span>
                       </div>
 
-                      {/* Bottom row: Edit status · Entry status */}
-                      <div style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'nowrap' }}>
+                      {/* Bottom row: Edit status left · Entry status right */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, color: statusTextColor(row.edit_status || 'Pending'), background: '#f9f1f6', border: `1px solid ${accentB}`, borderRadius: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}>
                           Edit: {row.edit_status || 'Pending'}
                         </span>
