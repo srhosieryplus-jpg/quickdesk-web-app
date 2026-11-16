@@ -501,7 +501,7 @@ export default function EditSheetPage() {
           text-align: center; pointer-events: none;
         }
         .es-header-right { display: flex; gap: 8px; align-items: center; }
-        .es-home-btn { background: rgba(255,255,255,0.15) !important; border: none !important; color: #e9d5ff !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; border-radius: 6px !important; padding: 4px 10px !important; font-family: inherit !important; }
+        .es-home-btn { background: rgba(255,255,255,0.15) !important; border: none !important; color: #e9d5ff !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; border-radius: 6px !important; padding: 4px 10px !important; font-family: inherit !important; line-height: 1.4 !important; display: inline-block !important; }
         /* ── Filters ── */
         .es-filters {
           display: flex; gap: 8px; flex-wrap: wrap; align-items: center;

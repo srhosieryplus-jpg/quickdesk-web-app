@@ -1390,8 +1390,8 @@ export default function SeasonBookPage() {
           .sb-header-title { position: static !important; transform: none !important; flex: 1; justify-content: flex-end; }
           .sb-header-left { flex: 0 !important; }
           .sb-header-right { display: none !important; }
-          .sb-subbar { gap: 6px; padding: 6px 8px 6px 0 !important; width: 100%; box-sizing: border-box; }
-          .sb-drop-select { height: 34px !important; font-size: 13px !important; padding: 0 8px !important; box-sizing: border-box; }
+          .sb-subbar { gap: 6px !important; padding: 6px 8px 6px 0 !important; width: 100% !important; box-sizing: border-box !important; }
+          .sb-drop-select { height: 34px !important; font-size: 14px !important; padding: 0 8px !important; box-sizing: border-box !important; }
           .sb-subbar-drop { order: 1; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
           .sb-subbar-search { order: 2; flex: 1; min-width: 0; max-width: none !important; }
           .sb-drop-label { display: none !important; }
@@ -1410,6 +1410,10 @@ export default function SeasonBookPage() {
           .sb-edit-grid-3 { grid-template-columns: 1fr 1fr !important; }
           .sb-edit-grid-4 { grid-template-columns: 1fr 1fr !important; }
           .sb-financials-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+        @media (max-width: 600px) {
+          .sb-subbar { padding: 6px 8px 6px 0 !important; }
+          .es-home-btn, .sb-home-btn { background: rgba(255,255,255,0.15) !important; border: none !important; color: #e9d5ff !important; font-size: 12px !important; font-weight: 700 !important; border-radius: 6px !important; padding: 4px 10px !important; }
         }
         /* Landscape phone */
         @media (pointer: coarse) and (max-width: 900px) and (orientation: landscape) {
