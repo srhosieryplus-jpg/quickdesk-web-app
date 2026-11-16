@@ -575,9 +575,12 @@ export default function EditSheetPage() {
       <div className="es-header">
         {/* Left: hamburger + back */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={() => setShowSeasonPanel(true)}
-            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 16, cursor: 'pointer' }}
-            title="Switch season">☰</button>
+          <button onClick={() => setShowSeasonPanel(true)} title="Switch season"
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', cursor: 'pointer', borderRadius: 6, padding: '5px 7px', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center', width: 34, height: 34, flexShrink: 0 }}>
+            <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
+            <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
+            <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
+          </button>
           <button onClick={() => router.push('/selector')}
             style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
             ← Home
