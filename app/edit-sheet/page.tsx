@@ -534,8 +534,9 @@ export default function EditSheetPage() {
           .es-header { flex-wrap: nowrap !important; }
           .es-header-title { position: static !important; transform: none !important; flex: 1; pointer-events: auto !important; }
           .es-header-right { display: none !important; }
-          .es-filters { flex-direction: column !important; align-items: stretch !important; padding: 8px 12px !important; }
-          .es-filters > * { width: 100% !important; max-width: none !important; flex: none !important; }
+          .es-filters { flex-direction: row !important; flex-wrap: wrap !important; align-items: center !important; padding: 6px 10px !important; gap: 6px !important; }
+          .es-filters > * { width: auto !important; min-width: 0 !important; flex: 1 1 auto !important; max-width: none !important; font-size: 13px !important; }
+          .es-filters select, .es-filters input { font-size: 13px !important; padding: 5px 7px !important; }
         }
       `}</style>
 
