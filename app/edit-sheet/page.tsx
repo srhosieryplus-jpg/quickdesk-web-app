@@ -583,8 +583,9 @@ export default function EditSheetPage() {
             <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
           </button>
           <button onClick={() => router.push('/selector')}
-            className="es-home-btn">
-            ← Home
+            className="es-home-btn"
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '6px', padding: '4px 10px', fontFamily: 'inherit', lineHeight: 1.4, display: 'inline-block', flexShrink: 0, whiteSpace: 'nowrap' }}>
+            {'←'} Home
           </button>
         </div>
 

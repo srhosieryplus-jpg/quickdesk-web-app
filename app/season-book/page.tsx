@@ -360,6 +360,7 @@ export default function SeasonBookPage() {
   const [user, setUser] = useState<User | null>(null)
   const [toast, setToast] = useState('')
   const [toastType, setToastType] = useState<'ok'|'err'>('ok')
+  const [isMobile, setIsMobile] = useState(false)
 
   // Season picker
   const [season, setSeason] = useState('SS27')
@@ -899,6 +900,13 @@ export default function SeasonBookPage() {
   }, [])
 
   useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 600 || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900))
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  useEffect(() => {
     const u = getSession()
     if (!u) { router.push('/'); return }
     setUser(u)
@@ -1389,7 +1397,7 @@ export default function SeasonBookPage() {
           .sb-drop-new { display: none !important; }
           .sb-click-hint { display: none !important; }
           .sb-header-title { position: static !important; transform: none !important; flex: 1; justify-content: flex-end; }
-          .sb-header-left { flex: 0 !important; }
+          .sb-header-left { flex: 0 0 auto !important; min-width: 0; }
           .sb-header-right { display: none !important; }
           .sb-subbar { gap: 6px !important; padding: 6px 8px 6px 0 !important; width: 100% !important; box-sizing: border-box !important; }
           .sb-subbar-drop { order: 1; flex-shrink: 0; display: flex; align-items: center; gap: 0 !important; padding-right: 0 !important; }
@@ -1471,8 +1479,8 @@ export default function SeasonBookPage() {
             <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
           </button>
           <button onClick={() => router.push('/selector')}
-            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '6px', padding: '4px 10px', fontFamily: 'inherit', lineHeight: 1.4 }}>
-            ← Home
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '6px', padding: '4px 10px', fontFamily: 'inherit', lineHeight: 1.4, display: 'inline-block', flexShrink: 0, whiteSpace: 'nowrap' }}>
+            {'←'} Home
           </button>
         </div>
 
@@ -1643,14 +1651,14 @@ export default function SeasonBookPage() {
       </div>
 
       {/* Combined sub-bar: Drop | search | active filters */}
-      <div className="sb-subbar" style={{ paddingLeft: 0 }}>
+      <div className="sb-subbar" style={isMobile ? { padding: '6px 8px 6px 0', justifyContent: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, width: '100%', boxSizing: 'border-box' } : { paddingLeft: 0 }}>
         {/* Drop dropdown — left edge, no sidebar spacer needed here */}
         <div className="sb-subbar-drop" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 0 }}>
           <span className="sb-drop-label" style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>
           <select className="sb-drop-select"
             value={activeDropName ?? ''}
             onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
-            style={{ fontSize: 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none' }}>
+            style={{ fontSize: isMobile ? 14 : 11, fontWeight: 700, border: `1.5px solid ${border}`, borderRadius: 7, padding: isMobile ? '0 8px' : '4px 8px', height: isMobile ? 34 : undefined, background: '#fff', color: purpleD, cursor: 'pointer', outline: 'none', boxSizing: 'border-box' }}>
             <option value="">All</option>
             {dropNamesInSeason.map(dn => <option key={dn} value={dn}>{dn}</option>)}
           </select>
@@ -1680,7 +1688,7 @@ export default function SeasonBookPage() {
         <div className="sb-subbar-divider" style={{ width: 1, height: 20, background: border, flexShrink: 0 }} />
 
         {/* Search — aligns with grand total box */}
-        <div className="sb-subbar-search" ref={headerSearchRef} style={{ position: 'relative', flex: 1 }}>
+        <div className="sb-subbar-search" ref={headerSearchRef} style={{ position: 'relative', flex: 1, minWidth: 0, ...(isMobile ? { maxWidth: 'none' } : {}) }}>
           <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden', height: 34 }}>
             <span style={{ padding: '0 8px', color: gray, fontSize: 14 }}>🔍</span>
             <input
