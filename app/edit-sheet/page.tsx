@@ -709,17 +709,17 @@ export default function EditSheetPage() {
                 <div className="es-brand-table">
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
                   <colgroup>
-                    {isAdmin && <col style={{ width: '8%' }} />}{/* Store ID */}
-                    <col style={{ width: '14%' }} />{/* Order # */}
-                    <col style={{ width: '10%' }} />{/* PDF */}
-                    <col style={{ width: '14%' }} />{/* Edit */}
-                    <col style={{ width: '14%' }} />{/* PO # */}
-                    <col style={{ width: '14%' }} />{/* Entry */}
+                    {isAdmin && <col style={{ width: '10%' }} />}{/* Store ID */}
+                    <col style={{ width: '12%' }} />{/* Order # */}
+                    <col style={{ width: '9%' }} />{/* PDF */}
+                    <col style={{ width: '12%' }} />{/* Edit */}
+                    <col style={{ width: '12%' }} />{/* PO # */}
+                    <col style={{ width: '12%' }} />{/* Entry */}
                     <col />{/* Notes */}
                   </colgroup>
                   <thead>
                     <tr style={{ background: '#f9f1f6', borderBottom: `1px solid ${accentB}` }}>
-                      {isAdmin && <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Store ID</th>}
+                      {isAdmin && <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>Store ID</th>}
                       <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Order #</th>
                       <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>PDF</th>
                       <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: gray, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Edit</th>
