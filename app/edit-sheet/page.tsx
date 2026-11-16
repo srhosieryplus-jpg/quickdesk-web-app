@@ -529,7 +529,6 @@ export default function EditSheetPage() {
         .es-ctx-item.danger:hover { background: #fef2f2; }
         @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
         /* ── Mobile ── */
-        .es-search-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
         .es-brand-table { display: table; }
         .es-brand-rows { display: none; }
         @media (max-width: 600px) {
@@ -538,11 +537,11 @@ export default function EditSheetPage() {
           .es-header { flex-wrap: nowrap !important; }
           .es-header-title { position: static !important; transform: none !important; flex: 1; pointer-events: auto !important; }
           .es-header-right { display: none !important; }
-          .es-filters { flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; padding: 6px 10px 4px !important; gap: 5px !important; overflow-x: auto !important; }
+          .es-filters { flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; padding: 6px 10px !important; gap: 5px !important; overflow-x: auto !important; }
           .es-filters select { font-size: 12px !important; padding: 5px 4px !important; min-width: 0 !important; flex-shrink: 1 !important; }
+          .es-filters > div { flex: 1 1 100px !important; max-width: none !important; min-width: 80px !important; }
+          .es-filters > div input { padding-left: 36px !important; }
           .es-filter-count { display: none !important; }
-          .es-search-row { margin-top: 4px !important; padding: 0 10px 6px !important; width: 100% !important; }
-          .es-search-row input { padding-left: 36px !important; }
           .es-brand-table { display: none !important; }
           .es-brand-rows { display: block !important; padding: 6px 10px 10px; }
         }
@@ -616,7 +615,7 @@ export default function EditSheetPage() {
 
       {/* ── Filters bar ───────────────────────────────────────────────────── */}
       <div style={{ background: '#fff', borderBottom: `1px solid ${borderC}`, padding: '10px 20px', position: 'sticky', top: 53, zIndex: 99, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
-        {/* Row 1: dropdowns + count */}
+        {/* Dropdowns + search — one row on desktop, stacked on mobile */}
         <div className="es-filters">
           {/* Status filter */}
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
@@ -641,13 +640,8 @@ export default function EditSheetPage() {
             {brandsInUse.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
 
-          <span className="es-filter-count" style={{ fontSize: 12, color: gray }}>{filtered.length} row{filtered.length !== 1 ? 's' : ''}</span>
-        </div>
-
-        {/* Row 2: search — matches brand table width */}
-        <div className="es-search-row" style={{ maxWidth: 820, margin: '0 auto', width: '100%' }}>
-          {/* Search */}
-          <div style={{ position: 'relative', flex: '1 1 180px', width: '100%' }}>
+          {/* Search input */}
+          <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 300 }}>
             <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 14, pointerEvents: 'none', lineHeight: 1 }}>🔍</span>
             <input ref={brandRef} value={search}
               onChange={e => {
@@ -675,7 +669,8 @@ export default function EditSheetPage() {
             )}
           </div>
 
-        </div>{/* end es-search-row */}
+          <span className="es-filter-count" style={{ fontSize: 12, color: gray }}>{filtered.length} row{filtered.length !== 1 ? 's' : ''}</span>
+        </div>
       </div>
 
       {/* ── Brand cards ───────────────────────────────────────────────────── */}
