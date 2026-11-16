@@ -644,8 +644,8 @@ export default function EditSheetPage() {
           <span className="es-filter-count" style={{ fontSize: 12, color: gray }}>{filtered.length} row{filtered.length !== 1 ? 's' : ''}</span>
         </div>
 
-        {/* Row 2: search — always full width, below dropdowns on mobile */}
-        <div className="es-search-row">
+        {/* Row 2: search — matches brand table width */}
+        <div className="es-search-row" style={{ maxWidth: 820, margin: '0 auto', width: '100%' }}>
           {/* Search */}
           <div style={{ position: 'relative', flex: '1 1 180px', width: '100%' }}>
             <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 14, pointerEvents: 'none', lineHeight: 1 }}>🔍</span>
