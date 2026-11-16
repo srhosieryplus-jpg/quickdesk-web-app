@@ -1651,10 +1651,10 @@ export default function SeasonBookPage() {
       </div>
 
       {/* Combined sub-bar: Drop | search | active filters */}
-      <div className="sb-subbar" style={isMobile ? { padding: '6px 8px 6px 0', justifyContent: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, width: '100%', boxSizing: 'border-box' } : { paddingLeft: 0 }}>
+      <div className="sb-subbar" style={isMobile ? { padding: '6px 8px', justifyContent: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, width: '100%', boxSizing: 'border-box' } : { paddingLeft: 0 }}>
         {/* Drop dropdown — left edge, no sidebar spacer needed here */}
         <div className="sb-subbar-drop" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 0 }}>
-          <span className="sb-drop-label" style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>
+          {!isMobile && <span className="sb-drop-label" style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>}
           <select className="sb-drop-select"
             value={activeDropName ?? ''}
             onChange={e => setActiveDropName(e.target.value === '' ? null : e.target.value)}
@@ -1676,16 +1676,16 @@ export default function SeasonBookPage() {
               <button onClick={() => { setShowDropNameMgr(false); setNewDropNameInput('') }}
                 style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 5, padding: '3px 6px', cursor: 'pointer' }}>✕</button>
             </div>
-          ) : (
+          ) : (!isMobile && (
             <button className="sb-drop-new" onClick={() => setShowDropNameMgr(true)}
               style={{ fontSize: 11, fontWeight: 700, background: 'none', border: `1.5px dashed ${border}`, borderRadius: 7, padding: '3px 8px', cursor: 'pointer', color: gray }}>
               + New
             </button>
-          )}
+          ))}
         </div>
 
         {/* Divider */}
-        <div className="sb-subbar-divider" style={{ width: 1, height: 20, background: border, flexShrink: 0 }} />
+        {!isMobile && <div className="sb-subbar-divider" style={{ width: 1, height: 20, background: border, flexShrink: 0 }} />}
 
         {/* Search — aligns with grand total box */}
         <div className="sb-subbar-search" ref={headerSearchRef} style={{ position: 'relative', flex: 1, minWidth: 0, ...(isMobile ? { maxWidth: 'none' } : {}) }}>
@@ -1747,8 +1747,8 @@ export default function SeasonBookPage() {
           </div>
         )}
 
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
+        {/* Spacer — desktop only */}
+        {!isMobile && <div style={{ flex: 1 }} />}
       </div>
 
       {/* Body */}
