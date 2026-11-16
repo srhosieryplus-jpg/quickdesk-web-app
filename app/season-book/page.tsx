@@ -1390,9 +1390,9 @@ export default function SeasonBookPage() {
           .sb-header-title { position: static !important; transform: none !important; flex: 1; justify-content: flex-end; }
           .sb-header-left { flex: 0 !important; }
           .sb-header-right { display: none !important; }
-          .sb-subbar { gap: 6px; padding: 6px 8px; }
-          .sb-subbar-drop { order: 99; flex-shrink: 0; display: flex; align-items: center; gap: 4px; margin-left: auto; }
-          .sb-subbar-search { order: 1; flex: 1; min-width: 0; max-width: none !important; }
+          .sb-subbar { gap: 6px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
+          .sb-subbar-drop { order: 1; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
+          .sb-subbar-search { order: 2; flex: 1; min-width: 0; max-width: none !important; }
           .sb-drop-label { display: none !important; }
           .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 70px; }
           .sb-subbar-divider { display: none !important; }
@@ -1468,7 +1468,7 @@ export default function SeasonBookPage() {
         {/* Center: title + season badge */}
         <div className="sb-header-title" style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
           <span style={{ fontSize: 19, fontWeight: 900, color: '#fff', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>📒 SEASON BOOK</span>
-          <span style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', fontSize: 12, fontWeight: 800, borderRadius: 12, padding: '3px 10px', border: '1.5px solid rgba(255,255,255,0.4)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          <span style={{ fontSize: 19, fontWeight: 900, opacity: 0.85, letterSpacing: '0.05em', background: 'rgba(233,213,255,0.25)', border: '1.5px solid rgba(233,213,255,0.5)', borderRadius: 7, padding: '0px 10px', cursor: 'pointer', whiteSpace: 'nowrap', color: '#fff' }}
             onClick={() => setShowSeasonPanel(true)}>
             {season}
           </span>
