@@ -609,7 +609,7 @@ export default function SeasonSSPage() {
           .modal-overlay { padding: 0; align-items: flex-end; }
           .modal-box { border-radius: 14px 14px 0 0; min-height: 85vh; max-height: 95vh; }
           /* Header compact */
-          .qs-header { padding: 10px 12px; }
+          .qs-header { padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top)); }
           .modal-tabs { overflow-x: auto; flex-wrap: nowrap; }
           .modal-tab { padding: 6px 12px; white-space: nowrap; font-size: 11px; }
           /* Hide the right-side admin panel in header on mobile */
