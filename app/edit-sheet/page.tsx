@@ -540,7 +540,7 @@ export default function EditSheetPage() {
           .es-filters { flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; padding: 6px 10px 4px !important; gap: 5px !important; overflow-x: auto !important; }
           .es-filters select { font-size: 12px !important; padding: 5px 4px !important; min-width: 0 !important; flex-shrink: 1 !important; }
           .es-filter-count { display: none !important; }
-          .es-search-row { margin-top: 4px !important; padding: 0 10px 6px !important; }
+          .es-search-row { margin-top: 4px !important; padding: 0 10px 6px !important; width: 100% !important; }
           .es-brand-table { display: none !important; }
           .es-brand-rows { display: block !important; padding: 6px 10px 10px; }
         }
@@ -641,7 +641,7 @@ export default function EditSheetPage() {
         {/* Row 2: search — always full width, below dropdowns on mobile */}
         <div className="es-search-row">
           {/* Search */}
-          <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 260 }}>
+          <div style={{ position: 'relative', flex: '1 1 180px', width: '100%' }}>
             <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: gray, fontSize: 13, pointerEvents: 'none' }}>🔍</span>
             <input ref={brandRef} value={search}
               onChange={e => {
@@ -783,15 +783,15 @@ export default function EditSheetPage() {
                       {/* Top row: Store ID · Order # · PO# */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', overflow: 'hidden' }}>
                         {isAdmin && (
-                          <span style={{ fontSize: 12, fontWeight: 800, color: accent, whiteSpace: 'nowrap' }}>{row.store}</span>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: accent, whiteSpace: 'nowrap' }}>{row.store}</span>
                         )}
-                        {isAdmin && <span style={{ color: accentB, fontSize: 11 }}>–</span>}
-                        <span style={{ fontSize: 12, fontWeight: 700, color: accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {isAdmin && <span style={{ color: accentB, fontSize: 12 }}>–</span>}
+                        <span style={{ fontSize: 14, fontWeight: 700, color: accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {row.order_num || '—'}
-                          {row.season_book_id && <span style={{ marginLeft: 4, fontSize: 10 }}>🔗</span>}
+                          {row.season_book_id && <span style={{ marginLeft: 4, fontSize: 11 }}>🔗</span>}
                         </span>
-                        <span style={{ color: accentB, fontSize: 11 }}>–</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: row.po_num ? accent : gray, whiteSpace: 'nowrap' }}>
+                        <span style={{ color: accentB, fontSize: 12 }}>–</span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: row.po_num ? accent : gray, whiteSpace: 'nowrap' }}>
                           {row.po_num || '—'}
                         </span>
                       </div>
