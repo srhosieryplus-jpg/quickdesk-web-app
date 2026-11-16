@@ -1349,7 +1349,7 @@ export default function SeasonBookPage() {
         .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: sticky; top: 0; z-index: 100; }
         .sb-home-btn { background: rgba(255,255,255,0.15) !important; border: none !important; color: #e9d5ff !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; border-radius: 6px !important; padding: 4px 10px !important; font-family: inherit !important; line-height: 1.4 !important; display: inline-block !important; }
         @keyframes cutoff-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(202,138,4,0.5); } 50% { box-shadow: 0 0 0 5px rgba(202,138,4,0); } }
-        .sb-subbar { padding: 6px 0 6px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
+        .sb-subbar { padding: 6px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
         .sb-layout { display: flex; flex: 1; position: relative; }
         .sb-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid ${border}; background: rgba(255,255,255,0.7); overflow-y: auto; position: sticky; top: 97px; height: calc(100vh - 97px); /* subbar ~43px + header 54px */ }
         .sb-main { flex: 1; padding: 16px; }
