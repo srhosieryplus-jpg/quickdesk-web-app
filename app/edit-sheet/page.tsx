@@ -541,6 +541,7 @@ export default function EditSheetPage() {
           .es-filters select { font-size: 12px !important; padding: 5px 4px !important; min-width: 0 !important; flex-shrink: 1 !important; }
           .es-filter-count { display: none !important; }
           .es-search-row { margin-top: 4px !important; padding: 0 10px 6px !important; width: 100% !important; }
+          .es-search-row input { padding-left: 36px !important; }
           .es-brand-table { display: none !important; }
           .es-brand-rows { display: block !important; padding: 6px 10px 10px; }
         }
