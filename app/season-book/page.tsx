@@ -1392,12 +1392,10 @@ export default function SeasonBookPage() {
           .sb-header-left { flex: 0 !important; }
           .sb-header-right { display: none !important; }
           .sb-subbar { gap: 6px !important; padding: 6px 8px 6px 0 !important; width: 100% !important; box-sizing: border-box !important; }
-          .sb-drop-select { height: 34px !important; font-size: 14px !important; padding: 0 8px !important; box-sizing: border-box !important; }
-          .sb-subbar-drop { order: 1; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
+          .sb-subbar-drop { order: 1; flex-shrink: 0; display: flex; align-items: center; gap: 0 !important; padding-right: 0 !important; }
           .sb-subbar-search { order: 2; flex: 1; min-width: 0; max-width: none !important; }
           .sb-drop-label { display: none !important; }
-          .sb-subbar-drop { padding-right: 0 !important; }
-          .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 70px; }
+          .sb-drop-select { height: 34px !important; font-size: 14px !important; padding: 0 8px !important; max-width: none !important; box-sizing: border-box !important; }
           .sb-subbar-divider { display: none !important; }
           .sb-drop-table { display: none !important; }
           .sb-drop-card { display: block !important; }
@@ -1644,7 +1642,7 @@ export default function SeasonBookPage() {
       </div>
 
       {/* Combined sub-bar: Drop | search | active filters */}
-      <div className="sb-subbar">
+      <div className="sb-subbar" style={{ paddingLeft: 0 }}>
         {/* Drop dropdown — left edge, no sidebar spacer needed here */}
         <div className="sb-subbar-drop" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 4 }}>
           <span className="sb-drop-label" style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>
