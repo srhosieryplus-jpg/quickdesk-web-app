@@ -598,7 +598,7 @@ export default function SeasonAWPage() {
         .modal-tab { padding: 7px 18px; border: none; background: none; font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 8px 8px 0 0; color: #64748b; }
         .modal-tab.active { background: ${blue}; color: #fff; }
         .modal-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
-        .qs-header { padding: 14px 20px; padding-top: max(14px, env(safe-area-inset-top)); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid ${blueD}; background: ${blue}; }
+        .qs-header { padding: 14px 20px; padding-top: max(14px, env(safe-area-inset-top)); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid ${blueD}; background: ${blue}; position: sticky; top: 0; z-index: 100; }
         @keyframes cutoff-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(202,138,4,0.5); } 50% { box-shadow: 0 0 0 5px rgba(202,138,4,0); } }
         .qs-logo { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; }
         @media (max-width: 600px) { .qs-logo { order: 3; width: 100%; justify-content: center; } }
