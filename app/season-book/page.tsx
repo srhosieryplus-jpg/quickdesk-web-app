@@ -1390,7 +1390,7 @@ export default function SeasonBookPage() {
           .sb-header-title { position: static !important; transform: none !important; flex: 1; justify-content: flex-end; }
           .sb-header-left { flex: 0 !important; }
           .sb-header-right { display: none !important; }
-          .sb-subbar { gap: 6px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
+          .sb-subbar { gap: 6px; padding: 6px 8px 6px 8px !important; width: 100%; box-sizing: border-box; }
           .sb-subbar-drop { order: 1; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
           .sb-subbar-search { order: 2; flex: 1; min-width: 0; max-width: none !important; }
           .sb-drop-label { display: none !important; }
@@ -1409,6 +1409,12 @@ export default function SeasonBookPage() {
           .sb-edit-grid-3 { grid-template-columns: 1fr 1fr !important; }
           .sb-edit-grid-4 { grid-template-columns: 1fr 1fr !important; }
           .sb-financials-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+        /* Landscape phone */
+        @media (pointer: coarse) and (max-width: 900px) and (orientation: landscape) {
+          .sb-header { padding: 6px 12px !important; min-height: 0 !important; }
+          .sb-header-title span:first-child { font-size: 14px !important; }
+          .sb-subbar { top: 44px !important; }
         }
       `}</style>
 

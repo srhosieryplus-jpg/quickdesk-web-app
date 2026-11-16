@@ -125,11 +125,13 @@ export default function SelectorPage() {
         >Sign Out</button>
       </div>
 
-      {/* Page title */}
-      <div style={{ padding: '20px 20px 12px', maxWidth: 720, margin: '0 auto' }}>
-        <h2 style={{ fontSize: 18, fontWeight: 800, color: '#3b1f8c', marginBottom: 4 }}>Select a Module</h2>
-        <p style={{ fontSize: 12, color: '#9b8ec4' }}>— choose a module to begin</p>
-      </div>
+      {/* Page title — hidden on mobile */}
+      {!mobile && (
+        <div style={{ padding: '20px 20px 12px', maxWidth: 720, margin: '0 auto' }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#3b1f8c', marginBottom: 4 }}>Select a Module</h2>
+          <p style={{ fontSize: 12, color: '#9b8ec4' }}>— choose a module to begin</p>
+        </div>
+      )}
 
       {/* Module grid — honeycomb pointy-top */}
       {(() => {
