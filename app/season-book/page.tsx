@@ -1470,7 +1470,8 @@ export default function SeasonBookPage() {
             <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
             <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
           </button>
-          <button onClick={() => router.push('/selector')} className="sb-home-btn">
+          <button onClick={() => router.push('/selector')}
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '6px', padding: '4px 10px', fontFamily: 'inherit', lineHeight: 1.4 }}>
             ← Home
           </button>
         </div>
@@ -1644,7 +1645,7 @@ export default function SeasonBookPage() {
       {/* Combined sub-bar: Drop | search | active filters */}
       <div className="sb-subbar" style={{ paddingLeft: 0 }}>
         {/* Drop dropdown — left edge, no sidebar spacer needed here */}
-        <div className="sb-subbar-drop" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 4 }}>
+        <div className="sb-subbar-drop" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, paddingRight: 0 }}>
           <span className="sb-drop-label" style={{ fontSize: 11, fontWeight: 800, color: gray }}>Drop:</span>
           <select className="sb-drop-select"
             value={activeDropName ?? ''}
@@ -1679,7 +1680,7 @@ export default function SeasonBookPage() {
         <div className="sb-subbar-divider" style={{ width: 1, height: 20, background: border, flexShrink: 0 }} />
 
         {/* Search — aligns with grand total box */}
-        <div className="sb-subbar-search" ref={headerSearchRef} style={{ position: 'relative', flex: 1, maxWidth: 500 }}>
+        <div className="sb-subbar-search" ref={headerSearchRef} style={{ position: 'relative', flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 7, border: `1.5px solid ${border}`, overflow: 'hidden', height: 34 }}>
             <span style={{ padding: '0 8px', color: gray, fontSize: 14 }}>🔍</span>
             <input
