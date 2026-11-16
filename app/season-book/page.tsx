@@ -1339,6 +1339,7 @@ export default function SeasonBookPage() {
       <style>{`
         * { box-sizing: border-box; }
         .sb-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid ${border}; background: ${purpleD}; position: sticky; top: 0; z-index: 100; }
+        .sb-home-btn { background: rgba(255,255,255,0.15) !important; border: none !important; color: #e9d5ff !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; border-radius: 6px !important; padding: 4px 10px !important; font-family: inherit !important; line-height: 1.4 !important; display: inline-block !important; }
         @keyframes cutoff-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(202,138,4,0.5); } 50% { box-shadow: 0 0 0 5px rgba(202,138,4,0); } }
         .sb-subbar { padding: 6px 0 6px 16px; background: #f5f3ff; border-bottom: 1px solid ${border}; display: flex; align-items: center; gap: 8px; position: sticky; top: 54px; z-index: 99; }
         .sb-layout { display: flex; flex: 1; position: relative; }
@@ -1395,6 +1396,7 @@ export default function SeasonBookPage() {
           .sb-subbar-drop { order: 1; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
           .sb-subbar-search { order: 2; flex: 1; min-width: 0; max-width: none !important; }
           .sb-drop-label { display: none !important; }
+          .sb-subbar-drop { padding-right: 0 !important; }
           .sb-drop-select { font-size: 10px !important; padding: 3px 4px !important; max-width: 70px; }
           .sb-subbar-divider { display: none !important; }
           .sb-drop-table { display: none !important; }
@@ -1470,8 +1472,7 @@ export default function SeasonBookPage() {
             <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
             <span style={{ display: 'block', width: 16, height: 2, background: '#fff', borderRadius: 1 }} />
           </button>
-          <button onClick={() => router.push('/selector')}
-            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#e9d5ff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 6, padding: '4px 10px' }}>
+          <button onClick={() => router.push('/selector')} className="sb-home-btn">
             ← Home
           </button>
         </div>
