@@ -711,10 +711,10 @@ export default function EditSheetPage() {
                   <colgroup>
                     {isAdmin && <col style={{ width: '10%' }} />}{/* Store ID */}
                     <col style={{ width: '12%' }} />{/* Order # */}
-                    <col style={{ width: '9%' }} />{/* PDF */}
-                    <col style={{ width: '12%' }} />{/* Edit */}
-                    <col style={{ width: '12%' }} />{/* PO # */}
-                    <col style={{ width: '12%' }} />{/* Entry */}
+                    <col style={{ width: '8%' }} />{/* PDF */}
+                    <col style={{ width: '15%' }} />{/* Edit */}
+                    <col style={{ width: '10%' }} />{/* PO # */}
+                    <col style={{ width: '15%' }} />{/* Entry */}
                     <col />{/* Notes */}
                   </colgroup>
                   <thead>
@@ -754,13 +754,13 @@ export default function EditSheetPage() {
                               </div>
                             ) : <span style={{ color: accent, fontSize: 12 }}>—</span>}
                           </td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', color: statusTextColor(row.edit_status || 'Pending') }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: statusTextColor(row.edit_status || 'Pending') }}>
                             {row.edit_status || 'Pending'}
                           </td>
-                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' }}>
+                          <td style={{ padding: '8px 12px', color: accent, fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {row.po_num || <span style={{ color: accent, opacity: 0.4 }}>—</span>}
                           </td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', color: statusTextColor(row.entry_status || (row.po_num ? 'Items Created' : 'Pending')) }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: statusTextColor(row.entry_status || (row.po_num ? 'Items Created' : 'Pending')) }}>
                             {row.entry_status || (row.po_num ? 'Items Created' : 'Pending')}
                           </td>
                           <td style={{ padding: '8px 12px', color: accent, fontSize: 12, fontStyle: row.note ? 'normal' : 'italic' }}>
