@@ -162,7 +162,7 @@ export default function LoginPage() {
           {needsPassword ? 'Enter your password' : 'Enter your User ID to continue'}
         </p>
 
-        <form onSubmit={handleLogin} style={{
+        <form onSubmit={handleLogin} autoComplete="off" style={{
           background: 'rgba(255,255,255,0.88)',
           border: '1.5px solid #d4c8f0',
           borderRadius: 14,
@@ -182,6 +182,7 @@ export default function LoginPage() {
             <input
               autoFocus={!needsPassword}
               type="password"
+              autoComplete="off"
               value={userid}
               onChange={e => { setUserid(e.target.value); setNeedsPassword(false); setPassword(''); setErr('') }}
               readOnly={needsPassword}
@@ -211,6 +212,7 @@ export default function LoginPage() {
               <input
                 ref={pwRef}
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={e => { setPassword(e.target.value); setErr('') }}
                 placeholder="Password"
