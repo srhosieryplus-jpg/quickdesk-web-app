@@ -157,6 +157,19 @@ export default function TasksPage() {
       : { done: false, completed_at: null, completed_by: null }
     await supabase.from('tasks').update(patch).eq('id', t.id)
     setTasks(prev => prev.map(x => x.id === t.id ? { ...x, ...patch } : x))
+
+    // Notify the original task creator when marked done (not when unchecking)
+    if (nowDone && t.logged_by && t.logged_by.toUpperCase() !== user.userid?.toUpperCase()) {
+      const completedByName = USER_DISPLAY[user.userid?.toUpperCase()] ?? user.userid
+      const taskPreview = t.task.length > 60 ? t.task.slice(0, 57) + '…' : t.task
+      sendTaskPush({
+        title: `✅ Task completed`,
+        body: `${completedByName} completed: "${taskPreview}"`,
+        assignedTo: t.logged_by,
+        location: user.location,
+        store: user.store,
+      })
+    }
   }
 
   async function deleteTask(id: string) {
