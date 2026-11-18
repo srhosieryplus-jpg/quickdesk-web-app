@@ -1844,6 +1844,8 @@ export default function SeasonBookPage() {
                     init:  r.reduce((s, x) => s + (x.initial_total ?? 0), 0),
                     dep:   r.reduce((s, x) => s + (x.deposit ?? 0), 0),
                     dut:   r.reduce((s, x) => s + (x.duties ?? 0), 0),
+                    shp:   r.reduce((s, x) => s + (x.shipping ?? 0), 0),
+                    ccf:   r.reduce((s, x) => s + (x.cc_fee ?? 0), 0),
                     bal:   r.reduce((s, x) => s + (x.balance_due ?? 0), 0),
                   }
                 }
@@ -1852,6 +1854,8 @@ export default function SeasonBookPage() {
                   { label: 'Initial Total',  key: 'init'  as const, fmt: (v: number) => fmt$(v) },
                   { label: 'Deposits Paid',  key: 'dep'   as const, fmt: (v: number) => fmt$(v) },
                   { label: 'Duties',         key: 'dut'   as const, fmt: (v: number) => fmt$(v) },
+                  { label: 'Shipping',       key: 'shp'   as const, fmt: (v: number) => fmt$(v) },
+                  { label: 'CC Fee',         key: 'ccf'   as const, fmt: (v: number) => fmt$(v) },
                   { label: 'Balance Due',    key: 'bal'   as const, fmt: (v: number) => fmt$(v) },
                 ]
                 const tableLabel = activeVendorId ? `Vendor: ${activeVendorId}` : activeDropName ? activeDropName : season
@@ -1929,7 +1933,7 @@ export default function SeasonBookPage() {
 
                   return (
                     <div key={vid} id={`vendor-${vid}`}
-                      style={{ marginBottom: 16, border: `2px solid ${isHighlighted ? purple : border}`, borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
+                      style={{ marginBottom: 16, border: `2px solid ${isHighlighted ? purple : border}`, borderRadius: 10, background: '#fff', overflow: 'hidden', scrollMarginTop: 110 }}>
 
                       {/* Vendor ID header */}
                       <div
