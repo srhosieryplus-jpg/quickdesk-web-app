@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
+import { sendTaskPush } from '@/lib/push'
 
 const STORES = ['PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
 const DELETE_PASSWORD = 'delete'
@@ -539,6 +540,7 @@ export default function QDPage() {
       saved_at: new Date().toISOString(),
       status: hasRealScan ? 'ready' : 'waiting',
     }
+    const isNew = !session.id
     if (session.id) {
       await supabase.from('upc_sessions').update(payload).eq('id', session.id)
     } else {
@@ -548,6 +550,19 @@ export default function QDPage() {
     await loadSessions()
     setSaving(false)
     showToast('✓ Saved!')
+
+    // On first save, notify STAR that a new session was created
+    if (isNew && currentUser && !ADMINS.includes(currentUser.userid.toUpperCase())) {
+      const storeName = currentUser.store || 'a store'
+      const creatorName = displayUser(currentUser.userid)
+      sendTaskPush({
+        title: `🔍 New UPC session`,
+        body: `${creatorName} (${storeName}): "${session.name}"`,
+        assignedTo: 'STAR',
+        location: currentUser.location || '',
+        store: currentUser.store || '',
+      })
+    }
   }
 
   async function deleteSession(s: UPCSession & { id: string }) {
@@ -559,6 +574,23 @@ export default function QDPage() {
     if (session?.id === s.id) setSession(null)
     loadSessions()
     showToast('🗑 Deleted')
+  }
+
+  async function markDone(s: UPCSession & { id: string }) {
+    await supabase.from('upc_sessions').update({ status: 'complete' }).eq('id', s.id)
+    loadSessions()
+    showToast('✓ Marked as done')
+    // Notify the session creator
+    if (s.userid && s.userid.toUpperCase() !== currentUser?.userid?.toUpperCase()) {
+      const adminName = displayUser(currentUser?.userid)
+      sendTaskPush({
+        title: `✅ Session complete`,
+        body: `${adminName} marked "${s.name}" as done`,
+        assignedTo: s.userid,
+        location: currentUser?.location || '',
+        store: currentUser?.store || '',
+      })
+    }
   }
 
   async function goHome() {
@@ -635,6 +667,9 @@ export default function QDPage() {
         <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
           <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px', flex: 1 }}>Load</button>
           <button onClick={() => exportCSV(s)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 7px', flex: 1 }}>↓ CSV</button>
+          {isAdmin(currentUser) && st !== 'complete' && (
+            <button onClick={() => markDone(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px' }}>✓ Done</button>
+          )}
           <button onClick={() => deleteSession(s)} style={{ ...btnSt('red'), fontSize: 10, padding: '2px 6px' }}>✕</button>
         </div>
       </div>
