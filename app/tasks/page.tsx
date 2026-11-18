@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { Task, User } from '@/lib/types'
+import { registerPush, sendTaskPush } from '@/lib/push'
 
 const teal = '#1e40af'
 const tealD = '#1e3a8a'
@@ -44,6 +45,8 @@ export default function TasksPage() {
     setUser(u)
     fetchTasks(u)
     fetchUsers(u)
+    // Register for push notifications (asks permission once, silently re-registers after)
+    registerPush(u.userid, u.store, u.location)
   }, [router])
 
   async function fetchUsers(u: User) {
@@ -113,6 +116,18 @@ export default function TasksPage() {
       assigned_to: newAssignTo || null,
     })
     if (error) { showToast('❌ Error saving task', 'err'); setSaving(false); return }
+
+    // Send push notification
+    const senderName = USER_DISPLAY[user.userid?.toUpperCase()] ?? user.userid
+    const taskPreview = newTask.trim().length > 60 ? newTask.trim().slice(0, 57) + '…' : newTask.trim()
+    sendTaskPush({
+      title: newAssignTo ? `📋 Task assigned to you` : `📋 New task at ${user.location}`,
+      body: `${senderName}: "${taskPreview}"`,
+      assignedTo: newAssignTo || null,
+      location: user.location,
+      store: user.store,
+    })
+
     setNewTask(''); setNewNote(''); setNewAssignTo('')
     showToast('✅ Task submitted')
     setSaving(false)
