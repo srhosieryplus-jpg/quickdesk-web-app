@@ -36,6 +36,24 @@ export async function registerPush(userid: string, store: string, location: stri
   }
 }
 
+export async function sendOrderPush({
+  orders,
+  pushedBy,
+}: {
+  orders: { store: string; poNums: string[] }[]
+  pushedBy: string
+}) {
+  try {
+    await fetch('/api/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders, pushedBy }),
+    })
+  } catch (err) {
+    console.error('Order push failed:', err)
+  }
+}
+
 export async function sendTaskPush({
   title, body, assignedTo, location, store,
 }: {

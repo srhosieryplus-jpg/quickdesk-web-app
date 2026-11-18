@@ -4,6 +4,9 @@ import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
+import { sendOrderPush } from '@/lib/push'
+
+const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
 
 const purple = '#7c3aed'
 const purpleLight = '#f5f3ff'
@@ -281,6 +284,19 @@ export default function AutoCSVPage() {
     const logged = Object.keys(pendingLog).length - skipped
     showToast(`✅ Logged ${logged} invoice${logged !== 1 ? 's' : ''}${skipped ? ` · ${skipped} skipped (already logged)` : ''}`)
     if (posErrors.length > 0) setShowAddFixed(true)
+
+    // Send push notifications grouped by store
+    const byStore: Record<string, string[]> = {}
+    for (const v of Object.values(pendingLog)) {
+      if (!v.storeID) continue
+      if (!byStore[v.storeID]) byStore[v.storeID] = []
+      if (v.poNum && !byStore[v.storeID].includes(v.poNum)) byStore[v.storeID].push(v.poNum)
+    }
+    const orders = Object.entries(byStore).map(([store, poNums]) => ({ store, poNums }))
+    if (orders.length > 0 && user) {
+      const pushedBy = USER_DISPLAY[user.userid?.toUpperCase()] ?? user.userid
+      sendOrderPush({ orders, pushedBy })
+    }
   }
 
   async function handleAddFixed() {
