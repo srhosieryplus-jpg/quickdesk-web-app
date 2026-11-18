@@ -36,6 +36,7 @@ export default function TasksPage() {
   const [editSaving, setEditSaving] = useState(false)
   const [pullY, setPullY] = useState(0)
   const [pulling, setPulling] = useState(false)
+  const [showPushBanner, setShowPushBanner] = useState(false)
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -45,9 +46,20 @@ export default function TasksPage() {
     setUser(u)
     fetchTasks(u)
     fetchUsers(u)
-    // Register for push notifications (asks permission once, silently re-registers after)
-    registerPush(u.userid, u.store, u.location)
+    // Show push banner if permission not yet granted
+    if ('Notification' in window && Notification.permission === 'default') {
+      setShowPushBanner(true)
+    } else if ('Notification' in window && Notification.permission === 'granted') {
+      // Already granted — silently re-register
+      registerPush(u.userid, u.store, u.location)
+    }
   }, [router])
+
+  async function handleEnableNotifications(u: User) {
+    setShowPushBanner(false)
+    const ok = await registerPush(u.userid, u.store, u.location)
+    if (ok) showToast('🔔 Notifications enabled')
+  }
 
   async function fetchUsers(u: User) {
     const { data } = await supabase.from('users').select('userid, name, store, location').order('userid')
@@ -253,6 +265,23 @@ export default function TasksPage() {
       `}</style>
 
       {/* Header */}
+      {/* Push notification banner */}
+      {showPushBanner && user && (
+        <div style={{ background: '#1e40af', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 13 }}>
+          <span>🔔 Enable notifications to get task alerts</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => handleEnableNotifications(user)}
+              style={{ background: '#fff', color: '#1e40af', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+              Enable
+            </button>
+            <button onClick={() => setShowPushBanner(false)}
+              style={{ background: 'none', border: 'none', color: '#93c5fd', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="tasks-header">
         {/* Left */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
