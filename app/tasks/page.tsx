@@ -98,12 +98,16 @@ export default function TasksPage() {
 
   async function fetchTasks(u: User) {
     setLoading(true)
-    let q = supabase.from('tasks').select('*').order('saved_at', { ascending: false })
-    if (u.store !== 'ALL') {
-      const viewStores = [u.store, ...(u.admin_stores ?? [])].filter(Boolean)
-      q = viewStores.length === 1 ? q.eq('store', viewStores[0]) : q.in('store', viewStores)
+    let data, error
+    if (u.store === 'ALL') {
+      // Admin sees all tasks
+      ;({ data, error } = await supabase.from('tasks').select('*').order('saved_at', { ascending: false }))
+    } else {
+      // Regular user: tasks for their store OR tasks assigned directly to them
+      ;({ data, error } = await supabase.from('tasks').select('*')
+        .or(`store.eq.${u.store},assigned_to.ilike.${u.userid}`)
+        .order('saved_at', { ascending: false }))
     }
-    const { data, error } = await q
     if (error) showToast('❌ Could not load tasks', 'err')
     else setTasks((data as Task[]) || [])
     setLoading(false)
@@ -118,9 +122,15 @@ export default function TasksPage() {
     e.preventDefault()
     if (!newTask.trim() || !user) return
     setSaving(true)
+
+    // If admin assigns to a user from another store, use that user's store/location
+    const assigneeUser = newAssignTo ? allUsers.find(u => u.userid.toUpperCase() === newAssignTo.toUpperCase()) : null
+    const taskStore = (user.store === 'ALL' && assigneeUser) ? assigneeUser.store : user.store
+    const taskLocation = (user.store === 'ALL' && assigneeUser) ? assigneeUser.location : user.location
+
     const { error } = await supabase.from('tasks').insert({
-      store: user.store,
-      location: user.location,
+      store: taskStore,
+      location: taskLocation,
       task: newTask.trim(),
       note: newNote.trim(),
       done: false,
@@ -133,11 +143,11 @@ export default function TasksPage() {
     const senderName = USER_DISPLAY[user.userid?.toUpperCase()] ?? user.userid
     const taskPreview = newTask.trim().length > 60 ? newTask.trim().slice(0, 57) + '…' : newTask.trim()
     sendTaskPush({
-      title: newAssignTo ? `📋 Task assigned to you` : `📋 New task at ${user.location}`,
+      title: newAssignTo ? `📋 Task assigned to you` : `📋 New task at ${taskLocation}`,
       body: `${senderName}: "${taskPreview}"`,
       assignedTo: newAssignTo || null,
-      location: user.location,
-      store: user.store,
+      location: taskLocation,
+      store: taskStore,
     })
 
     setNewTask(''); setNewNote(''); setNewAssignTo('')
