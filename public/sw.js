@@ -1,4 +1,4 @@
-// QuickDesk Service Worker — Web Push
+// QuickDesk Service Worker — Web Push — v2
 self.addEventListener('push', function(event) {
   if (!event.data) return
   const data = event.data.json()

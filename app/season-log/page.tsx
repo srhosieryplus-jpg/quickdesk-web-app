@@ -5,17 +5,19 @@ import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { SeasonLog, User } from '@/lib/types'
 
-// Match edit-sheet pink theme
-const accent  = '#db2777'
-const accentD = '#831843'
-const accentB = '#f9a8d4'
-const accentL = '#fdf2f8'
-const gray    = '#9ca3af'
+const gray = '#9ca3af'
+
+// Per-season themes
+const THEMES = {
+  SS: { accent: '#d97706', accentD: '#78350f', accentB: '#fcd34d', accentL: '#fffbeb', header: '#92400e' },
+  AW: { accent: '#2563eb', accentD: '#1e3a8a', accentB: '#93c5fd', accentL: '#eff6ff', header: '#1e40af' },
+}
 
 function SeasonLogInner() {
   const router = useRouter()
   const params = useSearchParams()
   const seasonType = params.get('type') || 'SS'
+  const { accent, accentD, accentB, accentL, header } = THEMES[seasonType as 'SS' | 'AW'] ?? THEMES.SS
 
   const [user, setUser]       = useState<User | null>(null)
   const [logs, setLogs]       = useState<SeasonLog[]>([])
@@ -91,8 +93,8 @@ function SeasonLogInner() {
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5', fontFamily: 'Inter, sans-serif' }}>
 
-      {/* Header — matches edit-sheet dark pink bar */}
-      <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, background: accentD, color: '#fff' }}>
+      {/* Header */}
+      <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, background: header, color: '#fff' }}>
         <button onClick={() => router.push('/selector')}
           style={{ background: 'none', border: 'none', fontSize: 12, color: accentB, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
           ← Back
@@ -211,7 +213,7 @@ function SeasonLogInner() {
       </div>
 
       {toast && (
-        <div style={{ position: 'fixed', bottom: 24, right: 24, background: accentD, color: '#fff', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: header, color: '#fff', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
           {toast}
         </div>
       )}
