@@ -8,34 +8,29 @@ import { sendTaskPush } from '@/lib/push'
 
 const STORES = ['PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
 const DELETE_PASSWORD = 'delete'
-const ADMINS = ['STEPH', 'STAR']
+const ADMINS = ['STEPH', 'STAR', 'SR']
 
-const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
-function displayUser(id: string | null | undefined) {
-  if (!id) return '—'
-  return USER_DISPLAY[id.toUpperCase()] ?? id
-}
-
-// Each row in a session — identified by a stable row_id (not UPC)
-interface ScanRow {
-  row_id: string        // stable identifier (uuid-ish)
-  upc: string          // empty until scanned
-  qty: number
-  [col: string]: string | number
-}
-
+interface ScanData { qty: number; [col: string]: string | number }
 interface UPCSession {
   id?: string
   name: string
   store: string
   userid?: string
   saved_at?: string
+  order_list: string[]
+  data: Record<string, ScanData>
+  extra_cols: string[]
+  status?: 'waiting' | 'ready' | 'complete'
+  rows?: { upc: string; qty: number }[]
+  admin_note?: string
   created_at?: string
   completed_at?: string
-  status?: 'In Progress' | 'Done'
-  admin_note?: string
-  rows: ScanRow[]       // ordered list of rows
-  extra_cols: string[]  // non-UPC columns (Pcode, Color, Size, etc.)
+}
+
+const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
+function displayUser(id: string | null | undefined) {
+  if (!id) return '—'
+  return USER_DISPLAY[id.toUpperCase()] ?? id
 }
 
 const purple = '#7c3aed'
@@ -45,27 +40,19 @@ const border = '#c4b5fd'
 
 type Tab = 'scanner' | 'history'
 
-let rowIdCounter = 0
-function newRowId() { return `r${Date.now()}_${++rowIdCounter}` }
-
-function emptyRow(extra_cols: string[]): ScanRow {
-  const r: ScanRow = { row_id: newRowId(), upc: '', qty: 0 }
-  extra_cols.forEach(c => { r[c] = '' })
-  return r
-}
-
 export default function QDPage() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [scanVal, setScanVal] = useState('')
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const isAdmin = (u: User | null) => u && ADMINS.includes(u.userid.toUpperCase())
 
   const [tab, setTab] = useState<Tab>('scanner')
   const [session, setSession] = useState<UPCSession | null>(null)
-  const [activeRowId, setActiveRowId] = useState<string | null>(null)
   const [recentSessions, setRecentSessions] = useState<(UPCSession & { id: string })[]>([])
   const [allSessions, setAllSessions] = useState<(UPCSession & { id: string })[]>([])
   const [historySearch, setHistorySearch] = useState('')
+  const [sortAsc, setSortAsc] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
 
@@ -75,23 +62,42 @@ export default function QDPage() {
 
   const [colPrompt, setColPrompt] = useState(false)
   const [colName, setColName] = useState('')
+  const pendingScanRef = useRef<string>('')
+  const [targetedPlaceholder, setTargetedPlaceholder] = useState<string>('')
+  const [ctxMenu, setCtxMenu] = useState<{ upc: string; x: number; y: number } | null>(null)
+  const [editingUpc, setEditingUpc] = useState<{ key: string; val: string } | null>(null)
 
   const [showSmartPaste, setShowSmartPaste] = useState(false)
-  const [pasteText, setPasteText] = useState('')
-  const [pastePreview, setPastePreview] = useState<{ headers: string[]; rows: string[][] } | null>(null)
-
-  // Done modal
   const [doneSession, setDoneSession] = useState<(UPCSession & { id: string }) | null>(null)
   const [doneNote, setDoneNote] = useState('')
   const [doneSaving, setDoneSaving] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [pastePreview, setPastePreview] = useState<{ headers: string[]; rows: string[][] } | null>(null)
+
+  // Camera scanning
+  const [showCamera, setShowCamera] = useState(false)
+  const [cameraError, setCameraError] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [camMode, setCamMode] = useState<'once' | 'continuous'>('once')
+  const [lastScanned, setLastScanned] = useState('')
+  const [scanFlash, setScanFlash] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const rafRef = useRef<number>(0)
+  const camModeRef = useRef<'once' | 'continuous'>('once')
+  const lastScannedRef = useRef('')
+  const cooldownRef = useRef(false)
+  const [pullY, setPullY] = useState(0)
+  const [pulling, setPulling] = useState(false)
+  const touchStartY = useRef(0)
+  const historyScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const u = getSession()
     if (!u) { router.push('/'); return }
     setCurrentUser(u)
-    // For admin (store=ALL), default to first real store; otherwise use their store
     const userStore = u.store?.toUpperCase() || ''
-    setNewStore(userStore === 'ALL' ? (STORES[0] || 'PO') : userStore)
+    setNewStore(userStore === 'ALL' ? 'PO' : userStore)
     loadSessions(u)
   }, [router])
 
@@ -104,7 +110,9 @@ export default function QDPage() {
     const user = u || currentUser
     if (!user) return
     let query = supabase.from('upc_sessions').select('*').order('saved_at', { ascending: false })
-    if (!isAdmin(user)) query = query.eq('store', user.store)
+    if (!isAdmin(user)) {
+      query = query.eq('store', user.store)
+    }
     const { data } = await query
     const all = (data || []) as (UPCSession & { id: string })[]
     setAllSessions(all)
@@ -117,11 +125,17 @@ export default function QDPage() {
       name: newName.trim(),
       store: newStore,
       userid: currentUser?.userid,
-      rows: [emptyRow([])],
+      order_list: [],
+      data: {},
       extra_cols: [],
     }
+    const pending = pendingScanRef.current
+    if (pending) {
+      newSess.order_list = [pending]
+      newSess.data[pending] = { qty: 1 }
+      pendingScanRef.current = ''
+    }
     setSession(newSess)
-    setActiveRowId(newSess.rows[0].row_id)
     setShowModal(false)
     setNewName('')
     setTimeout(() => inputRef.current?.focus(), 100)
@@ -129,134 +143,123 @@ export default function QDPage() {
   }
 
   function loadSessionData(s: UPCSession & { id: string }) {
-    // Support old sessions that used order_list/data format
-    const loaded = migrateSession(s)
-    setSession(loaded)
-    // Set active to first row with no UPC, or last row
-    const firstEmpty = loaded.rows.find(r => !r.upc)
-    setActiveRowId(firstEmpty?.row_id ?? loaded.rows[loaded.rows.length - 1]?.row_id ?? null)
+    // Migrate new-schema sessions (rows[]) back to old-schema (order_list/data)
+    const raw = s as UPCSession & { id: string; rows?: { upc: string; qty: number; [k: string]: string | number }[]; extra_cols?: string[] }
+    if (raw.rows && raw.rows.length > 0) {
+      const extra_cols = raw.extra_cols || []
+      const order_list: string[] = []
+      const data: Record<string, ScanData> = {}
+      for (const r of raw.rows) {
+        // Use upc if scanned, otherwise use row_id as placeholder key
+        const key = (r.upc as string) || (r.row_id as string) || String(Math.random())
+        if (!order_list.includes(key)) order_list.push(key)
+        const entry: ScanData = { qty: r.qty || 0 }
+        // Mark unscanned rows so UPC column shows blank
+        entry['_isPlaceholder'] = r.upc ? 0 : 1
+        extra_cols.forEach(c => { entry[c] = r[c] ?? '' })
+        data[key] = entry
+      }
+      setSession({ ...s, order_list, data, extra_cols })
+    } else {
+      setSession({ ...s })
+    }
     setTab('scanner')
     setTimeout(() => inputRef.current?.focus(), 100)
   }
 
-  // Migrate old sessions (order_list/data) to new rows format
-  function migrateSession(s: UPCSession & { id: string }): UPCSession & { id: string } {
-    if (s.rows) return s
-    // Old format: order_list + data
-    const old = s as unknown as { order_list?: string[]; data?: Record<string, {qty:number;[k:string]:string|number}>; extra_cols?: string[] }
-    if (old.order_list && old.data) {
-      const extra = old.extra_cols || []
-      const rows: ScanRow[] = old.order_list.map(upc => {
-        const d = old.data![upc]
-        const r: ScanRow = { row_id: newRowId(), upc, qty: d.qty as number }
-        extra.forEach(c => { r[c] = d[c] || '' })
-        return r
-      })
-      return { ...s, rows, extra_cols: extra }
-    }
-    return { ...s, rows: [emptyRow(s.extra_cols || [])], extra_cols: s.extra_cols || [] }
-  }
-
-  // Find the active row index; fall back to first empty row or last row
-  function getActiveIdx(rows: ScanRow[], activeId: string | null): number {
-    if (activeId) {
-      const i = rows.findIndex(r => r.row_id === activeId)
-      if (i >= 0) return i
-    }
-    const emptyIdx = rows.findIndex(r => !r.upc)
-    return emptyIdx >= 0 ? emptyIdx : rows.length - 1
+  function resetZoom() {
+    const vp = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null
+    if (!vp) return
+    const orig = vp.content
+    vp.content = 'width=device-width, initial-scale=1, maximum-scale=1'
+    setTimeout(() => { vp.content = orig }, 50)
   }
 
   function handleScan(upc: string) {
     upc = upc.trim()
+    if (!session) { pendingScanRef.current = upc; setShowModal(true); return }
     if (!upc) return
-    if (!session) { setShowModal(true); return }
+
+    // Grab and clear targeted row
+    const targetedKey = targetedPlaceholder || ''
+    if (targetedKey) setTargetedPlaceholder('')
 
     setSession(prev => {
       if (!prev) return prev
-      const rows = [...prev.rows]
+      const d = { ...prev.data }
+      const order = [...prev.order_list]
 
-      // Check if this UPC already exists in another row — increment qty there
-      const existingIdx = rows.findIndex(r => r.upc === upc)
-      if (existingIdx >= 0) {
-        rows[existingIdx] = { ...rows[existingIdx], qty: rows[existingIdx].qty + 1 }
-        setActiveRowId(rows[existingIdx].row_id)
-        return { ...prev, rows }
-      }
+      // 1. Check for a placeholder to fill (targeted or next in order)
+      const placeholderKey = (targetedKey && d[targetedKey]?.['_isPlaceholder'] === 1)
+        ? targetedKey
+        : order.find(k => d[k]?.['_isPlaceholder'] === 1)
 
-      // Fill active row with this UPC
-      const activeIdx = getActiveIdx(rows, activeRowId)
-      rows[activeIdx] = { ...rows[activeIdx], upc, qty: 1 }
+      // Determine which placeholder to fill (targeted click takes priority, else next in order)
+      const fillKey = (targetedKey && d[targetedKey]?.['_isPlaceholder'] === 1)
+        ? targetedKey
+        : order.find(k => d[k]?.['_isPlaceholder'] === 1)
 
-      // Auto-advance: find next empty row after this one, or append a new one
-      const nextEmptyIdx = rows.findIndex((r, i) => i > activeIdx && !r.upc)
-      if (nextEmptyIdx >= 0) {
-        setActiveRowId(rows[nextEmptyIdx].row_id)
-      } else {
-        // Append a new empty row if there are no more empty rows after active
-        const hasMoreEmpty = rows.some((r, i) => i !== activeIdx && !r.upc)
-        if (!hasMoreEmpty) {
-          const newRow = emptyRow(prev.extra_cols)
-          rows.push(newRow)
-          setActiveRowId(newRow.row_id)
+      if (fillKey) {
+        const placeholderData = { ...d[fillKey] }
+        const idx = order.indexOf(fillKey)
+        // Remove placeholder slot
+        delete d[fillKey]
+        order.splice(idx, 1)
+        if (d[upc] && d[upc]['_isPlaceholder'] !== 1) {
+          // UPC already exists — remove it from its current position and place it at the placeholder slot
+          const oldIdx = order.indexOf(upc)
+          if (oldIdx !== -1) order.splice(oldIdx, 1)
+          delete d[upc]
+          // Insert at placeholder's position (adjusted if old row was before it)
+          const insertAt = (oldIdx !== -1 && oldIdx < idx) ? idx - 1 : idx
+          d[upc] = { ...placeholderData, _isPlaceholder: 0, qty: 1 }
+          order.splice(insertAt, 0, upc)
         } else {
-          // Wrap to first empty before active
-          const firstEmpty = rows.find(r => !r.upc)
-          setActiveRowId(firstEmpty?.row_id ?? null)
+          // Fresh UPC — insert at placeholder position
+          d[upc] = { ...placeholderData, _isPlaceholder: 0, qty: 1 }
+          order.splice(idx, 0, upc)
         }
+        return { ...prev, order_list: order, data: d }
       }
 
-      return { ...prev, rows }
+      // No placeholders — if UPC already exists increment qty
+      if (d[upc] && d[upc]['_isPlaceholder'] !== 1) {
+        d[upc] = { ...d[upc], qty: (d[upc].qty as number) + 1 }
+        return { ...prev, order_list: order, data: d }
+      }
+
+      // 3. Brand new UPC with no placeholder — add new row at bottom
+      const empty: ScanData = { qty: 1 }
+      prev.extra_cols.forEach(c => { empty[c] = '' })
+      d[upc] = empty
+      order.push(upc)
+      return { ...prev, order_list: order, data: d }
     })
   }
 
-  function setActiveRow(row_id: string) {
-    setActiveRowId(row_id)
-    setTimeout(() => inputRef.current?.focus(), 50)
-  }
-
-  function updateRowUpc(row_id: string, upc: string) {
-    setSession(prev => {
-      if (!prev) return prev
-      return { ...prev, rows: prev.rows.map(r => r.row_id === row_id ? { ...r, upc } : r) }
-    })
-  }
-
-  function updateRowQty(row_id: string, val: string) {
+  function updateQty(upc: string, val: string) {
     const q = parseInt(val, 10)
+    if (isNaN(q)) return // don't delete while typing
     setSession(prev => {
-      if (!prev) return prev
-      if (isNaN(q) || q < 0) return prev
-      return { ...prev, rows: prev.rows.map(r => r.row_id === row_id ? { ...r, qty: q } : r) }
+      if (!prev || !prev.data[upc]) return prev // key already gone, ignore
+      if (q <= 0) {
+        const d = { ...prev.data }; delete d[upc]
+        return { ...prev, order_list: prev.order_list.filter(u => u !== upc), data: d }
+      }
+      return { ...prev, data: { ...prev.data, [upc]: { ...prev.data[upc], qty: q } } }
     })
   }
 
-  function updateRowExtra(row_id: string, col: string, val: string) {
-    setSession(prev => {
-      if (!prev) return prev
-      return { ...prev, rows: prev.rows.map(r => r.row_id === row_id ? { ...r, [col]: val } : r) }
-    })
+  function updateExtra(upc: string, col: string, val: string) {
+    setSession(prev => prev ? { ...prev, data: { ...prev.data, [upc]: { ...prev.data[upc], [col]: val } } } : prev)
   }
 
-  function removeRow(row_id: string) {
+  function removeUpc(upc: string) {
     setSession(prev => {
-      if (!prev) return prev
-      const rows = prev.rows.filter(r => r.row_id !== row_id)
-      // Keep at least one row
-      if (rows.length === 0) rows.push(emptyRow(prev.extra_cols))
-      if (activeRowId === row_id) setActiveRowId(rows[0].row_id)
-      return { ...prev, rows }
+      if (!prev || !prev.data[upc]) return prev // already gone, no-op
+      const d = { ...prev.data }; delete d[upc]
+      return { ...prev, order_list: prev.order_list.filter(u => u !== upc), data: d }
     })
-  }
-
-  function addEmptyRow() {
-    setSession(prev => {
-      if (!prev) return prev
-      const r = emptyRow(prev.extra_cols)
-      setActiveRowId(r.row_id)
-      return { ...prev, rows: [...prev.rows, r] }
-    })
-    setTimeout(() => inputRef.current?.focus(), 50)
   }
 
   function addExtraCol() {
@@ -265,11 +268,9 @@ export default function QDPage() {
     if (session?.extra_cols.includes(n)) { showToast('Column already exists'); return }
     setSession(prev => {
       if (!prev) return prev
-      return {
-        ...prev,
-        extra_cols: [...prev.extra_cols, n],
-        rows: prev.rows.map(r => ({ ...r, [n]: r[n] ?? '' })),
-      }
+      const d = { ...prev.data }
+      prev.order_list.forEach(upc => { d[upc] = { ...d[upc], [n]: '' } })
+      return { ...prev, extra_cols: [...prev.extra_cols, n], data: d }
     })
     setColName('')
     setColPrompt(false)
@@ -279,12 +280,180 @@ export default function QDPage() {
     if (!confirm(`Remove column "${col}"?`)) return
     setSession(prev => {
       if (!prev) return prev
-      const rows = prev.rows.map(r => { const nr = { ...r }; delete nr[col]; return nr })
-      return { ...prev, extra_cols: prev.extra_cols.filter(c => c !== col), rows }
+      const d = { ...prev.data }
+      prev.order_list.forEach(upc => { const r = { ...d[upc] }; delete r[col]; d[upc] = r })
+      return { ...prev, extra_cols: prev.extra_cols.filter(c => c !== col), data: d }
     })
   }
 
-  // ── Smart Paste ──────────────────────────────────────────────────────────────
+  // ── Camera scanning ────────────────────────────────────────────────────────
+
+  // Normalize barcode — preserve leading zeros, pad EAN/UPC only when format is known
+  function normalizeBarcode(raw: string, format?: string): string {
+    const code = raw.trim()
+    // Only pad when the scanner explicitly tells us the format
+    if (format === 'ean_13' && code.match(/^\d+$/) && code.length < 13) return code.padStart(13, '0')
+    if (format === 'upc_a' && code.match(/^\d+$/) && code.length < 12) return code.padStart(12, '0')
+    if (format === 'ean_8' && code.match(/^\d+$/) && code.length < 8) return code.padStart(8, '0')
+    // All other formats (Code 128, Code 39, ITF, alphanumeric, etc.) pass through unchanged
+    return code
+  }
+
+  async function openCamera() {
+    if (!session) { setShowModal(true); return }
+    setCameraError('')
+    setLastScanned('')
+    lastScannedRef.current = ''
+    cooldownRef.current = false
+    camModeRef.current = camMode
+    setShowCamera(true)
+    setScanning(false)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      })
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
+        startBarcodeLoop()
+      }
+    } catch {
+      setCameraError('Camera access denied. Please allow camera permission and try again.')
+    }
+  }
+
+  function onScanned(code: string) {
+    // Debounce: ignore same code within 1.5s in continuous mode
+    if (cooldownRef.current) return
+    if (camModeRef.current === 'continuous' && code === lastScannedRef.current) return
+
+    cooldownRef.current = true
+    lastScannedRef.current = code
+    setLastScanned(code)
+    setScanFlash(true)
+    setTimeout(() => setScanFlash(false), 300)
+    handleScan(code)
+
+    if (camModeRef.current === 'once') {
+      closeCamera()
+      showToast(`📷 Scanned: ${code}`)
+    } else {
+      // In continuous mode, allow next scan after cooldown
+      setTimeout(() => { cooldownRef.current = false }, 1500)
+    }
+  }
+
+  function startBarcodeLoop() {
+    setScanning(true)
+
+    // Try BarcodeDetector first (Chrome Android), fall back to ZXing (iOS Safari)
+    if ('BarcodeDetector' in window) {
+      // @ts-expect-error
+      const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] })
+      const tick = async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) {
+          rafRef.current = requestAnimationFrame(tick)
+          return
+        }
+        try {
+          const barcodes = await detector.detect(videoRef.current)
+          if (barcodes.length > 0) {
+            const b = barcodes[0]
+            const code = normalizeBarcode(b.rawValue as string, b.format as string)
+            onScanned(code)
+          }
+        } catch { /* ignore frame errors */ }
+        rafRef.current = requestAnimationFrame(tick)
+      }
+      rafRef.current = requestAnimationFrame(tick)
+    } else {
+      // ZXing fallback — works on iOS Safari
+      import('@zxing/library').then(({ BrowserMultiFormatReader, BarcodeFormat }) => {
+        const hints = new Map()
+        hints.set(2, [
+          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+          BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+          BarcodeFormat.ITF, BarcodeFormat.QR_CODE,
+        ])
+        const reader = new BrowserMultiFormatReader(hints)
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+
+        const tick = async () => {
+          const video = videoRef.current
+          if (!video || video.readyState < 2 || !ctx) {
+            rafRef.current = requestAnimationFrame(tick)
+            return
+          }
+          canvas.width = video.videoWidth
+          canvas.height = video.videoHeight
+          ctx.drawImage(video, 0, 0)
+          try {
+            const result = await reader.decodeFromImageUrl(canvas.toDataURL())
+            if (result) {
+              const fmt = result.getBarcodeFormat()
+              // ZXing BarcodeFormat: EAN_13=1, UPC_A=14
+              const fmtName = fmt === 1 ? 'ean_13' : fmt === 14 ? 'upc_a' : ''
+              const code = normalizeBarcode(result.getText(), fmtName)
+              onScanned(code)
+            }
+          } catch { /* no barcode in frame */ }
+          rafRef.current = requestAnimationFrame(tick)
+        }
+        rafRef.current = requestAnimationFrame(tick)
+      }).catch(() => {
+        setCameraError('Barcode scanning failed to load. Please try again.')
+      })
+    }
+  }
+
+  function closeCamera() {
+    cancelAnimationFrame(rafRef.current)
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+    setShowCamera(false)
+    setScanning(false)
+    setCameraError('')
+    setLastScanned('')
+    setScanFlash(false)
+    setTimeout(() => inputRef.current?.focus(), 100)
+  }
+
+  async function doManualScan() {
+    if (!videoRef.current || videoRef.current.readyState < 2) return
+    cooldownRef.current = false
+    lastScannedRef.current = ''
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.current.videoWidth
+    canvas.height = videoRef.current.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(videoRef.current, 0, 0)
+    if ('BarcodeDetector' in window) {
+      try {
+        // @ts-expect-error
+        const detector = new window.BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'] })
+        const barcodes = await detector.detect(videoRef.current)
+        if (barcodes.length > 0) {
+          onScanned(normalizeBarcode(barcodes[0].rawValue as string, barcodes[0].format as string))
+        } else { showToast('No barcode found — try again') }
+      } catch { showToast('No barcode found — try again') }
+    } else {
+      import('@zxing/library').then(({ BrowserMultiFormatReader }) => {
+        const reader = new BrowserMultiFormatReader()
+        reader.decodeFromImageUrl(canvas.toDataURL()).then(result => {
+          const fmt = result.getBarcodeFormat()
+          onScanned(normalizeBarcode(result.getText(), fmt === 1 ? 'ean_13' : fmt === 14 ? 'upc_a' : ''))
+        }).catch(() => showToast('No barcode found — try again'))
+      })
+    }
+  }
+
+  // ── Smart Paste ────────────────────────────────────────────────────────────
 
   function parsePasteText(text: string): { headers: string[]; rows: string[][] } | null {
     const lines = text.trim().split(/\r?\n/).filter(l => l.trim())
@@ -315,76 +484,91 @@ export default function QDPage() {
   function applySmartPaste() {
     if (!pastePreview) return
     const { headers, rows: dataRows } = pastePreview
-
     if (!session) {
       showToast('Start a session first, then use Smart Paste')
       setShowSmartPaste(false)
       setShowModal(true)
       return
     }
-
     setSession(prev => {
       if (!prev) return prev
-
-      // All columns from paste become extra_cols
       const newExtra = [...prev.extra_cols]
       headers.forEach(h => { if (!newExtra.includes(h)) newExtra.push(h) })
-
-      // Build new rows from paste data; each row starts with no UPC
-      const pastedRows: ScanRow[] = dataRows
-        .filter(r => r.some(c => c.trim())) // skip blank rows
-        .map(r => {
-          const row: ScanRow = { row_id: newRowId(), upc: '', qty: 0 }
-          headers.forEach((h, i) => { row[h] = r[i] || '' })
-          return row
+      const newOrder = [...prev.order_list]
+      const newData = { ...prev.data }
+      // Keep existing scanned rows, add new placeholder rows for each paste row
+      const pastedKeys: string[] = []
+      dataRows
+        .filter(r => r.some(c => c.trim()))
+        .forEach((r, i) => {
+          const key = '__paste__' + Date.now() + '_' + i
+          const entry: ScanData = { qty: 0, _isPlaceholder: 1 }
+          headers.forEach((h, hi) => { entry[h] = r[hi] || '' })
+          newExtra.forEach(c => { if (!(c in entry)) entry[c] = '' })
+          newData[key] = entry
+          pastedKeys.push(key)
         })
-
-      // Remove existing empty rows, keep any already-scanned rows, append pasted rows
-      const existingScanned = prev.rows.filter(r => r.upc)
-      const merged = [...existingScanned, ...pastedRows]
-
-      // Set active to first row with no upc
-      const firstEmpty = merged.find(r => !r.upc)
-      setActiveRowId(firstEmpty?.row_id ?? merged[merged.length - 1]?.row_id ?? null)
-
-      return { ...prev, extra_cols: newExtra, rows: merged }
+      // Remove existing placeholder rows, keep scanned rows
+      const scannedKeys = newOrder.filter(k => newData[k]?._isPlaceholder !== 1)
+      const mergedOrder = [...scannedKeys, ...pastedKeys]
+      return { ...prev, extra_cols: newExtra, order_list: mergedOrder, data: newData }
     })
-
-    showToast(`✓ ${dataRows.filter(r => r.some(c => c.trim())).length} rows loaded — ready to scan!`)
+    const count = dataRows.filter(r => r.some(c => c.trim())).length
+    showToast(`✓ ${count} rows loaded — ready to scan!`)
     setShowSmartPaste(false)
     setPasteText('')
     setPastePreview(null)
   }
 
-  // ── Save / Delete / Export ───────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────────
 
   async function saveSession() {
-    if (!session) return
-    const hasData = session.rows.some(r => r.upc || r.qty > 0 || session.extra_cols.some(c => r[c]))
-    if (!hasData) { showToast('Nothing to save yet'); return }
+    if (!session || !session.order_list.length) { showToast('Nothing to save yet'); return }
     setSaving(true)
-    const now = new Date().toISOString()
+    // Save as rows[] (new schema) so load migration stays consistent
+    const rows = session.order_list.map(key => {
+      const d = session.data[key]
+      const row: Record<string, string | number> = {
+        row_id: key,
+        upc: d._isPlaceholder === 1 ? '' : key,
+        qty: d.qty as number,
+      }
+      session.extra_cols.forEach(c => { row[c] = d[c] as string || '' })
+      return row
+    })
+    const hasRealScan = rows.some(r => r.upc && r.upc !== '')
     const payload = {
       name: session.name,
       store: session.store,
       userid: currentUser?.userid || '',
-      rows: session.rows,
+      rows,
       extra_cols: session.extra_cols,
-      saved_at: now,
-      status: session.status || 'In Progress',
-      admin_note: session.admin_note || null,
-      created_at: session.created_at || now,
-      completed_at: session.completed_at || null,
+      saved_at: new Date().toISOString(),
+      status: hasRealScan ? 'ready' : 'waiting',
     }
+    const isNew = !session.id
     if (session.id) {
       await supabase.from('upc_sessions').update(payload).eq('id', session.id)
     } else {
       const { data } = await supabase.from('upc_sessions').insert(payload).select().single()
-      if (data) setSession(prev => prev ? { ...prev, id: data.id, created_at: now } : prev)
+      if (data) setSession(prev => prev ? { ...prev, id: data.id } : prev)
     }
     await loadSessions()
     setSaving(false)
     showToast('✓ Saved!')
+
+    // On first save, notify STAR that a new session was created
+    if (isNew && currentUser && !ADMINS.includes(currentUser.userid.toUpperCase())) {
+      const storeName = currentUser.store || 'a store'
+      const creatorName = displayUser(currentUser.userid)
+      sendTaskPush({
+        title: `🔍 New UPC session`,
+        body: `${creatorName} (${storeName}): "${session.name}"`,
+        assignedTo: 'STAR',
+        location: currentUser.location || '',
+        store: currentUser.store || '',
+      })
+    }
   }
 
   async function deleteSession(s: UPCSession & { id: string }) {
@@ -398,36 +582,36 @@ export default function QDPage() {
     showToast('🗑 Deleted')
   }
 
+  function markDone(s: UPCSession & { id: string }) {
+    setDoneSession(s)
+    setDoneNote('')
+  }
+
   async function confirmDone() {
     if (!doneSession) return
     setDoneSaving(true)
     const now = new Date().toISOString()
     await supabase.from('upc_sessions').update({
-      status: 'Done',
+      status: 'complete',
       admin_note: doneNote.trim() || null,
       completed_at: now,
     }).eq('id', doneSession.id)
-
-    // Push notification — send to creator by userid, fallback to their store
-    const creatorId = doneSession.userid
+    // Notify creator
     const noteText = doneNote.trim()
-    const pushBody = noteText
-      ? `Note: ${noteText}`
-      : 'Your scan session has been completed.'
+    const pushBody = noteText ? `Note: ${noteText}` : 'Your scan session has been completed.'
     await fetch('/api/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: `✅ UPC Scanner — ${doneSession.name} Done`,
         body: pushBody,
-        assignedTo: creatorId || undefined,
+        assignedTo: doneSession.userid || undefined,
         location: 'qd',
         store: doneSession.store,
         url: '/quickdesk/qd',
         tag: `upc-done-${doneSession.id}`,
       }),
     })
-
     await loadSessions()
     setDoneSaving(false)
     setDoneSession(null)
@@ -436,34 +620,32 @@ export default function QDPage() {
   }
 
   async function undoDone(s: UPCSession & { id: string }) {
-    await supabase.from('upc_sessions').update({
-      status: 'In Progress',
-      completed_at: null,
-    }).eq('id', s.id)
+    await supabase.from('upc_sessions').update({ status: 'waiting', completed_at: null }).eq('id', s.id)
     await loadSessions()
-    showToast('↩ Set back to In Progress')
+    showToast('↩ Reopened')
   }
 
   async function goHome() {
-    if (session && session.rows.length > 0) await saveSession()
+    if (session && session.order_list.length) {
+      await saveSession()
+    }
     router.push('/selector')
   }
 
   function clearSession() {
     if (!session || !confirm('Clear all scans?')) return
-    const fresh = [emptyRow(session.extra_cols)]
-    setSession(prev => prev ? { ...prev, rows: fresh } : prev)
-    setActiveRowId(fresh[0].row_id)
+    setSession(prev => prev ? { ...prev, order_list: [], data: {} } : prev)
   }
 
   function exportCSV(s?: UPCSession) {
     const src = s || session
-    if (!src) { showToast('Nothing to export'); return }
-    const scanned = src.rows.filter(r => r.upc)
-    if (!scanned.length) { showToast('No scanned UPCs yet'); return }
+    if (!src || !src.order_list.length) { showToast('Nothing to export'); return }
     const extra = src.extra_cols
     const headers = ['UPC', 'Qty', ...extra, 'Store ID', 'Session', 'User']
-    const rows = scanned.map(r => [r.upc, r.qty, ...extra.map(n => r[n] || ''), src.store, src.name, src.userid || ''])
+    const rows = src.order_list.map(upc => {
+      const d = src.data[upc]
+      return [upc, d.qty, ...extra.map(n => d[n] || ''), src.store, src.name, src.userid || '']
+    })
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
@@ -472,10 +654,12 @@ export default function QDPage() {
     showToast('✓ CSV downloaded!')
   }
 
-  const scannedRows = session?.rows.filter(r => r.upc) ?? []
-  const totalQty = scannedRows.reduce((s, r) => s + r.qty, 0)
-  const totalRows = session?.rows.length ?? 0
-  const scannedCount = scannedRows.length
+  const totalQty = session ? Object.values(session.data).reduce((s, r) => s + (r.qty as number), 0) : 0
+  const uniqueCount = session?.order_list.length ?? 0
+  const rows = session ? (sortAsc ? session.order_list : [...session.order_list].reverse()) : []
+  const nextPlaceholderKey = (targetedPlaceholder && session?.data[targetedPlaceholder]?._isPlaceholder === 1)
+    ? targetedPlaceholder
+    : session?.order_list.find(k => session.data[k]?._isPlaceholder === 1) ?? ''
 
   const filteredHistory = allSessions.filter(s => {
     const q = historySearch.toLowerCase()
@@ -483,86 +667,166 @@ export default function QDPage() {
   })
 
   function SessionCard({ s, showUser }: { s: UPCSession & { id: string }; showUser?: boolean }) {
-    const loaded = s.rows ? s : migrateSession(s)
-    const scanned = loaded.rows.filter(r => r.upc)
-    const total = scanned.reduce((a, r) => a + r.qty, 0)
-    const isDone = s.status === 'Done'
+    const raw = s as UPCSession & { id: string; rows?: { upc: string; qty: number }[] }
+    // Support both old schema (order_list/data) and new schema (rows)
+    let total = 0, upcCount = 0
+    if (raw.rows) {
+      const scanned = raw.rows.filter(r => r.upc)
+      total = scanned.reduce((a, r) => a + (r.qty || 0), 0)
+      upcCount = scanned.length
+    } else {
+      total = Object.values(s.data || {}).reduce((a, r) => a + (r.qty as number), 0)
+      upcCount = (s.order_list || []).length
+    }
+    const date = s.saved_at ? new Date(s.saved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+    const st = s.status === 'complete' ? 'complete' : s.status === 'ready' ? 'ready' : total > 0 ? 'ready' : 'waiting'
+    const stLabel = st === 'complete' ? '✓ Done' : st === 'ready' ? '👀 Ready' : '⏳ Waiting'
+    const stBg    = st === 'complete' ? '#bbf7d0' : st === 'ready' ? '#fef3c7' : '#dbeafe'
+    const stColor = st === 'complete' ? '#166534' : st === 'ready' ? '#92400e' : '#1e40af'
+    const cardBg  = st === 'complete' ? '#dcfce7' : st === 'ready' ? '#fffbeb' : '#eff6ff'
+    const cardBorder = st === 'complete' ? '#86efac' : st === 'ready' ? '#fcd34d' : '#93c5fd'
     const fmtDt = (iso?: string) => iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
-    const createdStr = fmtDt(s.created_at || s.saved_at)
-    const completedStr = fmtDt(s.completed_at)
-    const admin = isAdmin(currentUser)
+    const createdStr = fmtDt((s as UPCSession & {created_at?:string}).created_at || s.saved_at)
+    const completedStr = fmtDt((s as UPCSession & {completed_at?:string}).completed_at)
     return (
-      <div style={{
-        background: isDone ? '#f0fdf4' : purpleLight,
-        border: `1px solid ${isDone ? '#86efac' : border}`,
-        borderRadius: 7, padding: '8px 10px',
-      }}>
-        {/* Title row */}
+      <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 7, padding: '8px 10px' }}>
+        {/* Title + status */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 800, flex: 1, color: isDone ? '#14532d' : purpleD }}>{s.name}</span>
-          <span style={{
-            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-            background: isDone ? '#bbf7d0' : '#e9e3fd',
-            color: isDone ? '#14532d' : '#5b21b6',
-            border: `1px solid ${isDone ? '#86efac' : '#c4b5fd'}`,
-          }}>
-            {isDone ? '✅ Done' : '🔄 In Progress'}
+          <span style={{ fontSize: 13, fontWeight: 800, flex: 1, color: st === 'complete' ? '#14532d' : '#1e293b' }}>{s.name}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: stBg, color: stColor, border: `1px solid ${cardBorder}` }}>
+            {stLabel}
           </span>
         </div>
-
         {/* Info row */}
         <div style={{ fontSize: 10, color: '#6b7280', display: 'flex', flexWrap: 'wrap', gap: '2px 10px', marginBottom: 4 }}>
           <span><strong style={{ color: '#374151' }}>Store:</strong> {s.store || '—'}</span>
           {showUser && s.userid && <span><strong style={{ color: '#374151' }}>By:</strong> {displayUser(s.userid)}</span>}
-          <span><strong style={{ color: '#374151' }}>Scanned:</strong> {scanned.length}/{loaded.rows.length} · {total} qty</span>
+          <span><strong style={{ color: '#374151' }}>UPCs:</strong> {upcCount} · {total} qty</span>
           {createdStr && <span><strong style={{ color: '#374151' }}>Created:</strong> {createdStr}</span>}
-          {isDone && completedStr && <span><strong style={{ color: '#14532d' }}>Completed:</strong> {completedStr}</span>}
+          {st === 'complete' && completedStr && <span><strong style={{ color: '#14532d' }}>Completed:</strong> {completedStr}</span>}
         </div>
-
         {/* Admin note */}
-        {s.admin_note && (
-          <div style={{ fontSize: 11, background: isDone ? '#dcfce7' : '#fef3c7', border: `1px solid ${isDone ? '#86efac' : '#fcd34d'}`, borderRadius: 5, padding: '4px 8px', color: isDone ? '#166534' : '#92400e', marginBottom: 6 }}>
-            📝 {s.admin_note}
+        {(s as UPCSession & {admin_note?:string}).admin_note && (
+          <div style={{ fontSize: 11, background: st === 'complete' ? '#dcfce7' : '#fef3c7', border: `1px solid ${cardBorder}`, borderRadius: 5, padding: '4px 8px', color: st === 'complete' ? '#166534' : '#92400e', marginBottom: 6 }}>
+            📝 {(s as UPCSession & {admin_note?:string}).admin_note}
           </div>
         )}
-
-        {/* Action buttons */}
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '3px 8px' }}>Load</button>
-          <button onClick={() => exportCSV(loaded)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>↓ CSV</button>
-          {admin && !isDone && (
-            <button onClick={() => { setDoneSession(s); setDoneNote('') }} style={{ ...btnSt('primary'), fontSize: 10, padding: '3px 8px' }}>✅ Mark Done</button>
+        {/* Buttons */}
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+          <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px' }}>Load</button>
+          <button onClick={() => exportCSV(s)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 7px' }}>↓ CSV</button>
+          {isAdmin(currentUser) && st !== 'complete' && (
+            <button onClick={() => markDone(s)} style={{ ...btnSt('primary'), fontSize: 10, padding: '2px 7px' }}>✅ Mark Done</button>
           )}
-          {admin && isDone && (
-            <button onClick={() => undoDone(s)} style={{ ...btnSt('yellow'), fontSize: 10, padding: '3px 8px' }}>↩ Reopen</button>
+          {isAdmin(currentUser) && st === 'complete' && (
+            <button onClick={() => undoDone(s)} style={{ ...btnSt('yellow'), fontSize: 10, padding: '2px 7px' }}>↩ Reopen</button>
           )}
-          <button onClick={() => deleteSession(s)} style={{ ...btnSt('red'), fontSize: 10, padding: '3px 6px' }}>✕</button>
+          <button onClick={() => deleteSession(s)} style={{ ...btnSt('red'), fontSize: 10, padding: '2px 6px' }}>✕</button>
         </div>
       </div>
     )
   }
 
-  const activeIdx = session ? getActiveIdx(session.rows, activeRowId) : -1
-
   return (
     <div style={{ minHeight: '100vh', background: purpleLight, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
+      <style>{`
+        .qd-header {
+          padding: 10px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 6px;
+          border-bottom: 1px solid #d4c8f0;
+          background: rgba(255,255,255,0.6);
+          backdrop-filter: blur(8px);
+        }
+        .qd-center {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex: 1;
+          justify-content: center;
+          pointer-events: none;
+        }
+        .qd-right {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        /* Tab bar action buttons — hidden on desktop, shown on mobile */
+        .qd-tab-actions {
+          display: none;
+          align-items: center;
+          gap: 4px;
+          margin-left: auto;
+          padding-right: 8px;
+        }
+        @media (max-width: 700px) {
+          .qd-center { order: 3; width: 100%; }
+          /* Hide header action buttons on mobile */
+          .qd-header-actions { display: none !important; }
+          /* Show tab bar action buttons on mobile */
+          .qd-tab-actions { display: flex; }
+        }
+        .qd-scanner-layout {
+          display: grid;
+          grid-template-columns: 220px 1fr;
+          flex: 1;
+          min-height: 0;
+          height: calc(100vh - 80px);
+        }
+        @media (max-width: 700px) {
+          .qd-scanner-layout {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+            height: auto;
+            min-height: calc(100vh - 80px);
+          }
+          .qd-left-panel {
+            border-right: none !important;
+            border-bottom: 1px solid #c4b5fd;
+          }
+          /* Hide Recent sessions panel on mobile */
+          .qd-recent-panel { display: none !important; }
+          .qd-recent-hr { display: none !important; }
+          /* Replace full custom columns box with inline chip row */
+          .qd-cols-desktop { display: none !important; }
+          .qd-cols-mobile { display: flex !important; }
+        }
+        .qd-cols-mobile {
+          display: none;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 4px;
+        }
+        /* Smart Paste + Clear side by side — mobile only */
+        .qd-paste-clear { display: none !important; }
+        .qd-clear-desktop { display: flex; }
+        .qd-scan-input { font-size: 12px !important; }
+        .qd-refresh-btn { display: inline-flex; }
+        @media (max-width: 700px) {
+          .qd-paste-clear { display: flex !important; }
+          .qd-clear-desktop { display: none !important; }
+          .qd-scan-input { font-size: 16px !important; }
+          .qd-refresh-btn { display: none !important; }
+        }
+      `}</style>
 
       {/* Header */}
-      <div style={{
-        padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'relative', borderBottom: '1px solid #d4c8f0',
-        background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
-      }}>
+      <div className="qd-header">
+        {/* Left: home + user info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={goHome} style={{ background: 'none', border: 'none', fontSize: 13, color: '#9b8ec4', cursor: 'pointer', fontWeight: 600 }}>← Home</button>
           <div style={{ width: 1, height: 16, background: '#d4c8f0' }} />
           <span style={{ fontSize: 12, color: '#9b8ec4' }}>
-            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{currentUser?.userid}</span>
+            <span style={{ fontWeight: 700, color: '#5b21b6' }}>{displayUser(currentUser?.userid)}</span>
             {currentUser?.store ? <> · {currentUser.store === 'ALL' ? 'All Stores' : currentUser.store}</> : ''}
           </span>
         </div>
 
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
+        {/* Center: logo + title */}
+        <div className="qd-center">
           <span style={{ fontSize: 18, fontWeight: 900, color: '#7c3aed', letterSpacing: '0.05em' }}>▌▌▌</span>
           <span style={{ fontSize: 16, fontWeight: 900, color: '#5b21b6', letterSpacing: '0.08em' }}>UPC SCANNER</span>
           <span style={{
@@ -577,51 +841,73 @@ export default function QDPage() {
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Right: actions — hidden on mobile, shown in tab bar instead */}
+        <div className="qd-right qd-header-actions">
           <Btn color="primary" onClick={() => setShowModal(true)}>+ New Invoice #</Btn>
-          <Btn color="yellow" onClick={saveSession} disabled={saving || !session}>
+          <Btn color="yellow" onClick={saveSession} disabled={saving || !session?.order_list.length}>
             {saving ? '…' : '💾 Save'}
           </Btn>
         </div>
       </div>
 
       {/* Tab bar */}
-      <div style={{ background: '#e8e4f8', borderBottom: `1px solid ${border}`, display: 'flex', gap: 0 }}>
+      <div style={{ background: '#e8e4f8', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 0 }}>
         {(['scanner', 'history'] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
             style={{ padding: '7px 18px', fontSize: 12, fontWeight: 700, border: 'none', borderBottom: tab === t ? `2px solid ${purple}` : '2px solid transparent', background: 'none', color: tab === t ? purple : '#6b7280', cursor: 'pointer', textTransform: 'capitalize', fontFamily: 'Inter, sans-serif' }}>
             {t === 'scanner' ? '📷 Scanner' : '🗂 History'}
           </button>
         ))}
+        {/* Action buttons in tab bar — only visible on mobile */}
+        <div className="qd-tab-actions">
+          <button onClick={() => setShowModal(true)}
+            style={{ ...btnSt('primary'), fontSize: 11, padding: '4px 10px' }}>+ New</button>
+          <button onClick={saveSession} disabled={saving || !session?.order_list.length}
+            style={{ ...btnSt('yellow'), fontSize: 11, padding: '4px 10px', opacity: (!session?.order_list.length) ? 0.5 : 1 }}>
+            {saving ? '…' : '💾'}
+          </button>
+          <button onClick={openCamera}
+            style={{ ...btnSt('ghost'), fontSize: 11, padding: '4px 10px', background: '#ede9fe', color: '#6d28d9', border: `1px solid ${border}` }}>
+            📷
+          </button>
+        </div>
       </div>
 
       {/* Scanner tab */}
       {tab === 'scanner' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', flex: 1, minHeight: 0, height: 'calc(100vh - 80px)' }}>
+        <div className="qd-scanner-layout">
 
           {/* Left panel */}
-          <div style={{ background: '#fff', borderRight: `1px solid ${border}`, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
+          <div className="qd-left-panel" style={{ background: '#fff', borderRight: `1px solid ${border}`, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <label style={labelSt}>Scan Barcode / UPC</label>
-              <input ref={inputRef} type="text" placeholder="Scan or type UPC…"
-                style={{ ...inputSt, fontSize: 11, fontWeight: 600, letterSpacing: '0.8px' }}
+              <input ref={inputRef} type="text" placeholder="Scan or type code…"
+                value={scanVal}
+                className="qd-scan-input"
+                style={{ ...inputSt, fontWeight: 600, letterSpacing: '0.8px' }}
+                onChange={e => setScanVal(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
-                    const v = (e.target as HTMLInputElement).value.trim()
-                    if (v) { handleScan(v); (e.target as HTMLInputElement).value = '' }
+                    const v = scanVal.trim()
+                    if (v) { handleScan(v); setScanVal(''); resetZoom() }
+                  }
+                }}
+                onPaste={e => {
+                  const pasted = e.clipboardData.getData('text').trim()
+                  if (pasted) {
+                    e.preventDefault()
+                    handleScan(pasted)
+                    setScanVal('')
+                    resetZoom()
                   }
                 }} />
             </div>
 
-            {/* Progress stats */}
-            <div style={{ display: 'flex', gap: 6 }}>
-              {[
-                ['Scanned', `${scannedCount}/${totalRows}`],
-                ['Total Qty', totalQty],
-              ].map(([lbl, num]) => (
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['Total Qty', totalQty], ['Unique', uniqueCount]].map(([lbl, num]) => (
                 <div key={lbl as string} style={{ flex: 1, background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '3px 6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: purple }}>{num}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: purple }}>{num}</div>
                   <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 600 }}>{lbl}</div>
                 </div>
               ))}
@@ -629,8 +915,8 @@ export default function QDPage() {
 
             <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
 
-            {/* Custom columns */}
-            <div style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 8 }}>
+            {/* Custom columns — desktop: full box; mobile: compact chip row */}
+            <div className="qd-cols-desktop" style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 8 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: purpleD, marginBottom: 6 }}>Custom Columns</div>
               {session?.extra_cols.map(col => (
                 <div key={col} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
@@ -656,16 +942,47 @@ export default function QDPage() {
               )}
             </div>
 
-            {/* Smart Paste button */}
-            <button onClick={() => setShowSmartPaste(true)}
-              style={{ width: '100%', ...btnSt('ghost'), justifyContent: 'center', fontSize: 11, padding: '5px 8px', background: '#ede9fe', color: '#6d28d9', border: `1px solid ${border}` }}>
-              📋 Smart Paste
-            </button>
+            {/* Mobile: compact column chips */}
+            <div className="qd-cols-mobile">
+              <span style={{ fontSize: 10, fontWeight: 700, color: purpleD, whiteSpace: 'nowrap' }}>Cols:</span>
+              {session?.extra_cols.map(col => (
+                <span key={col} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: purpleLight, border: `1px solid ${border}`, borderRadius: 10, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: purpleD }}>
+                  {col}
+                  <button onClick={() => removeExtraCol(col)}
+                    style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 10, padding: '0 1px', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                </span>
+              ))}
+              {colPrompt ? (
+                <>
+                  <input value={colName} onChange={e => setColName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addExtraCol()}
+                    autoFocus placeholder="name…"
+                    style={{ ...inputSt, width: 80, fontSize: 11, padding: '2px 6px' }} />
+                  <button onClick={addExtraCol} style={{ ...btnSt('primary'), fontSize: 10, padding: '2px 7px' }}>Add</button>
+                  <button onClick={() => { setColPrompt(false); setColName('') }} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 5px' }}>✕</button>
+                </>
+              ) : (
+                <button onClick={() => setColPrompt(true)}
+                  style={{ ...btnSt('ghost'), fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>+ col</button>
+              )}
+            </div>
 
-            <hr style={{ border: 'none', borderTop: `1px solid ${border}` }} />
+            {/* Smart Paste + Clear Session — side by side on mobile */}
+            <div className="qd-paste-clear" style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setShowSmartPaste(true)}
+                style={{ flex: 1, ...btnSt('ghost'), justifyContent: 'center', fontSize: 11, padding: '5px 6px', background: '#ede9fe', color: '#6d28d9', border: `1px solid ${border}` }}>
+                📋 Smart Paste
+              </button>
+              <button onClick={clearSession}
+                style={{ flex: 1, ...btnSt('red'), justifyContent: 'center', fontSize: 11, padding: '5px 6px' }}>
+                🗑 Clear
+              </button>
+            </div>
 
-            {/* Recent sessions */}
-            <div style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 6, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <hr className="qd-recent-hr" style={{ border: 'none', borderTop: `1px solid ${border}` }} />
+
+            {/* Recent sessions (last 5) — hidden on mobile */}
+            <div className="qd-recent-panel" style={{ border: `1px solid ${border}`, borderRadius: 6, padding: 6, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: purpleD, textTransform: 'uppercase', letterSpacing: '0.4px', flex: 1 }}>Recent (last 5)</span>
                 <button onClick={() => loadSessions()} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 6px' }}>🔄</button>
@@ -686,7 +1003,16 @@ export default function QDPage() {
               </div>
             </div>
 
+            {/* Smart Paste — desktop only (mobile uses the inline pair above) */}
+            <button onClick={() => setShowSmartPaste(true)}
+              className="qd-clear-desktop"
+              style={{ width: '100%', ...btnSt('ghost'), justifyContent: 'center', fontSize: 11, padding: '5px 8px', background: '#ede9fe', color: '#6d28d9', border: `1px solid ${border}` }}>
+              📋 Smart Paste
+            </button>
+
+            {/* Clear Session — desktop only (mobile uses the inline pair above) */}
             <button onClick={clearSession}
+              className="qd-clear-desktop"
               style={{ width: '100%', ...btnSt('red'), justifyContent: 'center', fontSize: 11 }}>
               🗑 Clear Session
             </button>
@@ -695,86 +1021,224 @@ export default function QDPage() {
           {/* Right panel — scan table */}
           <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ background: '#e8e4f8', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: `1px solid ${border}` }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>
-                {session?.name ? `📋 ${session.name}` : 'Session Table'}
-              </span>
-              {session && (
-                <select
-                  value={session.store}
-                  onChange={e => setSession(prev => prev ? { ...prev, store: e.target.value } : prev)}
-                  style={{ fontSize: 11, fontWeight: 700, color: purple, background: '#ede9fe', border: `1px solid ${border}`, borderRadius: 4, padding: '1px 4px', cursor: 'pointer', outline: 'none' }}>
-                  {STORES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              )}
+              <span style={{ fontSize: 11, fontWeight: 700, color: purpleD }}>Session Table</span>
               <div style={{ flex: 1 }} />
-              <button onClick={addEmptyRow} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>+ Row</button>
+              {isAdmin(currentUser) && session && session.order_list.length > 0 && (
+                <button onClick={() => {
+                  const headers = ['UPC', 'Qty', ...session.extra_cols]
+                  const dataRows = session.order_list.map((k) => {
+                    const d = session.data[k]
+                    return [d._isPlaceholder === 1 ? '' : k, d.qty, ...session.extra_cols.map(c => d[c] || '')]
+                  })
+                  const text = [headers, ...dataRows].map(r => r.join('\t')).join('\n')
+                  navigator.clipboard.writeText(text).then(() => showToast('✓ Table copied!'))
+                }} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>⎘ Copy</button>
+              )}
+              <button onClick={() => setSortAsc(a => !a)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>⇅ Sort</button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              {!session ? (
-                <div style={{ textAlign: 'center', color: '#6b7280', padding: '50px 20px', fontSize: 13 }}>
-                  Start a session or load one from the left panel.
+            {/* Split layout: left = #/UPC/Qty, right = extra columns */}
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', alignItems: 'flex-start' }}>
+              {!session || session.order_list.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#6b7280', padding: '50px 20px', fontSize: 13, flex: 1 }}>
+                  {session ? 'Start scanning barcodes.' : 'Start a session and scan barcodes to begin.'}
                 </div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={thSt}>#</th>
-                      <th style={{ ...thSt, minWidth: 80 }}>UPC</th>
-                      <th style={thSt}>Qty</th>
-                      {session.extra_cols.map(c => <th key={c} style={thSt}>{c}</th>)}
-                      <th style={{ ...thSt, width: 32 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {session.rows.map((row, ri) => {
-                      const isActive = row.row_id === activeRowId
-                      const isScanned = !!row.upc
-                      return (
-                        <tr key={row.row_id}
-                          onClick={() => setActiveRow(row.row_id)}
-                          style={{
-                            background: isActive ? '#e0d9fb' : isScanned ? '#f0fdf4' : (ri % 2 === 0 ? purpleLight : '#fafafa'),
-                            borderBottom: `1px solid ${isActive ? '#a78bfa' : '#ede9fe'}`,
-                            cursor: 'pointer',
-                            outline: isActive ? `2px solid #7c3aed` : 'none',
-                            outlineOffset: -1,
-                          }}>
-                          <td style={{ ...tdSt, color: '#6b7280', fontSize: 10, userSelect: 'none' }}>
-                            {isActive ? <span style={{ color: purple, fontWeight: 900 }}>▶</span> : ri + 1}
-                          </td>
-                          <td style={{ ...tdSt, fontFamily: 'Courier New, monospace', fontWeight: 600, letterSpacing: '0.4px' }}>
-                            {isScanned ? (
-                              <span style={{ color: isActive ? purpleD : '#374151' }}>{row.upc}</span>
-                            ) : (
-                              <span style={{ color: '#9ca3af', fontSize: 11 }}>{isActive ? '⬅ scan now' : '—'}</span>
-                            )}
-                          </td>
-                          <td style={tdSt} onClick={e => e.stopPropagation()}>
-                            <input type="number" min="0" value={row.qty}
-                              style={{ width: 52, padding: '2px 6px', border: `1.5px solid ${border}`, borderRadius: 3, fontSize: 12, fontWeight: 700, color: purple, textAlign: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}
-                              onChange={e => updateRowQty(row.row_id, e.target.value)} />
-                          </td>
-                          {session.extra_cols.map(col => (
-                            <td key={col} style={{ ...tdSt, maxWidth: 120 }} onClick={e => e.stopPropagation()}>
-                              {/* Show as bold readable text; click the value to edit inline */}
-                              <EditableCell
-                                value={row[col] as string || ''}
-                                onChange={val => updateRowExtra(row.row_id, col, val)}
-                                isActive={isActive}
-                              />
-                            </td>
-                          ))}
-                          <td style={tdSt} onClick={e => e.stopPropagation()}>
-                            <button onClick={() => removeRow(row.row_id)}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 13, cursor: 'pointer', padding: '1px 5px', borderRadius: 3 }}>✕</button>
-                          </td>
+                <>
+                  {/* Left panel — # / UPC / Qty */}
+                  <div style={{ flexShrink: 0, width: session.extra_cols.length > 0 ? 270 : '100%' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed', width: session.extra_cols.length > 0 ? 270 : undefined }}>
+                      <colgroup>
+                        <col style={{ width: 36 }} />
+                        <col style={{ width: 200 }} />
+                        <col style={{ width: 64 }} />
+                      </colgroup>
+                      <thead>
+                        <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
+                          <th style={{ ...thSt, textAlign: 'center', width: 32 }}>#</th>
+                          <th style={{ ...thSt }}>UPC</th>
+                          <th style={{ ...thSt, textAlign: 'center', width: 58 }}>Qty</th>
                         </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {rows.map((upc, ri) => {
+                          const row = session.data[upc]
+                          if (!row) return null
+                          const isPlaceholder = row._isPlaceholder === 1
+                          const isNextTarget = upc === nextPlaceholderKey
+                          const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
+                          const cellSt: React.CSSProperties = {
+                            display: 'block', width: '100%', padding: '5px 7px',
+                            border: 'none', outline: 'none', fontSize: 12,
+                            background: 'transparent', fontFamily: 'Inter, sans-serif',
+                            boxSizing: 'border-box',
+                          }
+                          return (
+                            <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}
+                              onContextMenu={e => { e.preventDefault(); setCtxMenu({ upc, x: e.clientX, y: e.clientY }) }}>
+                              <td style={{ ...tdSt, textAlign: 'center', color: '#9ca3af', fontSize: 10, padding: '5px 4px', whiteSpace: 'nowrap' }}>{ri + 1}</td>
+                              <td style={{ ...tdSt, background: isNextTarget ? '#dcfce7' : rowBg }}
+                                onClick={isPlaceholder ? () => setTargetedPlaceholder(upc) : undefined}>
+                                {isPlaceholder ? (
+                                  <span style={{ display: 'block', padding: '5px 7px', fontSize: 11, color: isNextTarget ? '#15803d' : '#9ca3af', fontStyle: isNextTarget ? 'italic' : 'normal', cursor: 'pointer', minHeight: 26 }}>
+                                    {isNextTarget ? '← next scan' : ''}
+                                  </span>
+                                ) : (
+                                  <input type="text" defaultValue={upc} key={upc}
+                                    style={{ ...cellSt, fontWeight: 600, fontFamily: 'Courier New, monospace', letterSpacing: '0.4px' }}
+                                    onBlur={e => {
+                                      const newUpc = e.target.value.trim()
+                                      if (!newUpc || newUpc === upc) return
+                                      setSession(prev => {
+                                        if (!prev) return prev
+                                        const d = { ...prev.data }
+                                        const order = [...prev.order_list]
+                                        if (!d[upc]) return prev
+                                        d[newUpc] = { ...d[upc], _isPlaceholder: 0 }
+                                        delete d[upc]
+                                        order[order.indexOf(upc)] = newUpc
+                                        return { ...prev, order_list: order, data: d }
+                                      })
+                                    }}
+                                  />
+                                )}
+                              </td>
+                              <td style={tdSt}>
+                                <input type="number" min="0" value={row.qty}
+                                  style={{ ...cellSt, fontWeight: 700, color: isPlaceholder ? '#d1d5db' : purple, textAlign: 'center' }}
+                                  onChange={e => updateQty(upc, e.target.value)} />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Right panel — extra columns (only shown when columns exist) */}
+                  {session.extra_cols.length > 0 && (
+                    <div style={{ flex: 1, borderLeft: '2px solid #CFC5ED' }}>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                        <thead>
+                          <tr style={{ background: '#CFC5ED', position: 'sticky', top: 0, zIndex: 1 }}>
+                            {session.extra_cols.map(c => <th key={c} style={{ ...thSt, whiteSpace: 'nowrap' }}>{c}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((upc, ri) => {
+                            const row = session.data[upc]
+                            if (!row) return null
+                            const rowBg = ri % 2 === 0 ? '#f5f3ff' : '#ffffff'
+                            const cellSt: React.CSSProperties = {
+                              display: 'block', width: '100%', padding: '5px 7px',
+                              border: 'none', outline: 'none', fontSize: 12,
+                              background: 'transparent', fontFamily: 'Inter, sans-serif',
+                              boxSizing: 'border-box',
+                            }
+                            return (
+                              <tr key={upc} style={{ background: rowBg, borderBottom: '1px solid #ede9fe' }}>
+                                {session.extra_cols.map(col => (
+                                  <td key={col} style={tdSt}>
+                                    <input type="text" value={row[col] as string || ''}
+                                      style={{ ...cellSt }}
+                                      onChange={e => updateExtra(upc, col, e.target.value)} />
+                                  </td>
+                                ))}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Right-click context menu */}
+      {ctxMenu && (
+        <div
+          onClick={() => setCtxMenu(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 999 }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 1000,
+              background: '#fff', border: `1px solid ${border}`, borderRadius: 8,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', minWidth: 160, overflow: 'hidden',
+            }}>
+            <div style={{ padding: '6px 8px', fontSize: 10, color: '#9ca3af', borderBottom: `1px solid ${border}`, fontFamily: 'Courier New, monospace', letterSpacing: '0.4px' }}>
+              {session?.data[ctxMenu.upc]?._isPlaceholder === 1 ? '(placeholder)' : ctxMenu.upc}
+            </div>
+            {session?.data[ctxMenu.upc]?._isPlaceholder !== 1 && (
+              <button
+                onClick={() => {
+                  setEditingUpc({ key: ctxMenu.upc, val: ctxMenu.upc })
+                  setCtxMenu(null)
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: 12, cursor: 'pointer', color: purpleD }}>
+                ✏️ Edit UPC
+              </button>
+            )}
+            <button
+              onClick={() => { removeUpc(ctxMenu.upc); setCtxMenu(null) }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: 12, cursor: 'pointer', color: '#dc2626' }}>
+              🗑 Delete row
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit UPC modal */}
+      {editingUpc && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, minWidth: 300, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: purpleD, marginBottom: 12 }}>Edit UPC</div>
+            <input
+              autoFocus
+              type="text"
+              value={editingUpc.val}
+              onChange={e => setEditingUpc({ ...editingUpc, val: e.target.value })}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const newUpc = editingUpc.val.trim()
+                  if (newUpc && newUpc !== editingUpc.key) {
+                    setSession(prev => {
+                      if (!prev || !prev.data[editingUpc.key]) return prev
+                      const d = { ...prev.data }
+                      const order = [...prev.order_list]
+                      d[newUpc] = { ...d[editingUpc.key], _isPlaceholder: 0 }
+                      delete d[editingUpc.key]
+                      order[order.indexOf(editingUpc.key)] = newUpc
+                      return { ...prev, order_list: order, data: d }
+                    })
+                  }
+                  setEditingUpc(null)
+                }
+                if (e.key === 'Escape') setEditingUpc(null)
+              }}
+              style={{ ...inputSt, width: '100%', fontFamily: 'Courier New, monospace', letterSpacing: '0.6px', fontWeight: 600, marginBottom: 12 }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditingUpc(null)} style={{ ...btnSt('ghost'), fontSize: 12 }}>Cancel</button>
+              <button onClick={() => {
+                const newUpc = editingUpc.val.trim()
+                if (newUpc && newUpc !== editingUpc.key) {
+                  setSession(prev => {
+                    if (!prev || !prev.data[editingUpc.key]) return prev
+                    const d = { ...prev.data }
+                    const order = [...prev.order_list]
+                    d[newUpc] = { ...d[editingUpc.key], _isPlaceholder: 0 }
+                    delete d[editingUpc.key]
+                    order[order.indexOf(editingUpc.key)] = newUpc
+                    return { ...prev, order_list: order, data: d }
+                  })
+                }
+                setEditingUpc(null)
+              }} style={{ ...btnSt('primary'), fontSize: 12 }}>Save</button>
             </div>
           </div>
         </div>
@@ -788,7 +1252,7 @@ export default function QDPage() {
               {isAdmin(currentUser) ? 'All Sessions' : 'My Sessions'} · {allSessions.length}
             </span>
             <div style={{ flex: 1 }} />
-            <button onClick={() => loadSessions()} style={{ ...btnSt('ghost'), fontSize: 11, padding: '3px 10px' }}>🔄 Refresh</button>
+            <button onClick={() => loadSessions()} className="qd-refresh-btn" style={{ ...btnSt('ghost'), fontSize: 11, padding: '3px 10px' }}>🔄 Refresh</button>
           </div>
           <input
             value={historySearch}
@@ -796,7 +1260,24 @@ export default function QDPage() {
             placeholder={isAdmin(currentUser) ? 'Search by invoice, store or user…' : 'Search by invoice or store…'}
             style={{ ...inputSt, fontSize: 12 }}
           />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
+          <div ref={historyScrollRef} style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}
+            onTouchStart={e => { touchStartY.current = e.touches[0].clientY; setPulling(false) }}
+            onTouchMove={e => {
+              const el = historyScrollRef.current; if (!el) return
+              const dy = e.touches[0].clientY - touchStartY.current
+              if (el.scrollTop === 0 && dy > 0) { setPullY(Math.min(dy, 72)); setPulling(true) }
+              else { setPullY(0); setPulling(false) }
+            }}
+            onTouchEnd={() => {
+              if (pullY > 50) { loadSessions(); showToast('🔄 Refreshed') }
+              setPullY(0); setPulling(false)
+            }}
+          >
+            {pulling && pullY > 10 && (
+              <div style={{ textAlign: 'center', padding: '6px 0', fontSize: 12, color: '#7c3aed', opacity: Math.min(pullY / 50, 1) }}>
+                {pullY > 50 ? '↑ Release to refresh' : '↓ Pull to refresh'}
+              </div>
+            )}
             {filteredHistory.length === 0 && (
               <div style={{ color: '#6b7280', fontSize: 13, textAlign: 'center', padding: 32 }}>
                 {historySearch ? 'No results.' : 'No sessions yet.'}
@@ -846,11 +1327,9 @@ export default function QDPage() {
               <button onClick={() => { setShowSmartPaste(false); setPasteText(''); setPastePreview(null) }}
                 style={{ background: 'none', border: 'none', fontSize: 16, color: '#6b7280', cursor: 'pointer' }}>✕</button>
             </div>
-
             <p style={{ fontSize: 11, color: '#6b7280', margin: 0, lineHeight: 1.6 }}>
-              Paste a table from Excel or Sheets (first row = headers like <strong>Pcode, Color, Size</strong>). Each row becomes a slot in the session — staff scans barcodes in order to fill them in. Tap any row to jump to it.
+              Paste a table from Excel or Sheets (first row = headers like <strong>Pcode, Color, Size</strong>). Each row becomes a slot — scan barcodes to fill them in.
             </p>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <label style={labelSt}>Paste data here</label>
               <textarea
@@ -861,7 +1340,6 @@ export default function QDPage() {
                 style={{ width: '100%', padding: '7px 10px', border: `1.5px solid ${border}`, borderRadius: 5, fontFamily: 'Courier New, monospace', fontSize: 11, background: purpleLight, color: '#1f2937', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
-
             {pastePreview && (
               <>
                 <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', maxHeight: 220 }}>
@@ -877,7 +1355,7 @@ export default function QDPage() {
                       {pastePreview.rows.slice(0, 8).map((row, ri) => (
                         <tr key={ri} style={{ background: ri % 2 === 0 ? purpleLight : '#fafafa' }}>
                           {row.map((cell, ci) => (
-                            <td key={ci} style={{ ...tdSt, fontSize: 10 }}>
+                            <td key={ci} style={{ ...tdSt, padding: '3px 8px', fontSize: 10 }}>
                               {cell || <span style={{ color: '#d1d5db' }}>—</span>}
                             </td>
                           ))}
@@ -891,22 +1369,112 @@ export default function QDPage() {
                     </div>
                   )}
                 </div>
-
                 <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#166534' }}>
-                  ✓ <strong>{pastePreview.rows.filter(r => r.some(c => c.trim())).length} rows</strong> ready to load as scan slots
-                  {pastePreview.headers.length > 0 && (
-                    <> · columns: <strong>{pastePreview.headers.join(', ')}</strong></>
-                  )}
+                  ✓ <strong>{pastePreview.rows.filter(r => r.some(c => c.trim())).length} rows</strong> ready to load
+                  {pastePreview.headers.length > 0 && <> · columns: <strong>{pastePreview.headers.join(', ')}</strong></>}
                 </div>
               </>
             )}
-
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => { setShowSmartPaste(false); setPasteText(''); setPastePreview(null) }} style={btnSt('ghost')}>Cancel</button>
               <button onClick={applySmartPaste} disabled={!pastePreview}
                 style={{ ...btnSt('primary'), opacity: pastePreview ? 1 : 0.4 }}>
                 📋 Load Rows
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Camera overlay — mobile only */}
+      {showCamera && (
+        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 2000, display: 'flex', flexDirection: 'column' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: 'rgba(0,0,0,0.8)' }}>
+            <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>📷 Scan Barcode</span>
+            {/* Live stats in continuous mode */}
+            {camMode === 'continuous' && session && (
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: '#a78bfa', lineHeight: 1 }}>{totalQty}</div>
+                  <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>QTY</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: '#a78bfa', lineHeight: 1 }}>{uniqueCount}</div>
+                  <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>UPC</div>
+                </div>
+              </div>
+            )}
+            <button onClick={closeCamera}
+              style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', fontSize: 20, width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              ✕
+            </button>
+          </div>
+
+          {/* Video area */}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {/* Scan flash */}
+            {scanFlash && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(124,58,237,0.35)', pointerEvents: 'none', transition: 'opacity 0.3s' }} />
+            )}
+            {/* Aim reticle */}
+            {scanning && !cameraError && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                <div style={{ width: 240, height: 140, border: `2px solid ${scanFlash ? '#22c55e' : 'rgba(124,58,237,0.8)'}`, borderRadius: 8, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)', position: 'relative', transition: 'border-color 0.2s' }}>
+                  {[['0%','0%','top','left'],['0%','100%','top','right'],['100%','0%','bottom','left'],['100%','100%','bottom','right']].map(([t,l,vp,hp]) => (
+                    <div key={`${vp}${hp}`} style={{
+                      position: 'absolute', top: t, left: l, width: 18, height: 18,
+                      borderTop: vp === 'top' ? `3px solid ${scanFlash ? '#22c55e' : '#7c3aed'}` : 'none',
+                      borderBottom: vp === 'bottom' ? `3px solid ${scanFlash ? '#22c55e' : '#7c3aed'}` : 'none',
+                      borderLeft: hp === 'left' ? `3px solid ${scanFlash ? '#22c55e' : '#7c3aed'}` : 'none',
+                      borderRight: hp === 'right' ? `3px solid ${scanFlash ? '#22c55e' : '#7c3aed'}` : 'none',
+                      transform: `translate(${hp === 'right' ? '50%' : '-50%'}, ${vp === 'bottom' ? '50%' : '-50%'})`,
+                    }} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom controls */}
+          <div style={{ background: 'rgba(0,0,0,0.85)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Mode toggle */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['once', 'continuous'] as const).map(m => (
+                <button key={m} onClick={() => { setCamMode(m); camModeRef.current = m }}
+                  style={{
+                    flex: 1, padding: '8px 0', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    background: camMode === m ? '#7c3aed' : 'rgba(255,255,255,0.1)',
+                    color: camMode === m ? '#fff' : '#9ca3af',
+                  }}>
+                  {m === 'once' ? '1× Scan Once' : '∞ Continuous'}
+                </button>
+              ))}
+            </div>
+
+            {/* Manual scan button */}
+            <button onClick={doManualScan}
+              style={{ width: '100%', padding: '12px 0', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 800, cursor: 'pointer', background: '#7c3aed', color: '#fff', letterSpacing: '0.04em' }}>
+              📷 Scan
+            </button>
+
+            {/* Status / last scanned */}
+            <div style={{ textAlign: 'center', minHeight: 24 }}>
+              {cameraError ? (
+                <span style={{ color: '#fca5a5', fontSize: 12, lineHeight: 1.5 }}>{cameraError}</span>
+              ) : lastScanned ? (
+                <div>
+                  <span style={{ color: '#4ade80', fontSize: 11, fontWeight: 700 }}>✓ </span>
+                  <span style={{ color: '#4ade80', fontSize: 13, fontFamily: 'Courier New, monospace', fontWeight: 700 }}>{lastScanned}</span>
+                  {camMode === 'continuous' && <span style={{ color: '#9ca3af', fontSize: 11 }}> — keep scanning…</span>}
+                </div>
+              ) : scanning ? (
+                <span style={{ color: '#a78bfa', fontSize: 12 }}>Point camera at barcode, then tap Scan</span>
+              ) : (
+                <span style={{ color: '#9ca3af', fontSize: 12 }}>Starting camera…</span>
+              )}
             </div>
           </div>
         </div>
@@ -919,25 +1487,25 @@ export default function QDPage() {
           <div style={{ background: '#fff', borderRadius: 10, padding: 22, width: 'min(380px, 94vw)', boxShadow: '0 16px 50px rgba(0,0,0,0.25)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#14532d', marginBottom: 4 }}>✅ Mark as Done</div>
             <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 14 }}>
-              Session: <strong style={{ color: purpleD }}>{doneSession.name}</strong> · {doneSession.store}<br/>
-              {doneSession.userid && <>Created by: <strong>{displayUser(doneSession.userid)}</strong></>}
+              Session: <strong style={{ color: purpleD }}>{doneSession.name}</strong> · {doneSession.store}
+              {doneSession.userid && <><br/>Created by: <strong>{displayUser(doneSession.userid)}</strong></>}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}>
-              <label style={{ ...labelSt }}>Note / PO# (optional — sent in notification)</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Note / PO# — sent in notification (optional)</label>
               <textarea
                 value={doneNote}
                 onChange={e => setDoneNote(e.target.value)}
                 placeholder="e.g. PO# 7823914 — all items created"
                 rows={3}
                 autoFocus
-                style={{ ...inputSt, resize: 'vertical', fontFamily: 'Inter, sans-serif' }}
+                style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #c4b5fd', borderRadius: 4, fontFamily: 'Inter, sans-serif', fontSize: 12, background: '#f5f3ff', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
             <div style={{ fontSize: 11, color: '#6b7280', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 5, padding: '6px 10px', marginBottom: 14 }}>
-              🔔 A push notification will be sent to {displayUser(doneSession.userid)} saying this session is done{doneNote.trim() ? ' with your note' : ''}.
+              🔔 Push notification will be sent to {displayUser(doneSession.userid)}{doneNote.trim() ? ' with your note' : ''}.
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => setDoneSession(null)} style={btnSt('ghost')}>Cancel</button>
+              <button onClick={() => setDoneSession(null)} style={{ ...btnSt('ghost') }}>Cancel</button>
               <button onClick={confirmDone} disabled={doneSaving}
                 style={{ ...btnSt('primary'), opacity: doneSaving ? 0.6 : 1 }}>
                 {doneSaving ? '…' : '✅ Confirm Done'}
@@ -952,46 +1520,6 @@ export default function QDPage() {
           {toast}
         </div>
       )}
-    </div>
-  )
-}
-
-function EditableCell({ value, onChange, isActive }: { value: string; onChange: (v: string) => void; isActive: boolean }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(value)
-
-  if (editing) {
-    return (
-      <input
-        autoFocus
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => { onChange(draft); setEditing(false) }}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { onChange(draft); setEditing(false) } }}
-        style={{ width: '100%', minWidth: 60, padding: '2px 5px', border: `1.5px solid #7c3aed`, borderRadius: 3, fontSize: 12, background: '#fff', fontFamily: 'Inter, sans-serif', outline: 'none' }}
-      />
-    )
-  }
-
-  return (
-    <div
-      onClick={() => { setDraft(value); setEditing(true) }}
-      title="Click to edit"
-      style={{
-        display: 'inline-block',
-        fontSize: 12,
-        fontWeight: value ? 700 : 400,
-        color: value ? (isActive ? '#4c1d95' : '#1f2937') : '#9ca3af',
-        background: value ? (isActive ? '#ddd6fe' : '#ede9fe') : 'transparent',
-        borderRadius: 4,
-        padding: value ? '2px 7px' : '2px 4px',
-        cursor: 'text',
-        whiteSpace: 'nowrap',
-        userSelect: 'none',
-        minWidth: 24,
-      }}
-    >
-      {value || '—'}
     </div>
   )
 }
@@ -1033,10 +1561,11 @@ const inputSt: React.CSSProperties = {
 }
 
 const thSt: React.CSSProperties = {
-  padding: '4px 10px', textAlign: 'left', fontWeight: 700, fontSize: 10,
-  color: '#1A0A40', borderBottom: '2px solid #c4b5fd',
+  padding: '5px 8px', textAlign: 'left', fontWeight: 700, fontSize: 10,
+  color: '#1A0A40', borderBottom: '2px solid #c4b5fd', borderRight: '1px solid #ddd6fe',
+  whiteSpace: 'nowrap',
 }
 
 const tdSt: React.CSSProperties = {
-  padding: '3px 10px', verticalAlign: 'middle',
+  padding: '0', verticalAlign: 'middle', borderRight: '1px solid #ede9fe',
 }
