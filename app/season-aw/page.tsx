@@ -993,57 +993,72 @@ export default function SeasonAWPage() {
           </div>
           </div>
 
-          {/* ── MOBILE CARDS ── */}
+          {/* ── MOBILE CARDS — grouped by brand, matching edit-sheet style ── */}
           <div className="aw-cards" style={{ paddingBottom: 40 }}>
             {filteredStore.length === 0 ? (
               <p style={{ textAlign: 'center', color: '#9b8ec4', fontSize: 13, padding: 24 }}>
                 {storeRows.length === 0 ? 'No orders in system yet.' : 'No matches.'}
               </p>
-            ) : filteredStore.map((r, ri) => {
-              const logged = r.logged && !r.flagged
-              const statusBg   = r.flagged ? '#fef3c7' : logged ? '#bbf7d0' : '#e0e7ff'
-              const statusClr  = r.flagged ? '#92400e' : logged ? '#14532d' : blueD
-              const statusBdr  = r.flagged ? '#fcd34d' : logged ? '#86efac' : '#a5b4fc'
-              const statusText = r.flagged ? '⚑ Flagged' : logged ? '✓ Logged' : 'Pending'
-              return (
-                <div key={r.id}
-                  style={{ background: ri % 2 === 0 ? '#fff' : '#f5f9ff', border: `1px solid ${border}`, borderRadius: 8, padding: '8px 12px', marginBottom: 6, cursor: 'pointer' }}
-                  onClick={() => { setState({ phase: 'found', row: r }); setInvoiceQ(r.invoice_no); setLoggedRow(r.logged ? r : null) }}>
-
-                  {/* Top row: Store – Brand – Invoice# – PO# */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap', overflow: 'hidden', marginBottom: 5 }}>
-                    {hasMultiStore && (
-                      <>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: blue, whiteSpace: 'nowrap', flexShrink: 0 }}>{r.store}</span>
-                        <span style={{ color: border, fontSize: 12, flexShrink: 0 }}>–</span>
-                      </>
-                    )}
-                    <span style={{ fontSize: 13, fontWeight: 800, color: blueD, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1, minWidth: 0 }}>
-                      {r.brand}
-                    </span>
-                    <span style={{ color: border, fontSize: 12, flexShrink: 0 }}>–</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: blue, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {r.invoice_no}
-                    </span>
-                    <span style={{ color: border, fontSize: 12, flexShrink: 0 }}>–</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: r.po_no ? blue : '#9ca3af', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {r.po_no || '—'}
-                    </span>
+            ) : (() => {
+              const byBrandMap: Record<string, typeof filteredStore> = {}
+              for (const r of filteredStore) {
+                if (!byBrandMap[r.brand]) byBrandMap[r.brand] = []
+                byBrandMap[r.brand].push(r)
+              }
+              return Object.entries(byBrandMap).map(([brandName, rows]) => {
+                const allLogged = rows.every(r => r.logged && !r.flagged)
+                const anyFlagged = rows.some(r => r.flagged)
+                return (
+                  <div key={brandName} style={{ background: '#fff', border: `2px solid ${anyFlagged ? '#fcd34d' : allLogged ? '#86efac' : border}`, borderRadius: 10, marginBottom: 12, overflow: 'hidden' }}>
+                    {/* Brand header */}
+                    <div style={{ padding: '10px 14px', background: blueL, borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 15, fontWeight: 900, color: blueD }}>{brandName}</span>
+                      <span style={{ fontSize: 11, color: blue, fontWeight: 700 }}>{rows.length} order{rows.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    {/* Order rows */}
+                    {rows.map((r, ri) => {
+                      const logged = r.logged && !r.flagged
+                      const statusBg   = r.flagged ? '#fef3c7' : logged ? '#bbf7d0' : '#e0e7ff'
+                      const statusClr  = r.flagged ? '#92400e' : logged ? '#14532d' : blueD
+                      const statusBdr  = r.flagged ? '#fcd34d' : logged ? '#86efac' : '#a5b4fc'
+                      const statusText = r.flagged ? '⚑ Flagged' : logged ? '✓ Logged' : 'Pending'
+                      return (
+                        <div key={r.id}
+                          style={{ background: ri % 2 === 0 ? '#fff' : '#f5f9ff', borderBottom: ri < rows.length - 1 ? `1px solid ${border}` : 'none', padding: '8px 14px', cursor: 'pointer' }}
+                          onClick={() => { setState({ phase: 'found', row: r }); setInvoiceQ(r.invoice_no); setLoggedRow(r.logged ? r : null) }}>
+                          {/* Store – Invoice# – PO# */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', overflow: 'hidden', marginBottom: 5 }}>
+                            {hasMultiStore && (
+                              <>
+                                <span style={{ fontSize: 14, fontWeight: 800, color: blue, whiteSpace: 'nowrap', flexShrink: 0 }}>{r.store}</span>
+                                <span style={{ color: border, fontSize: 12, flexShrink: 0 }}>–</span>
+                              </>
+                            )}
+                            <span style={{ fontSize: 14, fontWeight: 700, color: blue, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {r.invoice_no}
+                            </span>
+                            <span style={{ color: border, fontSize: 12, flexShrink: 0 }}>–</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: r.po_no ? blue : '#9ca3af', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {r.po_no || '—'}
+                            </span>
+                          </div>
+                          {/* Status pill + date */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, background: statusBg, color: statusClr, border: `1px solid ${statusBdr}`, borderRadius: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                              {statusText}
+                            </span>
+                            <span style={{ fontSize: 10, color: '#6b7280', whiteSpace: 'nowrap' }}>
+                              {fmtDate(r.created_at)}{r.logged_by ? ` · ${displayUser(r.logged_by)}` : ''}
+                            </span>
+                          </div>
+                          {r.note && <div style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginTop: 3 }}>{r.note}</div>}
+                        </div>
+                      )
+                    })}
                   </div>
-
-                  {/* Bottom row: status pill left · logged-by+date right */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, background: statusBg, color: statusClr, border: `1px solid ${statusBdr}`, borderRadius: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}>
-                      {statusText}
-                    </span>
-                    <span style={{ fontSize: 10, color: '#6b7280', whiteSpace: 'nowrap' }}>
-                      {fmtDate(r.created_at)}{r.logged_by ? ` · ${displayUser(r.logged_by)}` : ''}
-                    </span>
-                  </div>
-                  {r.note && <div style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginTop: 3 }}>{r.note}</div>}
-                </div>
-              )
-            })}
+                )
+              })
+            })()}
           </div>
           </>
         )}
