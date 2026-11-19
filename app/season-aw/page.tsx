@@ -570,7 +570,7 @@ export default function SeasonAWPage() {
 
   // ── render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: blueL, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100vh', overflow: 'hidden', background: blueL, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         * { box-sizing: border-box; }
         .aw-btn { border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; }
@@ -865,7 +865,7 @@ export default function SeasonAWPage() {
       )}
 
       {/* ── STORE LOG TABLE (IC-log style) ── */}
-      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ width: '100%', maxWidth: 900, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: blueD }}>Filter:</span>
           <input value={tableFilter} onChange={e => setTableFilter(e.target.value)}
@@ -971,7 +971,7 @@ export default function SeasonAWPage() {
                         })()}
                       </td>
                       <td className="aw-col-hide" style={{ fontSize: 10, color: dim, whiteSpace: 'nowrap' }}>
-                        {r.logged_by ? <>{displayUser(r.logged_by)}{r.logged_at ? <span style={{ color: '#9ca3af', marginLeft: 4 }}>{fmtDate(r.logged_at)}</span> : null}</> : '—'}
+                        {r.logged_by ? <>{displayUser(r.logged_by)}{r.logged_at ? <span style={{ color: '#9ca3af', marginLeft: 4 }}>{fmtTs(r.logged_at)}</span> : null}</> : '—'}
                       </td>
                       <td className="aw-col-hide" style={{ fontSize: 10, color: dim, maxWidth: 140 }}>{r.adj_qty != null ? `⚠️ Adj qty: ${r.adj_qty}` : r.note || ''}</td>
                       <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
