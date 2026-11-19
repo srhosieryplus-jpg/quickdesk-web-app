@@ -726,59 +726,70 @@ export default function SeasonAWPage() {
           <div style={{ width: '100%', maxWidth: 900 }}>
 
             {/* FOUND */}
-            {state.phase === 'found' && (
-              <div className="result-card">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: blueD }}>Order Found</span>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {state.row.logged && (
-                      <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>
-                        ✓ Logged by {state.row.logged_by}
+            {state.phase === 'found' && (() => {
+                const noPo = !state.row.po_no && !state.row.logged
+                const justLogged = loggedRow && loggedRow.id === state.row.id
+                return (
+              <div className="result-card" style={noPo ? { borderColor: '#fca5a5', background: '#fef2f2' } : justLogged ? { borderColor: '#86efac', background: '#f0fdf4' } : {}}>
+                {/* Header row */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: noPo ? '#dc2626' : justLogged ? '#14532d' : blueD }}>
+                      {justLogged ? '✅ Logged' : 'Order Found'}
+                    </span>
+                    {noPo && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 20, padding: '1px 8px', whiteSpace: 'nowrap' }}>
+                        ⚠ No PO# — items not created
                       </span>
                     )}
-                    <button onClick={reset} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                    {justLogged && loggedRow.po_no && (
+                      <span style={{ fontSize: 13, fontWeight: 900, color: '#14532d', fontFamily: 'monospace' }}>PO# {loggedRow.po_no}</span>
+                    )}
+                    {state.row.logged && !justLogged && (
+                      <span style={{ background: '#bbf7d0', color: '#14532d', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '1px 8px', border: '1px solid #86efac' }}>
+                        ✓ Logged by {displayUser(state.row.logged_by)}
+                      </span>
+                    )}
                   </div>
+                  <button onClick={reset} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>✕</button>
                 </div>
 
-                {!state.row.po_no && !state.row.logged && (
-                  <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '8px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 16 }}>⚠️</span>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>
-                      Items have not been created yet — no PO # on file.
-                    </div>
-                  </div>
-                )}
-
-                {/* Green PO badge after logging */}
-                {loggedRow && loggedRow.id === state.row.id && (
-                  <div style={{ background: '#dcfce7', border: '1.5px solid #86efac', borderRadius: 8, padding: '8px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>✅</span>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d' }}>Logged successfully</div>
-                      {loggedRow.po_no && (
-                        <div style={{ fontSize: 14, fontWeight: 900, color: '#166534', fontFamily: 'monospace', letterSpacing: '0.04em' }}>
-                          PO# {loggedRow.po_no}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'center', padding: '4px 0' }}>
-                  {[
-                    { label: 'Order #', value: linkedOrderNum ?? state.row.invoice_no },
-                    { label: 'PO #',    value: state.row.po_no },
-                    { label: 'Brand',   value: state.row.brand },
-                    { label: 'Qty',     value: state.row.qty != null ? String(state.row.qty) : null },
-                    state.row.logged_at ? { label: 'Logged', value: `${displayUser(state.row.logged_by)} · ${fmtTs(state.row.logged_at)}` } : null,
-                    state.row.note ? { label: 'Note', value: state.row.note } : null,
-                  ].filter(Boolean).map(item => item && (
-                    <span key={item.label} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, whiteSpace: 'nowrap' }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{item.value ?? '—'}</span>
+                {/* Row 1: Order # · Brand */}
+                <div style={{ display: 'flex', gap: 16, marginBottom: 2, flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Order #</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', fontFamily: 'monospace' }}>{linkedOrderNum ?? state.row.invoice_no}</span>
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Brand</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{state.row.brand}</span>
+                  </span>
+                  {state.row.logged_at && (
+                    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Logged</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280' }}>{displayUser(state.row.logged_by)} · {fmtTs(state.row.logged_at)}</span>
                     </span>
-                  ))}
+                  )}
                 </div>
+                {/* Row 2: PO # · Qty */}
+                <div style={{ display: 'flex', gap: 16, marginBottom: 2, flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PO #</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: state.row.po_no ? '#1e293b' : '#9ca3af' }}>{state.row.po_no || '—'}</span>
+                  </span>
+                  {state.row.qty != null && (
+                    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Qty</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{state.row.qty}</span>
+                    </span>
+                  )}
+                </div>
+                {/* Tiny note */}
+                {state.row.note && (
+                  <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>
+                    {state.row.note}
+                  </div>
+                )}
 
                 {!state.row.logged && (
                   <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -799,7 +810,8 @@ export default function SeasonAWPage() {
                   </div>
                 )}
               </div>
-            )}
+                )
+              })()}
 
             {/* NOT FOUND */}
             {state.phase === 'notfound' && (
