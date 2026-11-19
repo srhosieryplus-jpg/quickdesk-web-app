@@ -999,37 +999,48 @@ export default function SeasonAWPage() {
               <p style={{ textAlign: 'center', color: '#9b8ec4', fontSize: 13, padding: 24 }}>
                 {storeRows.length === 0 ? 'No orders in system yet.' : 'No matches.'}
               </p>
-            ) : filteredStore.map((r) => {
+            ) : filteredStore.map((r, ri) => {
               const logged = r.logged && !r.flagged
-              const cardBg = r.flagged ? '#fffbeb' : logged ? '#dcfce7' : '#fff'
-              const cardBorder = r.flagged ? '#fcd34d' : logged ? '#86efac' : '#93c5fd'
+              const statusBg   = r.flagged ? '#fef3c7' : logged ? '#bbf7d0' : '#e0e7ff'
+              const statusClr  = r.flagged ? '#92400e' : logged ? '#14532d' : blueD
+              const statusBdr  = r.flagged ? '#fcd34d' : logged ? '#86efac' : '#a5b4fc'
+              const statusText = r.flagged ? '⚑ Flagged' : logged ? '✓ Logged' : 'Pending'
               return (
                 <div key={r.id}
-                  style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8, cursor: 'pointer' }}
+                  style={{ background: ri % 2 === 0 ? '#fff' : '#f5f9ff', border: `1px solid ${border}`, borderRadius: 8, padding: '8px 12px', marginBottom: 6, cursor: 'pointer' }}
                   onClick={() => { setState({ phase: 'found', row: r }); setInvoiceQ(r.invoice_no); setLoggedRow(r.logged ? r : null) }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: logged ? '#14532d' : r.flagged ? '#92400e' : '#1f2937' }}>
-                        {r.invoice_no}
-                      </div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: logged ? '#166534' : '#374151', marginTop: 2 }}>{r.brand}</div>
-                      {r.note && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Note: {r.note}</div>}
-                    </div>
-                    <span style={{
-                      background: r.flagged ? '#fef3c7' : logged ? '#bbf7d0' : '#e0e7ff',
-                      color: r.flagged ? '#92400e' : logged ? '#14532d' : blueD,
-                      border: `1px solid ${r.flagged ? '#fcd34d' : logged ? '#86efac' : '#a5b4fc'}`,
-                      fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '2px 8px', whiteSpace: 'nowrap', flexShrink: 0,
-                    }}>
-                      {r.flagged ? '⚑ Flagged' : logged ? '✓ Logged' : 'Pending'}
+
+                  {/* Top row: Store – Brand – Invoice# – PO# */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap', overflow: 'hidden', marginBottom: 5 }}>
+                    {hasMultiStore && (
+                      <>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: blue, whiteSpace: 'nowrap', flexShrink: 0 }}>{r.store}</span>
+                        <span style={{ color: border, fontSize: 12, flexShrink: 0 }}>–</span>
+                      </>
+                    )}
+                    <span style={{ fontSize: 13, fontWeight: 800, color: blueD, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1, minWidth: 0 }}>
+                      {r.brand}
+                    </span>
+                    <span style={{ color: border, fontSize: 12, flexShrink: 0 }}>–</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: blue, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {r.invoice_no}
+                    </span>
+                    <span style={{ color: border, fontSize: 12, flexShrink: 0 }}>–</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: r.po_no ? blue : '#9ca3af', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {r.po_no || '—'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 6, fontSize: 11, color: logged ? '#16a34a' : '#6b7280', flexWrap: 'wrap' }}>
-                    {hasMultiStore && <><span style={{ fontWeight: 700 }}>{r.store}</span><span>·</span></>}
-                    <span>{fmtDate(r.created_at)}</span>
-                    {r.logged_by && <><span>·</span><span>{displayUser(r.logged_by)}</span></>}
-                    {r.po_no && <><span>·</span><span>PO: {r.po_no}</span></>}
+
+                  {/* Bottom row: status pill left · logged-by+date right */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, background: statusBg, color: statusClr, border: `1px solid ${statusBdr}`, borderRadius: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                      {statusText}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#6b7280', whiteSpace: 'nowrap' }}>
+                      {fmtDate(r.created_at)}{r.logged_by ? ` · ${displayUser(r.logged_by)}` : ''}
+                    </span>
                   </div>
+                  {r.note && <div style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginTop: 3 }}>{r.note}</div>}
                 </div>
               )
             })}
