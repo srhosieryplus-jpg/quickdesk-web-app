@@ -408,12 +408,12 @@ export default function QDPage() {
       completed_at: now,
     }).eq('id', doneSession.id)
 
-    // Push notification to whoever created this session
+    // Push notification — send to creator by userid, fallback to their store
     const creatorId = doneSession.userid
     const noteText = doneNote.trim()
     const pushBody = noteText
-      ? `Session complete. Note: ${noteText}`
-      : 'Your UPC scan session has been completed.'
+      ? `Note: ${noteText}`
+      : 'Your scan session has been completed.'
     await sendTaskPush({
       title: `✅ UPC Scanner — ${doneSession.name} Done`,
       body: pushBody,

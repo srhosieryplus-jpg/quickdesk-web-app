@@ -83,17 +83,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ sent: totalSent, failed: totalFailed })
     }
 
-    // ── Mode 2: task notification (original logic) ────────────────────────────
-    let query = supabase.from('push_subscriptions').select('subscription')
+    // ── Mode 2: task / UPC notification ──────────────────────────────────────
+    let subs: { subscription: webpush.PushSubscription }[] | null = null
 
     if (assignedTo) {
-      query = query.ilike('userid', assignedTo)
+      // Try to find the specific user's subscription first
+      const { data } = await supabase
+        .from('push_subscriptions')
+        .select('subscription')
+        .ilike('userid', assignedTo)
+      subs = data && data.length > 0 ? data : null
+
+      // Fallback: send to all subscriptions for that store if user not found
+      if (!subs && store) {
+        const { data: storeSubs } = await supabase
+          .from('push_subscriptions')
+          .select('subscription')
+          .eq('store', store)
+        subs = storeSubs && storeSubs.length > 0 ? storeSubs : null
+      }
     } else {
-      query = query.eq('location', location).neq('store', 'ALL')
+      const { data, error } = await supabase
+        .from('push_subscriptions')
+        .select('subscription')
+        .eq('location', location)
+        .neq('store', 'ALL')
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      subs = data
     }
 
-    const { data: subs, error } = await query
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!subs || subs.length === 0) return NextResponse.json({ sent: 0 })
 
     const payload = JSON.stringify({ title, body: msgBody, url: url || '/tasks', tag: 'quickdesk-task' })
