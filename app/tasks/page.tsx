@@ -50,7 +50,7 @@ export default function TasksPage() {
     if ('Notification' in window && Notification.permission === 'default') {
       setShowPushBanner(true)
     } else if ('Notification' in window && Notification.permission === 'granted') {
-      // Already granted — silently re-register
+      // Already granted — silently re-register to refresh stale subscriptions
       registerPush(u.userid, u.store, u.location)
     }
   }, [router])

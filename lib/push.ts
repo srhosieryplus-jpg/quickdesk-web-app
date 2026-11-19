@@ -17,8 +17,10 @@ export async function registerPush(userid: string, store: string, location: stri
     const reg = await navigator.serviceWorker.register('/sw.js')
     await navigator.serviceWorker.ready
 
+    // Always unsubscribe and re-subscribe to ensure the endpoint is fresh
     const existing = await reg.pushManager.getSubscription()
-    const sub = existing ?? await reg.pushManager.subscribe({
+    if (existing) await existing.unsubscribe()
+    const sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     })
