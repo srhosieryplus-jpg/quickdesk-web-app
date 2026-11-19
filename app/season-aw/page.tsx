@@ -580,7 +580,7 @@ export default function SeasonAWPage() {
         .aw-btn-amber   { background: ${amber}; color: #fff; }
         .aw-btn-gray    { background: #f3f4f6; color: #374151; }
         .aw-btn-red     { background: #dc2626; color: #fff; }
-        .result-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; padding: 16px; margin: 0; box-shadow: 0 2px 12px rgba(30,64,175,0.07); }
+        .result-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; padding: 10px 14px; margin: 0; box-shadow: 0 2px 12px rgba(30,64,175,0.07); }
         .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
         .brand-row:hover { background: ${blueL}; border-color: ${border}; }
         .aw-table { border-collapse: collapse; width: 100%; font-size: 12px; }
@@ -722,8 +722,8 @@ export default function SeasonAWPage() {
 
       {/* ── RESULT PANEL (above the table) ── */}
       {state.phase !== 'idle' && (
-        <div style={{ background: blueL, borderBottom: `1px solid ${border}`, padding: '12px 16px', display: 'flex', justifyContent: 'center' }}>
-          <div style={{ width: '100%', maxWidth: 560 }}>
+        <div style={{ background: blueL, borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ width: '100%', maxWidth: 900 }}>
 
             {/* FOUND */}
             {state.phase === 'found' && (
@@ -764,17 +764,24 @@ export default function SeasonAWPage() {
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-                  <InfoRow label="Order #" value={linkedOrderNum ?? state.row.invoice_no} />
-                  <InfoRow label="PO #"      value={state.row.po_no} />
-                  <InfoRow label="Brand"     value={state.row.brand} />
-                  <InfoRow label="Qty"       value={state.row.qty} />
-                  {state.row.logged_at && <InfoRow label="Logged at" value={fmtTs(state.row.logged_at)} />}
-                  {state.row.note && <InfoRow label="Note" value={state.row.note} />}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'center', padding: '4px 0' }}>
+                  {[
+                    { label: 'Order #', value: linkedOrderNum ?? state.row.invoice_no },
+                    { label: 'PO #',    value: state.row.po_no },
+                    { label: 'Brand',   value: state.row.brand },
+                    { label: 'Qty',     value: state.row.qty != null ? String(state.row.qty) : null },
+                    state.row.logged_at ? { label: 'Logged', value: `${displayUser(state.row.logged_by)} · ${fmtTs(state.row.logged_at)}` } : null,
+                    state.row.note ? { label: 'Note', value: state.row.note } : null,
+                  ].filter(Boolean).map(item => item && (
+                    <span key={item.label} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{item.value ?? '—'}</span>
+                    </span>
+                  ))}
                 </div>
 
                 {!state.row.logged && (
-                  <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <input value={logNote} onChange={e => setLogNote(e.target.value)}
                       placeholder="Note (optional)…" style={{ ...inputSt, flex: 1, minWidth: 140 }} />
                     <button onClick={() => logRow(state.row)} disabled={logging} className="aw-btn aw-btn-primary">

@@ -593,7 +593,7 @@ export default function SeasonSSPage() {
         .ss-search-brand { display: flex; align-items: center; gap: 6px; padding: 0 10px; flex: 1.4; border-left: 1px solid #fef3c7; position: relative; }
         .ss-search-btn { background: ${green}; color: #fff; border: none; border-radius: 0 6px 6px 0; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
         .ss-search-input { border: none; outline: none; font-size: 13px; color: #111; background: transparent; flex: 1; padding: 8px 0; font-family: Inter, sans-serif; width: 0; min-width: 0; }
-        .result-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; padding: 16px; margin: 0; box-shadow: 0 2px 12px rgba(5,150,105,0.07); }
+        .result-card { background: #fff; border: 1.5px solid ${border}; border-radius: 10px; padding: 10px 14px; margin: 0; box-shadow: 0 2px 12px rgba(5,150,105,0.07); }
         .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
         @media (max-width: 600px) {
           .ss-col-hide { display: none; }
@@ -729,8 +729,8 @@ export default function SeasonSSPage() {
 
       {/* ── RESULT PANEL ── */}
       {state.phase !== 'idle' && (
-        <div style={{ background: greenL, borderBottom: `1px solid ${border}`, padding: '12px 16px', display: 'flex', justifyContent: 'center' }}>
-          <div style={{ width: '100%', maxWidth: 560 }}>
+        <div style={{ background: greenL, borderBottom: `1px solid ${border}`, padding: '6px 16px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ width: '100%', maxWidth: 900 }}>
 
             {state.phase === 'found' && (
               <div className="result-card">
@@ -769,20 +769,27 @@ export default function SeasonSSPage() {
                   </div>
                 )}
 
-                <div className="result-grid">
-                  <InfoRow label="Order #" value={linkedOrderNum ?? state.row.invoice_no} />
-                  <InfoRow label="PO #"      value={state.row.po_no} />
-                  <InfoRow label="Brand"     value={state.row.brand} />
-                  <InfoRow label="Qty"       value={state.row.qty} />
-                  {state.row.logged_at && <InfoRow label="Logged" value={`${displayUser(state.row.logged_by)} · ${fmtTs(state.row.logged_at)}`} />}
-                  {state.row.adj_qty != null && <InfoRow label="Adj Qty" value={String(state.row.adj_qty)} />}
-                  {state.row.adj_amount != null && <InfoRow label="Adj Amt" value={String(state.row.adj_amount)} />}
-                  {state.row.adj_note && <InfoRow label="Adj Note" value={state.row.adj_note} />}
-                  {state.row.note && <InfoRow label="Note" value={state.row.note} />}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'center', padding: '4px 0' }}>
+                  {[
+                    { label: 'Order #', value: linkedOrderNum ?? state.row.invoice_no },
+                    { label: 'PO #',    value: state.row.po_no },
+                    { label: 'Brand',   value: state.row.brand },
+                    { label: 'Qty',     value: state.row.qty != null ? String(state.row.qty) : null },
+                    state.row.logged_at ? { label: 'Logged', value: `${displayUser(state.row.logged_by)} · ${fmtTs(state.row.logged_at)}` } : null,
+                    state.row.adj_qty != null ? { label: 'Adj Qty', value: String(state.row.adj_qty) } : null,
+                    state.row.adj_amount != null ? { label: 'Adj Amt', value: String(state.row.adj_amount) } : null,
+                    state.row.adj_note ? { label: 'Adj Note', value: state.row.adj_note } : null,
+                    state.row.note ? { label: 'Note', value: state.row.note } : null,
+                  ].filter(Boolean).map(item => item && (
+                    <span key={item.label} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{item.value ?? '—'}</span>
+                    </span>
+                  ))}
                 </div>
 
                 {!state.row.logged && (
-                  <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <input value={logNote} onChange={e => setLogNote(e.target.value)}
                       placeholder="Note (optional)…" style={{ ...inputSt, flex: 1, minWidth: 140 }} />
                     <button onClick={() => logRow(state.row)} disabled={logging} className="ss-btn ss-btn-primary">
