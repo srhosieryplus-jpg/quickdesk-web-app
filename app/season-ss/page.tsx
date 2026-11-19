@@ -760,51 +760,44 @@ export default function SeasonSSPage() {
                   <button onClick={reset} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>✕</button>
                 </div>
 
-                {/* Row 1: Order # · Brand */}
-                <div style={{ display: 'flex', gap: 16, marginBottom: 2, flexWrap: 'wrap' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Order #</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', fontFamily: 'monospace' }}>{linkedOrderNum ?? state.row.invoice_no}</span>
-                  </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Brand</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{state.row.brand}</span>
-                  </span>
-                  {state.row.logged_at && (
-                    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Logged</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280' }}>{displayUser(state.row.logged_by)} · {fmtTs(state.row.logged_at)}</span>
-                    </span>
-                  )}
+                {/* Info: all on one compact line, two rows */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto auto auto auto', gap: '3px 18px', alignItems: 'baseline', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Order #</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#1e293b', fontFamily: 'monospace' }}>{linkedOrderNum ?? state.row.invoice_no}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Brand</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{state.row.brand}</span>
+
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PO #</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: state.row.po_no ? '#1e293b' : '#9ca3af' }}>{state.row.po_no || '—'}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Qty</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{state.row.qty ?? '—'}</span>
                 </div>
-                {/* Row 2: PO # · Qty */}
-                <div style={{ display: 'flex', gap: 16, marginBottom: 2, flexWrap: 'wrap' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PO #</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: state.row.po_no ? '#1e293b' : '#9ca3af' }}>{state.row.po_no || '—'}</span>
-                  </span>
-                  {state.row.qty != null && (
-                    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Qty</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{state.row.qty}</span>
-                    </span>
-                  )}
-                  {state.row.adj_qty != null && (
-                    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Adj Qty</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>{state.row.adj_qty}</span>
-                    </span>
-                  )}
-                  {state.row.adj_amount != null && (
-                    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Adj Amt</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>{state.row.adj_amount}</span>
-                    </span>
-                  )}
-                </div>
+                {/* Adj fields (only when present) */}
+                {(state.row.adj_qty != null || state.row.adj_amount != null) && (
+                  <div style={{ display: 'flex', gap: 14, marginBottom: 2 }}>
+                    {state.row.adj_qty != null && (
+                      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Adj Qty</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#92400e' }}>{state.row.adj_qty}</span>
+                      </span>
+                    )}
+                    {state.row.adj_amount != null && (
+                      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Adj Amt</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#92400e' }}>{state.row.adj_amount}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+                {/* Logged by (only when already logged) */}
+                {state.row.logged_at && (
+                  <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 1 }}>
+                    Logged by {displayUser(state.row.logged_by)} · {fmtTs(state.row.logged_at)}
+                  </div>
+                )}
                 {/* Tiny note */}
                 {(state.row.note || state.row.adj_note) && (
-                  <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>
+                  <div style={{ fontSize: 10, color: '#9ca3af' }}>
                     {state.row.note}{state.row.adj_note ? (state.row.note ? ' · ' : '') + state.row.adj_note : ''}
                   </div>
                 )}
