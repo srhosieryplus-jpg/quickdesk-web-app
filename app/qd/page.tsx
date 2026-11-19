@@ -4,10 +4,17 @@ import { useRouter } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
+import { sendTaskPush } from '@/lib/push'
 
 const STORES = ['PO','HP1','HP2','HP3','COX','JCKSN','HB','KINGS','CONEY','SE13','TTC','TTP']
 const DELETE_PASSWORD = 'delete'
-const ADMINS = ['STEPH']
+const ADMINS = ['STEPH', 'STAR']
+
+const USER_DISPLAY: Record<string, string> = { 'STAR': 'Steph' }
+function displayUser(id: string | null | undefined) {
+  if (!id) return '—'
+  return USER_DISPLAY[id.toUpperCase()] ?? id
+}
 
 // Each row in a session — identified by a stable row_id (not UPC)
 interface ScanRow {
@@ -23,6 +30,10 @@ interface UPCSession {
   store: string
   userid?: string
   saved_at?: string
+  created_at?: string
+  completed_at?: string
+  status?: 'In Progress' | 'Done'
+  admin_note?: string
   rows: ScanRow[]       // ordered list of rows
   extra_cols: string[]  // non-UPC columns (Pcode, Color, Size, etc.)
 }
@@ -68,6 +79,11 @@ export default function QDPage() {
   const [showSmartPaste, setShowSmartPaste] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pastePreview, setPastePreview] = useState<{ headers: string[]; rows: string[][] } | null>(null)
+
+  // Done modal
+  const [doneSession, setDoneSession] = useState<(UPCSession & { id: string }) | null>(null)
+  const [doneNote, setDoneNote] = useState('')
+  const [doneSaving, setDoneSaving] = useState(false)
 
   useEffect(() => {
     const u = getSession()
@@ -347,19 +363,24 @@ export default function QDPage() {
     const hasData = session.rows.some(r => r.upc || r.qty > 0 || session.extra_cols.some(c => r[c]))
     if (!hasData) { showToast('Nothing to save yet'); return }
     setSaving(true)
+    const now = new Date().toISOString()
     const payload = {
       name: session.name,
       store: session.store,
       userid: currentUser?.userid || '',
       rows: session.rows,
       extra_cols: session.extra_cols,
-      saved_at: new Date().toISOString(),
+      saved_at: now,
+      status: session.status || 'In Progress',
+      admin_note: session.admin_note || null,
+      created_at: session.created_at || now,
+      completed_at: session.completed_at || null,
     }
     if (session.id) {
       await supabase.from('upc_sessions').update(payload).eq('id', session.id)
     } else {
       const { data } = await supabase.from('upc_sessions').insert(payload).select().single()
-      if (data) setSession(prev => prev ? { ...prev, id: data.id } : prev)
+      if (data) setSession(prev => prev ? { ...prev, id: data.id, created_at: now } : prev)
     }
     await loadSessions()
     setSaving(false)
@@ -375,6 +396,46 @@ export default function QDPage() {
     if (session?.id === s.id) setSession(null)
     loadSessions()
     showToast('🗑 Deleted')
+  }
+
+  async function confirmDone() {
+    if (!doneSession) return
+    setDoneSaving(true)
+    const now = new Date().toISOString()
+    await supabase.from('upc_sessions').update({
+      status: 'Done',
+      admin_note: doneNote.trim() || null,
+      completed_at: now,
+    }).eq('id', doneSession.id)
+
+    // Push notification to whoever created this session
+    const creatorId = doneSession.userid
+    const noteText = doneNote.trim()
+    const pushBody = noteText
+      ? `Session complete. Note: ${noteText}`
+      : 'Your UPC scan session has been completed.'
+    await sendTaskPush({
+      title: `✅ UPC Scanner — ${doneSession.name} Done`,
+      body: pushBody,
+      assignedTo: creatorId || undefined,
+      location: 'qd',
+      store: doneSession.store,
+    })
+
+    await loadSessions()
+    setDoneSaving(false)
+    setDoneSession(null)
+    setDoneNote('')
+    showToast('✅ Marked Done & notification sent!')
+  }
+
+  async function undoDone(s: UPCSession & { id: string }) {
+    await supabase.from('upc_sessions').update({
+      status: 'In Progress',
+      completed_at: null,
+    }).eq('id', s.id)
+    await loadSessions()
+    showToast('↩ Set back to In Progress')
   }
 
   async function goHome() {
@@ -419,22 +480,57 @@ export default function QDPage() {
     const loaded = s.rows ? s : migrateSession(s)
     const scanned = loaded.rows.filter(r => r.upc)
     const total = scanned.reduce((a, r) => a + r.qty, 0)
-    const date = s.saved_at ? new Date(s.saved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+    const isDone = s.status === 'Done'
+    const fmtDt = (iso?: string) => iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
+    const createdStr = fmtDt(s.created_at || s.saved_at)
+    const completedStr = fmtDt(s.completed_at)
+    const admin = isAdmin(currentUser)
     return (
-      <div style={{ background: purpleLight, border: `1px solid ${border}`, borderRadius: 5, padding: '5px 6px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, flex: 1 }}>{s.name}</span>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: total > 0 ? '#dcfce7' : '#fef3c7', color: total > 0 ? '#166534' : '#92400e' }}>
-            {total > 0 ? '✓' : 'Empty'}
+      <div style={{
+        background: isDone ? '#f0fdf4' : purpleLight,
+        border: `1px solid ${isDone ? '#86efac' : border}`,
+        borderRadius: 7, padding: '8px 10px',
+      }}>
+        {/* Title row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, flex: 1, color: isDone ? '#14532d' : purpleD }}>{s.name}</span>
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+            background: isDone ? '#bbf7d0' : '#e9e3fd',
+            color: isDone ? '#14532d' : '#5b21b6',
+            border: `1px solid ${isDone ? '#86efac' : '#c4b5fd'}`,
+          }}>
+            {isDone ? '✅ Done' : '🔄 In Progress'}
           </span>
         </div>
-        <div style={{ fontSize: 10, color: '#6b7280', margin: '2px 0' }}>
-          {s.store || '—'}{showUser && s.userid ? ` · ${s.userid}` : ''} · {scanned.length}/{loaded.rows.length} scanned · {total} qty{date ? ` · ${date}` : ''}
+
+        {/* Info row */}
+        <div style={{ fontSize: 10, color: '#6b7280', display: 'flex', flexWrap: 'wrap', gap: '2px 10px', marginBottom: 4 }}>
+          <span><strong style={{ color: '#374151' }}>Store:</strong> {s.store || '—'}</span>
+          {showUser && s.userid && <span><strong style={{ color: '#374151' }}>By:</strong> {displayUser(s.userid)}</span>}
+          <span><strong style={{ color: '#374151' }}>Scanned:</strong> {scanned.length}/{loaded.rows.length} · {total} qty</span>
+          {createdStr && <span><strong style={{ color: '#374151' }}>Created:</strong> {createdStr}</span>}
+          {isDone && completedStr && <span><strong style={{ color: '#14532d' }}>Completed:</strong> {completedStr}</span>}
         </div>
-        <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
-          <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '2px 7px', flex: 1 }}>Load</button>
-          <button onClick={() => exportCSV(loaded)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '2px 7px', flex: 1 }}>↓ CSV</button>
-          <button onClick={() => deleteSession(s)} style={{ ...btnSt('red'), fontSize: 10, padding: '2px 6px' }}>✕</button>
+
+        {/* Admin note */}
+        {s.admin_note && (
+          <div style={{ fontSize: 11, background: isDone ? '#dcfce7' : '#fef3c7', border: `1px solid ${isDone ? '#86efac' : '#fcd34d'}`, borderRadius: 5, padding: '4px 8px', color: isDone ? '#166534' : '#92400e', marginBottom: 6 }}>
+            📝 {s.admin_note}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          <button onClick={() => loadSessionData(s)} style={{ ...btnSt('green'), fontSize: 10, padding: '3px 8px' }}>Load</button>
+          <button onClick={() => exportCSV(loaded)} style={{ ...btnSt('ghost'), fontSize: 10, padding: '3px 8px' }}>↓ CSV</button>
+          {admin && !isDone && (
+            <button onClick={() => { setDoneSession(s); setDoneNote('') }} style={{ ...btnSt('primary'), fontSize: 10, padding: '3px 8px' }}>✅ Mark Done</button>
+          )}
+          {admin && isDone && (
+            <button onClick={() => undoDone(s)} style={{ ...btnSt('yellow'), fontSize: 10, padding: '3px 8px' }}>↩ Reopen</button>
+          )}
+          <button onClick={() => deleteSession(s)} style={{ ...btnSt('red'), fontSize: 10, padding: '3px 6px' }}>✕</button>
         </div>
       </div>
     )
@@ -804,6 +900,41 @@ export default function QDPage() {
               <button onClick={applySmartPaste} disabled={!pastePreview}
                 style={{ ...btnSt('primary'), opacity: pastePreview ? 1 : 0.4 }}>
                 📋 Load Rows
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark Done modal */}
+      {doneSession && (
+        <div onClick={e => e.target === e.currentTarget && setDoneSession(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 10, padding: 22, width: 'min(380px, 94vw)', boxShadow: '0 16px 50px rgba(0,0,0,0.25)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#14532d', marginBottom: 4 }}>✅ Mark as Done</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 14 }}>
+              Session: <strong style={{ color: purpleD }}>{doneSession.name}</strong> · {doneSession.store}<br/>
+              {doneSession.userid && <>Created by: <strong>{displayUser(doneSession.userid)}</strong></>}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}>
+              <label style={{ ...labelSt }}>Note / PO# (optional — sent in notification)</label>
+              <textarea
+                value={doneNote}
+                onChange={e => setDoneNote(e.target.value)}
+                placeholder="e.g. PO# 7823914 — all items created"
+                rows={3}
+                autoFocus
+                style={{ ...inputSt, resize: 'vertical', fontFamily: 'Inter, sans-serif' }}
+              />
+            </div>
+            <div style={{ fontSize: 11, color: '#6b7280', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 5, padding: '6px 10px', marginBottom: 14 }}>
+              🔔 A push notification will be sent to {displayUser(doneSession.userid)} saying this session is done{doneNote.trim() ? ' with your note' : ''}.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setDoneSession(null)} style={btnSt('ghost')}>Cancel</button>
+              <button onClick={confirmDone} disabled={doneSaving}
+                style={{ ...btnSt('primary'), opacity: doneSaving ? 0.6 : 1 }}>
+                {doneSaving ? '…' : '✅ Confirm Done'}
               </button>
             </div>
           </div>
