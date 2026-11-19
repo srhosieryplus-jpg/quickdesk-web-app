@@ -1,4 +1,4 @@
-// QuickDesk Service Worker — Web Push — v3
+// QuickDesk Service Worker — Web Push — v4
 
 // Force immediate activation and claim all open tabs/windows
 self.addEventListener('install', function(event) {
@@ -10,14 +10,15 @@ self.addEventListener('activate', function(event) {
 
 self.addEventListener('push', function(event) {
   if (!event.data) return
-  const data = event.data.json()
+  let data = {}
+  try { data = event.data.json() } catch(e) { data = { title: 'QuickDesk', body: event.data.text() } }
+  const tag = data.tag || ('quickdesk-' + Date.now())
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      tag: data.tag || 'quickdesk-task',
-      data: { url: data.url || '/tasks' },
+    self.registration.showNotification(data.title || 'QuickDesk', {
+      body: data.body || '',
+      tag: tag,
+      renotify: true,
+      data: { url: data.url || '/' },
       vibrate: [200, 100, 200],
     })
   )

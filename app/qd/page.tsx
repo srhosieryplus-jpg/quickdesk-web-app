@@ -414,12 +414,18 @@ export default function QDPage() {
     const pushBody = noteText
       ? `Note: ${noteText}`
       : 'Your scan session has been completed.'
-    await sendTaskPush({
-      title: `✅ UPC Scanner — ${doneSession.name} Done`,
-      body: pushBody,
-      assignedTo: creatorId || undefined,
-      location: 'qd',
-      store: doneSession.store,
+    await fetch('/api/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `✅ UPC Scanner — ${doneSession.name} Done`,
+        body: pushBody,
+        assignedTo: creatorId || undefined,
+        location: 'qd',
+        store: doneSession.store,
+        url: '/quickdesk/qd',
+        tag: `upc-done-${doneSession.id}`,
+      }),
     })
 
     await loadSessions()
